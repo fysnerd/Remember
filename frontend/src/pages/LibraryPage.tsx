@@ -14,7 +14,7 @@ interface Tag {
 
 interface Content {
   id: string;
-  platform: 'YOUTUBE' | 'SPOTIFY';
+  platform: 'YOUTUBE' | 'SPOTIFY' | 'TIKTOK';
   externalId: string;
   url: string;
   title: string;
@@ -24,6 +24,8 @@ interface Content {
   showName: string | null;
   listenProgress: number | null;
   fullyPlayed: boolean;
+  authorUsername: string | null;
+  viewCount: number | null;
   status: 'PENDING' | 'SELECTED' | 'TRANSCRIBING' | 'GENERATING' | 'READY' | 'FAILED' | 'UNSUPPORTED';
   capturedAt: string;
   tags: Tag[];
@@ -58,7 +60,7 @@ interface ContentDetailResponse extends Content {
 }
 
 type ViewMode = 'grid' | 'list';
-type PlatformFilter = 'all' | 'YOUTUBE' | 'SPOTIFY';
+type PlatformFilter = 'all' | 'YOUTUBE' | 'SPOTIFY' | 'TIKTOK';
 type StatusFilter = 'all' | 'PENDING' | 'READY' | 'FAILED';
 
 export function LibraryPage() {
@@ -292,6 +294,7 @@ export function LibraryPage() {
                   <option value="all">All platforms</option>
                   <option value="YOUTUBE">YouTube</option>
                   <option value="SPOTIFY">Spotify</option>
+                  <option value="TIKTOK">TikTok</option>
                 </select>
               </div>
               <div>
@@ -374,7 +377,7 @@ export function LibraryPage() {
             <p className="text-cream-dark max-w-md mx-auto">
               {activeFilters > 0
                 ? 'Try adjusting your filters to find what you\'re looking for.'
-                : 'Connect YouTube or Spotify in Settings to start capturing content.'}
+                : 'Connect YouTube, Spotify, or TikTok in Settings to start capturing content.'}
             </p>
           </div>
         ) : viewMode === 'grid' ? (
@@ -427,9 +430,11 @@ export function LibraryPage() {
                   {/* Platform indicator */}
                   <span className={clsx(
                     'absolute top-2 right-2 w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold',
-                    content.platform === 'YOUTUBE' ? 'bg-[#FF0000]/90 text-white' : 'bg-[#1DB954]/90 text-white'
+                    content.platform === 'YOUTUBE' && 'bg-[#FF0000]/90 text-white',
+                    content.platform === 'SPOTIFY' && 'bg-[#1DB954]/90 text-white',
+                    content.platform === 'TIKTOK' && 'bg-gradient-to-br from-[#00f2ea] to-[#ff0050] text-white'
                   )}>
-                    {content.platform === 'YOUTUBE' ? 'YT' : 'SP'}
+                    {content.platform === 'YOUTUBE' ? 'YT' : content.platform === 'SPOTIFY' ? 'SP' : 'TT'}
                   </span>
                 </div>
 
@@ -501,7 +506,11 @@ export function LibraryPage() {
                     {content.title}
                   </h3>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className={content.platform === 'YOUTUBE' ? 'badge-youtube' : 'badge-spotify'}>
+                    <span className={clsx(
+                      content.platform === 'YOUTUBE' && 'badge-youtube',
+                      content.platform === 'SPOTIFY' && 'badge-spotify',
+                      content.platform === 'TIKTOK' && 'badge-tiktok'
+                    )}>
                       {content.platform}
                     </span>
                     {(() => {
@@ -594,7 +603,11 @@ export function LibraryPage() {
                         {contentDetail.title}
                       </h2>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className={contentDetail.platform === 'YOUTUBE' ? 'badge-youtube' : 'badge-spotify'}>
+                        <span className={clsx(
+                          contentDetail.platform === 'YOUTUBE' && 'badge-youtube',
+                          contentDetail.platform === 'SPOTIFY' && 'badge-spotify',
+                          contentDetail.platform === 'TIKTOK' && 'badge-tiktok'
+                        )}>
                           {contentDetail.platform}
                         </span>
                         {(() => {

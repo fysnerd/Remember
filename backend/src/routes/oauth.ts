@@ -4,6 +4,7 @@ import { prisma } from '../config/database.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { Platform } from '@prisma/client';
+import { startTikTokAuth, cancelTikTokAuth } from '../services/tiktokAuth.js';
 
 // Token response interface for OAuth providers
 interface OAuthTokenResponse {
@@ -244,6 +245,144 @@ oauthRouter.delete('/spotify/disconnect', authenticateToken, async (req: Request
 });
 
 // ============================================================================
+// TikTok (Cookie-based authentication via browser automation)
+// ============================================================================
+
+interface TikTokCookiesPayload {
+  sessionid: string;
+  sessionid_ss?: string;
+  sid_tt?: string;
+  uid_tt?: string;
+  msToken?: string;
+  tt_chain_token?: string;
+  tt_csrf_token?: string;
+  passport_csrf_token?: string;
+  s_v_web_id?: string;
+  odin_tt?: string;
+  sid_guard?: string;
+}
+
+// POST /api/oauth/tiktok/connect - Start browser-based TikTok auth
+oauthRouter.post('/tiktok/connect', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Check if cookies were provided directly (manual mode)
+    const cookies = req.body as TikTokCookiesPayload;
+
+    if (cookies && cookies.sessionid) {
+      // Manual mode: cookies provided directly
+      const cookiesJson = JSON.stringify(cookies);
+
+      await prisma.connectedPlatform.upsert({
+        where: {
+          userId_platform: {
+            userId: req.user!.id,
+            platform: Platform.TIKTOK,
+          },
+        },
+        update: {
+          accessToken: cookiesJson,
+          refreshToken: null,
+          expiresAt: null,
+          lastSyncError: null,
+        },
+        create: {
+          userId: req.user!.id,
+          platform: Platform.TIKTOK,
+          accessToken: cookiesJson,
+          refreshToken: null,
+          expiresAt: null,
+        },
+      });
+
+      return res.json({ message: 'TikTok connected successfully' });
+    }
+
+    // Auto mode: launch browser for user to login
+    console.log(`[TikTok] Starting browser auth for user ${req.user!.id}`);
+
+    const result = await startTikTokAuth(req.user!.id);
+
+    if (!result.success || !result.cookies) {
+      throw new AppError(400, result.error || 'Authentication failed');
+    }
+
+    // Store cookies
+    const cookiesJson = JSON.stringify(result.cookies);
+
+    await prisma.connectedPlatform.upsert({
+      where: {
+        userId_platform: {
+          userId: req.user!.id,
+          platform: Platform.TIKTOK,
+        },
+      },
+      update: {
+        accessToken: cookiesJson,
+        refreshToken: null,
+        expiresAt: null,
+        lastSyncError: null,
+      },
+      create: {
+        userId: req.user!.id,
+        platform: Platform.TIKTOK,
+        accessToken: cookiesJson,
+        refreshToken: null,
+        expiresAt: null,
+      },
+    });
+
+    res.json({ message: 'TikTok connected successfully' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/oauth/tiktok/cancel - Cancel pending auth
+oauthRouter.post('/tiktok/cancel', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await cancelTikTokAuth(req.user!.id);
+    res.json({ message: 'Auth cancelled' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// DELETE /api/oauth/tiktok/disconnect
+oauthRouter.delete('/tiktok/disconnect', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await prisma.connectedPlatform.delete({
+      where: {
+        userId_platform: {
+          userId: req.user!.id,
+          platform: Platform.TIKTOK,
+        },
+      },
+    });
+
+    res.json({ message: 'TikTok disconnected successfully' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/oauth/tiktok/sync - Trigger manual TikTok sync
+oauthRouter.post('/tiktok/sync', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Import sync function dynamically
+    const { syncTikTokForUser } = await import('../workers/tiktokSync.js');
+
+    const newVideosCount = await syncTikTokForUser(req.user!.id);
+
+    res.json({
+      message: 'TikTok sync completed',
+      newVideos: newVideosCount
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================================
 // Connection Status
 // ============================================================================
 
@@ -263,6 +402,7 @@ oauthRouter.get('/status', authenticateToken, async (req: Request, res: Response
     const status = {
       youtube: connections.find((c) => c.platform === Platform.YOUTUBE) || null,
       spotify: connections.find((c) => c.platform === Platform.SPOTIFY) || null,
+      tiktok: connections.find((c) => c.platform === Platform.TIKTOK) || null,
     };
 
     res.json(status);

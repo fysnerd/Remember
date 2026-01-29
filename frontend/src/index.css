@@ -338,6 +338,12 @@ h1, h2, h3, .font-display {
   border-color: rgba(29, 185, 84, 0.2);
 }
 
+.badge-tiktok {
+  background: linear-gradient(135deg, rgba(0, 242, 234, 0.1), rgba(255, 0, 80, 0.1));
+  color: #00f2ea;
+  border-color: rgba(0, 242, 234, 0.3);
+}
+
 /* Status badges */
 .status-pending {
   background: var(--void-200);

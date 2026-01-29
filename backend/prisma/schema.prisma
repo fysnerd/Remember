@@ -110,6 +110,7 @@ model ConnectedPlatform {
 enum Platform {
   YOUTUBE
   SPOTIFY
+  TIKTOK
 }
 
 // ============================================================================
@@ -135,6 +136,10 @@ model Content {
   showName       String?
   listenProgress Int?      // Listening progress percentage (0-100)
   fullyPlayed    Boolean   @default(false)
+
+  // For TikTok videos
+  authorUsername String?   // TikTok @username
+  viewCount      Int?      // Number of views
 
   // Processing status
   status        ContentStatus @default(PENDING)
