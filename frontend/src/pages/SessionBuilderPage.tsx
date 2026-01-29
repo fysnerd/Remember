@@ -3,7 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Brain, ArrowLeft, Filter, Hash, Layers, Zap,
-  CheckSquare, Square, ChevronDown, Loader2
+  CheckSquare, Square, ChevronDown, Loader2, Inbox, ArrowRight
 } from 'lucide-react';
 import { api } from '../lib/api';
 import clsx from 'clsx';
@@ -34,6 +34,17 @@ export function SessionBuilderPage() {
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [selectedContentIds, setSelectedContentIds] = useState<string[]>([]);
   const [showContentPicker, setShowContentPicker] = useState(false);
+
+  // Fetch inbox count
+  const { data: inboxData } = useQuery<{ count: number }>({
+    queryKey: ['inbox-count'],
+    queryFn: async () => {
+      const res = await api.get<{ count: number }>('/content/inbox/count');
+      return res.data;
+    },
+  });
+
+  const inboxCount = inboxData?.count || 0;
 
   // Fetch tags
   const { data: tags } = useQuery<Tag[]>({
@@ -157,6 +168,31 @@ export function SessionBuilderPage() {
             </div>
           </div>
         </div>
+
+        {/* Inbox Triage Prompt */}
+        {inboxCount > 0 && (
+          <Link
+            to="/inbox"
+            className="block mb-6 p-5 rounded-2xl bg-gradient-to-r from-amber/10 to-amber/5 border border-amber/30 hover:border-amber/50 transition-all animate-slide-up group"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-amber/20 flex items-center justify-center">
+                  <Inbox size={24} className="text-amber" />
+                </div>
+                <div>
+                  <h3 className="font-display text-cream text-lg">
+                    Review your inbox first
+                  </h3>
+                  <p className="text-cream-dark text-sm">
+                    {inboxCount} new item{inboxCount !== 1 ? 's' : ''} waiting to be triaged
+                  </p>
+                </div>
+              </div>
+              <ArrowRight size={20} className="text-amber group-hover:translate-x-1 transition-transform" />
+            </div>
+          </Link>
+        )}
 
         {/* Configuration Card */}
         <div className="card animate-slide-up">

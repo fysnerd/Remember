@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Grid, List, Filter, ChevronLeft, ChevronRight, Play, RefreshCw, X, Search,
-  Download, Tag, ExternalLink, Clock, CheckCircle2, AlertCircle, Loader2
+  Download, Tag, ExternalLink, Clock, CheckCircle2, AlertCircle, Loader2, BookOpen, Archive
 } from 'lucide-react';
 import { api } from '../lib/api';
 import clsx from 'clsx';
@@ -26,7 +26,7 @@ interface Content {
   fullyPlayed: boolean;
   authorUsername: string | null;
   viewCount: number | null;
-  status: 'PENDING' | 'SELECTED' | 'TRANSCRIBING' | 'GENERATING' | 'READY' | 'FAILED' | 'UNSUPPORTED';
+  status: 'INBOX' | 'ARCHIVED' | 'PENDING' | 'SELECTED' | 'TRANSCRIBING' | 'GENERATING' | 'READY' | 'FAILED' | 'UNSUPPORTED';
   capturedAt: string;
   tags: Tag[];
   _count: { quizzes: number };
@@ -138,6 +138,26 @@ export function LibraryPage() {
     },
   });
 
+  const moveToLearning = useMutation({
+    mutationFn: async (contentId: string) => {
+      return api.patch(`/content/${contentId}/triage`, { action: 'learn' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['content'] });
+      setSelectedContentId(null);
+    },
+  });
+
+  const archiveContent = useMutation({
+    mutationFn: async (contentId: string) => {
+      return api.patch(`/content/${contentId}/triage`, { action: 'archive' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['content'] });
+      setSelectedContentId(null);
+    },
+  });
+
   const formatDuration = (seconds: number | null) => {
     if (!seconds) return null;
     const mins = Math.floor(seconds / 60);
@@ -147,6 +167,8 @@ export function LibraryPage() {
 
   const getStatusConfig = (status: Content['status']) => {
     const configs = {
+      INBOX: { class: 'status-pending', label: 'Inbox', icon: Clock },
+      ARCHIVED: { class: 'badge-muted', label: 'Archived', icon: Archive },
       PENDING: { class: 'status-pending', label: 'Pending', icon: Clock },
       SELECTED: { class: 'status-processing', label: 'Processing', icon: Loader2 },
       TRANSCRIBING: { class: 'status-processing', label: 'Transcribing', icon: Loader2 },
@@ -766,6 +788,27 @@ export function LibraryPage() {
                     >
                       <RefreshCw size={16} className={retryContent.isPending ? 'animate-spin' : ''} />
                       {retryContent.isPending ? 'Retrying...' : 'Retry'}
+                    </button>
+                  )}
+                  {contentDetail.status === 'ARCHIVED' && (
+                    <button
+                      onClick={() => moveToLearning.mutate(contentDetail.id)}
+                      disabled={moveToLearning.isPending}
+                      className="btn-primary flex-1 flex items-center justify-center gap-2"
+                    >
+                      <BookOpen size={16} />
+                      {moveToLearning.isPending ? 'Moving...' : 'Move to Learning'}
+                    </button>
+                  )}
+                  {(contentDetail.status === 'READY' || contentDetail.status === 'SELECTED') && (
+                    <button
+                      onClick={() => archiveContent.mutate(contentDetail.id)}
+                      disabled={archiveContent.isPending}
+                      className="btn-ghost flex items-center justify-center gap-2"
+                      title="Archive content"
+                    >
+                      <Archive size={16} />
+                      {archiveContent.isPending ? 'Archiving...' : 'Archive'}
                     </button>
                   )}
                 </div>
