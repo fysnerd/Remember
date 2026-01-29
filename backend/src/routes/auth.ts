@@ -6,8 +6,45 @@ import { prisma } from '../config/database.js';
 import { config } from '../config/env.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { generateTokens, authenticateToken, JwtPayload } from '../middleware/auth.js';
+import { Platform } from '@prisma/client';
+import { syncUserYouTube } from '../workers/youtubeSync.js';
+import { syncUserSpotify } from '../workers/spotifySync.js';
+import { syncTikTokForUser } from '../workers/tiktokSync.js';
 
 export const authRouter = Router();
+
+/**
+ * Sync all connected platforms for a user (non-blocking background task)
+ */
+async function syncUserPlatforms(userId: string): Promise<void> {
+  try {
+    const connections = await prisma.connectedPlatform.findMany({
+      where: { userId },
+    });
+
+    for (const connection of connections) {
+      if (connection.platform === Platform.YOUTUBE) {
+        syncUserYouTube(userId, connection.id).catch((error) => {
+          console.error(`[Auth] Background YouTube sync failed for user ${userId}:`, error);
+        });
+      } else if (connection.platform === Platform.SPOTIFY) {
+        syncUserSpotify(userId, connection.id).catch((error) => {
+          console.error(`[Auth] Background Spotify sync failed for user ${userId}:`, error);
+        });
+      } else if (connection.platform === Platform.TIKTOK) {
+        syncTikTokForUser(userId).catch((error) => {
+          console.error(`[Auth] Background TikTok sync failed for user ${userId}:`, error);
+        });
+      }
+    }
+
+    if (connections.length > 0) {
+      console.log(`[Auth] Triggered background sync for ${connections.length} platforms (user ${userId})`);
+    }
+  } catch (error) {
+    console.error(`[Auth] Failed to trigger platform sync for user ${userId}:`, error);
+  }
+}
 
 // Validation schemas
 const signupSchema = z.object({
@@ -114,6 +151,9 @@ authRouter.post('/login', async (req: Request, res: Response, next: NextFunction
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
     });
+
+    // Trigger background sync of all connected platforms (non-blocking)
+    syncUserPlatforms(user.id);
 
     return res.json({
       user: {

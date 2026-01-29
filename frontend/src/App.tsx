@@ -6,8 +6,8 @@ import { SignupPage } from './pages/SignupPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { LibraryPage } from './pages/LibraryPage';
-import { ReviewPage } from './pages/ReviewPage';
 import { InboxPage } from './pages/InboxPage';
+import { ReviewPage } from './pages/ReviewPage';
 import { SessionBuilderPage } from './pages/SessionBuilderPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {

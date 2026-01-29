@@ -6,11 +6,94 @@ import { processContentTranscript } from '../services/transcription.js';
 import { processPodcastTranscript } from '../services/podcastTranscription.js';
 import { processContentQuiz, regenerateQuiz } from '../services/quizGeneration.js';
 import { autoTagContent } from '../services/tagging.js';
+import { syncUserYouTube } from '../workers/youtubeSync.js';
+import { syncUserSpotify } from '../workers/spotifySync.js';
+import { syncTikTokForUser } from '../workers/tiktokSync.js';
 
 export const contentRouter = Router();
 
 // All content routes require authentication
 contentRouter.use(authenticateToken);
+
+// ============================================================================
+// Refresh / Sync Endpoint (User-accessible)
+// ============================================================================
+
+// POST /api/content/refresh - Manually trigger sync for all connected platforms
+contentRouter.post('/refresh', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+
+    // Get all connected platforms for this user
+    const connections = await prisma.connectedPlatform.findMany({
+      where: { userId },
+    });
+
+    if (connections.length === 0) {
+      return res.json({
+        message: 'No platforms connected',
+        platforms: [],
+        syncing: false,
+      });
+    }
+
+    // Track which platforms are being synced
+    const syncingPlatforms: string[] = [];
+    const syncPromises: Promise<{ platform: string; newItems: number }>[] = [];
+
+    for (const connection of connections) {
+      if (connection.platform === Platform.YOUTUBE) {
+        syncingPlatforms.push('youtube');
+        syncPromises.push(
+          syncUserYouTube(userId, connection.id)
+            .then((newItems) => ({ platform: 'youtube', newItems }))
+            .catch((error) => {
+              console.error(`[Content Refresh] YouTube sync failed:`, error);
+              return { platform: 'youtube', newItems: 0 };
+            })
+        );
+      } else if (connection.platform === Platform.SPOTIFY) {
+        syncingPlatforms.push('spotify');
+        syncPromises.push(
+          syncUserSpotify(userId, connection.id)
+            .then((newItems) => ({ platform: 'spotify', newItems }))
+            .catch((error) => {
+              console.error(`[Content Refresh] Spotify sync failed:`, error);
+              return { platform: 'spotify', newItems: 0 };
+            })
+        );
+      } else if (connection.platform === Platform.TIKTOK) {
+        syncingPlatforms.push('tiktok');
+        syncPromises.push(
+          syncTikTokForUser(userId)
+            .then((newItems) => ({ platform: 'tiktok', newItems }))
+            .catch((error) => {
+              console.error(`[Content Refresh] TikTok sync failed:`, error);
+              return { platform: 'tiktok', newItems: 0 };
+            })
+        );
+      }
+    }
+
+    // Wait for all syncs to complete
+    const results = await Promise.all(syncPromises);
+
+    // Calculate totals
+    const totalNewItems = results.reduce((sum, r) => sum + r.newItems, 0);
+
+    console.log(`[Content Refresh] User ${userId}: synced ${syncingPlatforms.join(', ')} - ${totalNewItems} new items`);
+
+    return res.json({
+      message: totalNewItems > 0
+        ? `Sync complete! ${totalNewItems} new items found.`
+        : 'Sync complete. No new items found.',
+      platforms: results,
+      totalNewItems,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
 
 // GET /api/content - List user's content with search & filters
 contentRouter.get('/', async (req: Request, res: Response, next: NextFunction) => {
@@ -172,6 +255,230 @@ contentRouter.get('/tags', async (req: Request, res: Response, next: NextFunctio
     return next(error);
   }
 });
+
+// ============================================================================
+// Inbox & Triage Endpoints (MUST be before /:id routes)
+// ============================================================================
+
+// GET /api/content/inbox - Get all inbox items
+contentRouter.get('/inbox', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { page = '1', limit = '50' } = req.query;
+    const pageNum = parseInt(page as string, 10);
+    const limitNum = Math.min(parseInt(limit as string, 10), 100);
+    const skip = (pageNum - 1) * limitNum;
+
+    const [contents, total] = await Promise.all([
+      prisma.content.findMany({
+        where: {
+          userId: req.user!.id,
+          status: ContentStatus.INBOX,
+        },
+        orderBy: { capturedAt: 'desc' },
+        skip,
+        take: limitNum,
+        include: {
+          tags: true,
+        },
+      }),
+      prisma.content.count({
+        where: {
+          userId: req.user!.id,
+          status: ContentStatus.INBOX,
+        },
+      }),
+    ]);
+
+    return res.json({
+      contents,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// GET /api/content/inbox/count - Get inbox count for badge
+contentRouter.get('/inbox/count', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const count = await prisma.content.count({
+      where: {
+        userId: req.user!.id,
+        status: ContentStatus.INBOX,
+      },
+    });
+
+    return res.json({ count });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// POST /api/content/triage/bulk - Bulk triage multiple items
+contentRouter.post('/triage/bulk', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { contentIds, action } = req.body;
+
+    if (!Array.isArray(contentIds) || contentIds.length === 0) {
+      return res.status(400).json({ error: 'contentIds must be a non-empty array' });
+    }
+
+    if (!['learn', 'archive', 'delete'].includes(action)) {
+      return res.status(400).json({ error: 'Invalid action. Use "learn", "archive", or "delete".' });
+    }
+
+    // Verify ownership of all items
+    const ownedContent = await prisma.content.findMany({
+      where: {
+        id: { in: contentIds },
+        userId: req.user!.id,
+      },
+      select: { id: true },
+    });
+
+    const ownedIds = ownedContent.map(c => c.id);
+
+    if (ownedIds.length === 0) {
+      return res.status(404).json({ error: 'No valid content found' });
+    }
+
+    let processed = 0;
+
+    if (action === 'delete') {
+      const result = await prisma.content.deleteMany({
+        where: {
+          id: { in: ownedIds },
+        },
+      });
+      processed = result.count;
+    } else {
+      const newStatus = action === 'learn' ? ContentStatus.SELECTED : ContentStatus.ARCHIVED;
+      const result = await prisma.content.updateMany({
+        where: {
+          id: { in: ownedIds },
+        },
+        data: { status: newStatus },
+      });
+      processed = result.count;
+    }
+
+    return res.json({
+      success: true,
+      processed,
+      failed: contentIds.length - processed,
+      message: `Successfully ${action === 'delete' ? 'deleted' : action === 'learn' ? 'added to learning' : 'archived'} ${processed} items`,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// POST /api/content/bulk-generate-quiz - Generate quiz for multiple contents
+contentRouter.post('/bulk-generate-quiz', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { contentIds } = req.body;
+
+    if (!Array.isArray(contentIds) || contentIds.length === 0) {
+      return res.status(400).json({ error: 'contentIds must be a non-empty array' });
+    }
+
+    // F8: Validate all elements are strings
+    if (!contentIds.every((id): id is string => typeof id === 'string')) {
+      return res.status(400).json({ error: 'contentIds must contain only strings' });
+    }
+
+    if (contentIds.length > 50) {
+      return res.status(400).json({ error: 'Maximum 50 items per batch' });
+    }
+
+    // Verify ownership and get eligible content
+    const contents = await prisma.content.findMany({
+      where: {
+        id: { in: contentIds },
+        userId: req.user!.id,
+      },
+      include: { transcript: true, quizzes: true },
+    });
+
+    if (contents.length === 0) {
+      return res.status(404).json({ error: 'No valid content found' });
+    }
+
+    // F12: Use ContentStatus enum - Sets for type-safe status checks
+    const processingStatuses = new Set<ContentStatus>([ContentStatus.GENERATING, ContentStatus.TRANSCRIBING]);
+    const excludedStatuses = new Set<ContentStatus>([ContentStatus.GENERATING, ContentStatus.TRANSCRIBING, ContentStatus.FAILED, ContentStatus.UNSUPPORTED]);
+
+    // Filter eligible: has transcript, no quizzes yet, not already processing
+    const eligible = contents.filter(c =>
+      c.transcript &&
+      c.quizzes.length === 0 &&
+      !processingStatuses.has(c.status)
+    );
+
+    // Filter needing transcription first
+    const needsTranscript = contents.filter(c =>
+      !c.transcript &&
+      !excludedStatuses.has(c.status)
+    );
+
+    // F9: Use Sets for O(1) lookups
+    const queuedSet = new Set<string>();
+    const needsTranscriptSet = new Set(needsTranscript.map(c => c.id));
+
+    const results = {
+      queued: [] as string[],
+      skipped: [] as { id: string; reason: string }[],
+      needsTranscript: needsTranscript.map(c => c.id),
+    };
+
+    // Queue eligible for quiz generation
+    for (const content of eligible) {
+      // F3: Use ContentStatus enum
+      await prisma.content.update({
+        where: { id: content.id },
+        data: { status: ContentStatus.GENERATING },
+      });
+
+      // Fire and forget - process in background
+      processContentQuiz(content.id).catch(err => {
+        console.error(`[BulkQuiz] Failed for ${content.id}:`, err);
+      });
+
+      results.queued.push(content.id);
+      queuedSet.add(content.id);
+    }
+
+    // Mark skipped items (F9: O(1) lookups with Sets)
+    for (const content of contents) {
+      if (!queuedSet.has(content.id) && !needsTranscriptSet.has(content.id)) {
+        let reason = 'Unknown';
+        if (content.quizzes.length > 0) reason = 'Already has quiz';
+        else if (processingStatuses.has(content.status)) reason = 'Already processing';
+        else if (content.status === ContentStatus.FAILED) reason = 'Failed status';
+        else if (content.status === ContentStatus.UNSUPPORTED) reason = 'Unsupported content';
+
+        results.skipped.push({ id: content.id, reason });
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: `Queued ${results.queued.length} items for quiz generation`,
+      results,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// ============================================================================
+// Content Detail Routes (with :id parameter)
+// ============================================================================
 
 // GET /api/content/:id - Get single content with details
 contentRouter.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
@@ -523,69 +830,6 @@ contentRouter.put('/:id/tags', async (req: Request, res: Response, next: NextFun
   }
 });
 
-// ============================================================================
-// Inbox & Triage Endpoints
-// ============================================================================
-
-// GET /api/content/inbox - Get all inbox items
-contentRouter.get('/inbox', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { page = '1', limit = '50' } = req.query;
-    const pageNum = parseInt(page as string, 10);
-    const limitNum = Math.min(parseInt(limit as string, 10), 100);
-    const skip = (pageNum - 1) * limitNum;
-
-    const [contents, total] = await Promise.all([
-      prisma.content.findMany({
-        where: {
-          userId: req.user!.id,
-          status: ContentStatus.INBOX,
-        },
-        orderBy: { capturedAt: 'desc' },
-        skip,
-        take: limitNum,
-        include: {
-          tags: true,
-        },
-      }),
-      prisma.content.count({
-        where: {
-          userId: req.user!.id,
-          status: ContentStatus.INBOX,
-        },
-      }),
-    ]);
-
-    return res.json({
-      contents,
-      pagination: {
-        page: pageNum,
-        limit: limitNum,
-        total,
-        totalPages: Math.ceil(total / limitNum),
-      },
-    });
-  } catch (error) {
-    return next(error);
-  }
-});
-
-// GET /api/content/inbox/count - Get inbox count for badge
-contentRouter.get('/inbox/count', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const count = await prisma.content.count({
-      where: {
-        userId: req.user!.id,
-        status: ContentStatus.INBOX,
-      },
-    });
-
-    return res.json({ count });
-  } catch (error) {
-    return next(error);
-  }
-});
-
 // PATCH /api/content/:id/triage - Triage a single content item
 contentRouter.patch('/:id/triage', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -619,67 +863,6 @@ contentRouter.patch('/:id/triage', async (req: Request, res: Response, next: Nex
       success: true,
       newStatus: updated.status,
       message: action === 'learn' ? 'Content added to learning queue' : 'Content archived',
-    });
-  } catch (error) {
-    return next(error);
-  }
-});
-
-// POST /api/content/triage/bulk - Bulk triage multiple items
-contentRouter.post('/triage/bulk', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { contentIds, action } = req.body;
-
-    if (!Array.isArray(contentIds) || contentIds.length === 0) {
-      return res.status(400).json({ error: 'contentIds must be a non-empty array' });
-    }
-
-    if (!['learn', 'archive', 'delete'].includes(action)) {
-      return res.status(400).json({ error: 'Invalid action. Use "learn", "archive", or "delete".' });
-    }
-
-    // Verify ownership of all items
-    const ownedContent = await prisma.content.findMany({
-      where: {
-        id: { in: contentIds },
-        userId: req.user!.id,
-      },
-      select: { id: true },
-    });
-
-    const ownedIds = ownedContent.map(c => c.id);
-
-    if (ownedIds.length === 0) {
-      return res.status(404).json({ error: 'No valid content found' });
-    }
-
-    let processed = 0;
-
-    if (action === 'delete') {
-      // Delete content (cascades to transcripts, quizzes, etc.)
-      const result = await prisma.content.deleteMany({
-        where: {
-          id: { in: ownedIds },
-        },
-      });
-      processed = result.count;
-    } else {
-      // Update status
-      const newStatus = action === 'learn' ? ContentStatus.SELECTED : ContentStatus.ARCHIVED;
-      const result = await prisma.content.updateMany({
-        where: {
-          id: { in: ownedIds },
-        },
-        data: { status: newStatus },
-      });
-      processed = result.count;
-    }
-
-    return res.json({
-      success: true,
-      processed,
-      failed: contentIds.length - processed,
-      message: `Successfully ${action === 'delete' ? 'deleted' : action === 'learn' ? 'added to learning' : 'archived'} ${processed} items`,
     });
   } catch (error) {
     return next(error);

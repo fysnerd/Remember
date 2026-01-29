@@ -30,8 +30,9 @@ interface YouTubePlaylistResponse {
 
 /**
  * Fetch liked videos from YouTube for a specific user
+ * Exported for use in OAuth callbacks and manual refresh
  */
-async function syncUserYouTube(userId: string, connectionId: string): Promise<number> {
+export async function syncUserYouTube(userId: string, connectionId: string): Promise<number> {
   const connection = await prisma.connectedPlatform.findUnique({
     where: { id: connectionId },
   });

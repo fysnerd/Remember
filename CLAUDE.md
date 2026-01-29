@@ -40,7 +40,13 @@
 | YouTube Data API v3 | Récupération des vidéos likées |
 | Spotify Web API | Récupération des podcasts écoutés |
 | Mistral AI | Génération de quiz |
-| Groq (Whisper) | Transcription audio |
+| Groq (Whisper) | Transcription audio podcasts |
+
+### Outils CLI
+| Outil | Usage |
+|-------|-------|
+| yt-dlp | Récupération des sous-titres YouTube (auto-générés inclus) |
+| curl_cffi | Impersonation navigateur pour éviter le rate limiting YouTube |
 
 ---
 
@@ -50,6 +56,12 @@
 - Node.js v22+
 - npm
 - Cloudflared (pour les callbacks OAuth)
+- Python 3.x avec `yt-dlp` et `curl_cffi` (pour la transcription YouTube)
+
+```bash
+# Installation des dépendances Python pour la transcription
+pip install yt-dlp curl_cffi
+```
 
 ### 1. Backend (Terminal 1)
 ```bash
@@ -113,7 +125,7 @@ Remember/
 |-----|-----------|-------------|
 | YouTube Sync | 15 min | Importe les vidéos likées |
 | Spotify Sync | 30 min | Importe les podcasts écoutés |
-| Transcription YouTube | 5 min | Récupère les sous-titres |
+| Transcription YouTube | 5 min | Récupère les sous-titres via yt-dlp |
 | Transcription Podcast | 10 min | Transcrit avec Whisper |
 | Quiz Generation | 5 min | Génère les quiz avec Mistral |
 | Auto-Tagging | 15 min | Tag automatique du contenu |
@@ -263,3 +275,35 @@ Si deux branches modifient le même fichier, Git demandera de résoudre les conf
 1. Git marquera les conflits dans les fichiers
 2. Édite les fichiers pour choisir quelle version garder
 3. `git add .` puis `git commit` pour finaliser
+
+---
+
+## Suivi projet (Linear)
+
+**IMPORTANT pour Claude Code:** Toujours documenter dans Linear (via MCP) :
+- **Nouvelles features** : Créer une issue avec label `feature`
+- **Bug fixes** : Créer une issue avec label `bug`
+- **Améliorations** : Créer une issue avec label `improvement`
+- **Tech debt** : Créer une issue avec label `tech-debt`
+
+Format des issues Linear :
+```
+Titre: [Type] Description courte
+Description:
+- Ce qui a été fait
+- Fichiers modifiés
+- Tests effectués
+- Prérequis/dépendances ajoutées
+```
+
+---
+
+## Changelog récent
+
+### 2025-01-29 - Transcription YouTube via yt-dlp
+- **Type:** Improvement
+- **Description:** Remplacement de `youtube-transcript` par `yt-dlp` pour la récupération des sous-titres YouTube
+- **Raison:** `youtube-transcript` ne gérait pas correctement les sous-titres auto-générés (ASR)
+- **Fichiers modifiés:** `backend/src/services/transcription.ts`
+- **Prérequis ajoutés:** `pip install yt-dlp curl_cffi`
+- **Testé:** Flow complet YouTube → Transcription → Quiz Generation validé

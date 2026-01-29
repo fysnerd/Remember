@@ -41,8 +41,9 @@ interface SpotifySavedEpisodesResponse {
 /**
  * Sync user's LISTENED Spotify episodes
  * Only fetches saved episodes that have been fully played or >80% listened
+ * Exported for use in OAuth callbacks and manual refresh
  */
-async function syncUserSpotify(userId: string, connectionId: string): Promise<number> {
+export async function syncUserSpotify(userId: string, connectionId: string): Promise<number> {
   const connection = await prisma.connectedPlatform.findUnique({
     where: { id: connectionId },
   });

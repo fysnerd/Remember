@@ -5,6 +5,8 @@ import { authenticateToken } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { Platform } from '@prisma/client';
 import { startTikTokAuth, cancelTikTokAuth } from '../services/tiktokAuth.js';
+import { syncUserYouTube } from '../workers/youtubeSync.js';
+import { syncUserSpotify } from '../workers/spotifySync.js';
 
 // Token response interface for OAuth providers
 interface OAuthTokenResponse {
@@ -84,7 +86,7 @@ oauthRouter.get('/youtube/callback', async (req: Request, res: Response, next: N
     const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
 
     // Store or update connected platform
-    await prisma.connectedPlatform.upsert({
+    const connection = await prisma.connectedPlatform.upsert({
       where: {
         userId_platform: {
           userId,
@@ -104,6 +106,11 @@ oauthRouter.get('/youtube/callback', async (req: Request, res: Response, next: N
         refreshToken: tokens.refresh_token || null,
         expiresAt,
       },
+    });
+
+    // Trigger immediate sync in background (non-blocking)
+    syncUserYouTube(userId, connection.id).catch((error) => {
+      console.error(`[OAuth] Background YouTube sync failed for user ${userId}:`, error);
     });
 
     // Redirect back to frontend
@@ -197,7 +204,7 @@ oauthRouter.get('/spotify/callback', async (req: Request, res: Response, next: N
     const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
 
     // Store or update connected platform
-    await prisma.connectedPlatform.upsert({
+    const connection = await prisma.connectedPlatform.upsert({
       where: {
         userId_platform: {
           userId,
@@ -217,6 +224,11 @@ oauthRouter.get('/spotify/callback', async (req: Request, res: Response, next: N
         refreshToken: tokens.refresh_token || null,
         expiresAt,
       },
+    });
+
+    // Trigger immediate sync in background (non-blocking)
+    syncUserSpotify(userId, connection.id).catch((error) => {
+      console.error(`[OAuth] Background Spotify sync failed for user ${userId}:`, error);
     });
 
     // Redirect back to frontend

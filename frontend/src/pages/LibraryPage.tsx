@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Grid, List, Filter, ChevronLeft, ChevronRight, Play, RefreshCw, X, Search,
@@ -75,6 +75,53 @@ export function LibraryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+
+  // Selection state
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Helpers
+  const toggleSelection = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      // Exit selection mode if nothing selected
+      if (next.size === 0) {
+        setSelectionMode(false);
+      }
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (data?.contents) {
+      setSelectedIds(new Set(data.contents.map(c => c.id)));
+      setSelectionMode(true);
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+    setSelectionMode(false);
+  };
+
+  // Enter selection mode on first selection
+  const handleCheckboxClick = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!selectionMode) {
+      setSelectionMode(true);
+    }
+    toggleSelection(id);
+  };
+
+  // Clear selection when filters change
+  useEffect(() => {
+    clearSelection();
+  }, [platformFilter, statusFilter, categoryFilter, searchQuery, selectedTags, page]);
 
   const queryClient = useQueryClient();
 
@@ -155,6 +202,45 @@ export function LibraryPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['content'] });
       setSelectedContentId(null);
+    },
+  });
+
+  const refreshContent = useMutation({
+    mutationFn: async () => {
+      return api.post<{ message: string; totalNewItems: number }>('/content/refresh');
+    },
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['content'] });
+      queryClient.invalidateQueries({ queryKey: ['inbox-count'] });
+      // Could add a toast notification here
+      console.log('[Refresh]', response.data.message);
+    },
+  });
+
+  interface BulkGenerateResponse {
+    success: boolean;
+    message: string;
+    results: {
+      queued: string[];
+      skipped: { id: string; reason: string }[];
+      needsTranscript: string[];
+    };
+  }
+
+  const bulkGenerateQuiz = useMutation({
+    mutationFn: async (contentIds: string[]) => {
+      return api.post<BulkGenerateResponse>('/content/bulk-generate-quiz', { contentIds });
+    },
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['content'] });
+      clearSelection();
+      // F7: User feedback for results
+      const { results } = response.data;
+      const parts: string[] = [];
+      if (results.queued.length > 0) parts.push(`${results.queued.length} queued for generation`);
+      if (results.skipped.length > 0) parts.push(`${results.skipped.length} skipped`);
+      if (results.needsTranscript.length > 0) parts.push(`${results.needsTranscript.length} need transcription first`);
+      alert(parts.join(', ') || 'No items processed');
     },
   });
 
@@ -258,6 +344,15 @@ export function LibraryPage() {
                 )}
               </div>
             </form>
+
+            <button
+              onClick={() => refreshContent.mutate()}
+              disabled={refreshContent.isPending}
+              className="btn-ghost p-3"
+              title="Sync all platforms"
+            >
+              <RefreshCw size={20} className={refreshContent.isPending ? 'animate-spin' : ''} />
+            </button>
 
             <button
               onClick={handleExportAll}
@@ -423,10 +518,33 @@ export function LibraryPage() {
             {data.contents.map((content, index) => (
               <div
                 key={content.id}
-                onClick={() => setSelectedContentId(content.id)}
-                className="archive-card animate-slide-up"
+                onClick={() => selectionMode ? toggleSelection(content.id) : setSelectedContentId(content.id)}
+                className={clsx(
+                  "archive-card animate-slide-up group",
+                  selectedIds.has(content.id) && "ring-2 ring-amber"
+                )}
                 style={{ animationDelay: `${index * 0.05}s` }}
               >
+                {/* Checkbox - visible on hover or in selection mode */}
+                <div
+                  className={clsx(
+                    "absolute top-2 left-2 z-10 transition-opacity",
+                    selectionMode ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                  )}
+                >
+                  <button
+                    onClick={(e) => handleCheckboxClick(content.id, e)}
+                    className={clsx(
+                      "w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all",
+                      selectedIds.has(content.id)
+                        ? "bg-amber border-amber text-void"
+                        : "bg-void/80 border-cream/30 hover:border-amber"
+                    )}
+                  >
+                    {selectedIds.has(content.id) && <CheckCircle2 size={14} />}
+                  </button>
+                </div>
+
                 {/* Thumbnail */}
                 <div className="archive-card-thumbnail">
                   {content.thumbnailUrl ? (
@@ -458,8 +576,8 @@ export function LibraryPage() {
                     </div>
                   )}
 
-                  {/* Completed badge */}
-                  {content.fullyPlayed && (
+                  {/* Completed badge - only show if not selected (checkbox takes precedence) */}
+                  {content.fullyPlayed && !selectedIds.has(content.id) && (
                     <span className="absolute top-2 left-2 w-7 h-7 bg-sage text-void rounded-full flex items-center justify-center">
                       <CheckCircle2 size={16} />
                     </span>
@@ -514,10 +632,33 @@ export function LibraryPage() {
             {data.contents.map((content, index) => (
               <div
                 key={content.id}
-                onClick={() => setSelectedContentId(content.id)}
-                className="card-interactive flex gap-4 p-4 animate-slide-up"
+                onClick={() => selectionMode ? toggleSelection(content.id) : setSelectedContentId(content.id)}
+                className={clsx(
+                  "card-interactive flex gap-4 p-4 animate-slide-up group",
+                  selectedIds.has(content.id) && "ring-2 ring-amber"
+                )}
                 style={{ animationDelay: `${index * 0.03}s` }}
               >
+                {/* Checkbox */}
+                <div
+                  className={clsx(
+                    "flex items-center transition-opacity",
+                    selectionMode ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                  )}
+                >
+                  <button
+                    onClick={(e) => handleCheckboxClick(content.id, e)}
+                    className={clsx(
+                      "w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all",
+                      selectedIds.has(content.id)
+                        ? "bg-amber border-amber text-void"
+                        : "bg-void/80 border-cream/30 hover:border-amber"
+                    )}
+                  >
+                    {selectedIds.has(content.id) && <CheckCircle2 size={14} />}
+                  </button>
+                </div>
+
                 {/* Thumbnail */}
                 <div className="w-40 h-24 rounded-xl bg-void-200 overflow-hidden flex-shrink-0 relative">
                   {content.thumbnailUrl ? (
@@ -613,6 +754,51 @@ export function LibraryPage() {
             >
               <ChevronRight size={20} />
             </button>
+          </div>
+        )}
+
+        {/* Floating Action Bar */}
+        {selectionMode && selectedIds.size > 0 && (
+          <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-slide-up">
+            <div className="bg-void-100 border border-void-200 rounded-2xl shadow-2xl px-6 py-4 flex items-center gap-4">
+              <span className="text-cream font-medium">
+                {selectedIds.size} selected
+              </span>
+
+              <div className="w-px h-6 bg-void-200" />
+
+              <button
+                onClick={selectAll}
+                className="btn-ghost text-sm"
+              >
+                Select page ({data?.contents.length})
+              </button>
+
+              <button
+                onClick={() => bulkGenerateQuiz.mutate(Array.from(selectedIds))}
+                disabled={bulkGenerateQuiz.isPending}
+                className="btn-primary flex items-center gap-2"
+              >
+                {bulkGenerateQuiz.isPending ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Play size={16} />
+                    Generate Quiz
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={clearSelection}
+                className="btn-ghost p-2 text-cream-dark hover:text-cream"
+              >
+                <X size={18} />
+              </button>
+            </div>
           </div>
         )}
       </div>
