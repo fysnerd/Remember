@@ -1,19 +1,34 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Home, BookOpen, Brain, Settings, LogOut, Sparkles } from 'lucide-react';
+import { Home, BookOpen, Brain, Settings, LogOut, Sparkles, Inbox } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '../stores/authStore';
+import { api } from '../lib/api';
 import clsx from 'clsx';
-
-const navItems = [
-  { to: '/', icon: Home, label: 'Dashboard' },
-  { to: '/library', icon: BookOpen, label: 'Archive' },
-  { to: '/review', icon: Brain, label: 'Review' },
-  { to: '/settings', icon: Settings, label: 'Settings' },
-];
 
 export function Layout() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Fetch inbox count for badge
+  const { data: inboxData } = useQuery({
+    queryKey: ['inbox-count'],
+    queryFn: async () => {
+      const res = await api.get<{ count: number }>('/content/inbox/count');
+      return res.data;
+    },
+    refetchInterval: 60000, // Refresh every minute
+  });
+
+  const inboxCount = inboxData?.count || 0;
+
+  const navItems = [
+    { to: '/', icon: Home, label: 'Dashboard' },
+    { to: '/inbox', icon: Inbox, label: 'Inbox', badge: inboxCount > 0 ? inboxCount : undefined },
+    { to: '/library', icon: BookOpen, label: 'Archive' },
+    { to: '/review', icon: Brain, label: 'Review' },
+    { to: '/settings', icon: Settings, label: 'Settings' },
+  ];
 
   const handleLogout = () => {
     logout();
@@ -47,7 +62,7 @@ export function Layout() {
 
         {/* Navigation */}
         <nav className="flex-1 p-4 space-y-1">
-          {navItems.map(({ to, icon: Icon, label }) => {
+          {navItems.map(({ to, icon: Icon, label, badge }) => {
             const isActive = location.pathname === to ||
               (to !== '/' && location.pathname.startsWith(to));
 
@@ -70,7 +85,12 @@ export function Layout() {
                   )}
                 />
                 <span className="font-medium">{label}</span>
-                {isActive && (
+                {badge !== undefined && badge > 0 && (
+                  <span className="ml-auto px-2 py-0.5 text-xs font-bold rounded-full bg-amber text-void">
+                    {badge > 99 ? '99+' : badge}
+                  </span>
+                )}
+                {isActive && !badge && (
                   <div className="ml-auto w-1.5 h-1.5 rounded-full bg-amber" />
                 )}
               </NavLink>

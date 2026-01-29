@@ -33,13 +33,26 @@ contentRouter.get('/', async (req: Request, res: Response, next: NextFunction) =
     };
 
     // Platform filter
-    if (platform && typeof platform === 'string' && (platform === 'YOUTUBE' || platform === 'SPOTIFY')) {
+    if (platform && typeof platform === 'string' && ['YOUTUBE', 'SPOTIFY', 'TIKTOK'].includes(platform)) {
       where.platform = platform as Platform;
     }
 
     // Status filter
     if (status && typeof status === 'string') {
       where.status = status as ContentStatus;
+    }
+
+    // Category filter (learning vs archived)
+    const { category } = req.query;
+    if (category === 'learning') {
+      // Learning = everything except INBOX and ARCHIVED
+      where.status = { notIn: [ContentStatus.INBOX, ContentStatus.ARCHIVED] };
+    } else if (category === 'archived') {
+      where.status = ContentStatus.ARCHIVED;
+    }
+    // Default: exclude INBOX from main library view (unless explicitly requested)
+    if (!status && !category) {
+      where.status = { not: ContentStatus.INBOX };
     }
 
     // Full-text search on title, description, and transcript
@@ -504,6 +517,199 @@ contentRouter.put('/:id/tags', async (req: Request, res: Response, next: NextFun
     return res.json({
       message: 'Tags updated successfully',
       tags: updated?.tags || [],
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// ============================================================================
+// Inbox & Triage Endpoints
+// ============================================================================
+
+// GET /api/content/inbox - Get all inbox items
+contentRouter.get('/inbox', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { page = '1', limit = '50' } = req.query;
+    const pageNum = parseInt(page as string, 10);
+    const limitNum = Math.min(parseInt(limit as string, 10), 100);
+    const skip = (pageNum - 1) * limitNum;
+
+    const [contents, total] = await Promise.all([
+      prisma.content.findMany({
+        where: {
+          userId: req.user!.id,
+          status: ContentStatus.INBOX,
+        },
+        orderBy: { capturedAt: 'desc' },
+        skip,
+        take: limitNum,
+        include: {
+          tags: true,
+        },
+      }),
+      prisma.content.count({
+        where: {
+          userId: req.user!.id,
+          status: ContentStatus.INBOX,
+        },
+      }),
+    ]);
+
+    return res.json({
+      contents,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// GET /api/content/inbox/count - Get inbox count for badge
+contentRouter.get('/inbox/count', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const count = await prisma.content.count({
+      where: {
+        userId: req.user!.id,
+        status: ContentStatus.INBOX,
+      },
+    });
+
+    return res.json({ count });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// PATCH /api/content/:id/triage - Triage a single content item
+contentRouter.patch('/:id/triage', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { action } = req.body;
+
+    if (!['learn', 'archive'].includes(action)) {
+      return res.status(400).json({ error: 'Invalid action. Use "learn" or "archive".' });
+    }
+
+    // Verify ownership
+    const content = await prisma.content.findFirst({
+      where: {
+        id,
+        userId: req.user!.id,
+      },
+    });
+
+    if (!content) {
+      return res.status(404).json({ error: 'Content not found' });
+    }
+
+    const newStatus = action === 'learn' ? ContentStatus.SELECTED : ContentStatus.ARCHIVED;
+
+    const updated = await prisma.content.update({
+      where: { id },
+      data: { status: newStatus },
+    });
+
+    return res.json({
+      success: true,
+      newStatus: updated.status,
+      message: action === 'learn' ? 'Content added to learning queue' : 'Content archived',
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// POST /api/content/triage/bulk - Bulk triage multiple items
+contentRouter.post('/triage/bulk', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { contentIds, action } = req.body;
+
+    if (!Array.isArray(contentIds) || contentIds.length === 0) {
+      return res.status(400).json({ error: 'contentIds must be a non-empty array' });
+    }
+
+    if (!['learn', 'archive', 'delete'].includes(action)) {
+      return res.status(400).json({ error: 'Invalid action. Use "learn", "archive", or "delete".' });
+    }
+
+    // Verify ownership of all items
+    const ownedContent = await prisma.content.findMany({
+      where: {
+        id: { in: contentIds },
+        userId: req.user!.id,
+      },
+      select: { id: true },
+    });
+
+    const ownedIds = ownedContent.map(c => c.id);
+
+    if (ownedIds.length === 0) {
+      return res.status(404).json({ error: 'No valid content found' });
+    }
+
+    let processed = 0;
+
+    if (action === 'delete') {
+      // Delete content (cascades to transcripts, quizzes, etc.)
+      const result = await prisma.content.deleteMany({
+        where: {
+          id: { in: ownedIds },
+        },
+      });
+      processed = result.count;
+    } else {
+      // Update status
+      const newStatus = action === 'learn' ? ContentStatus.SELECTED : ContentStatus.ARCHIVED;
+      const result = await prisma.content.updateMany({
+        where: {
+          id: { in: ownedIds },
+        },
+        data: { status: newStatus },
+      });
+      processed = result.count;
+    }
+
+    return res.json({
+      success: true,
+      processed,
+      failed: contentIds.length - processed,
+      message: `Successfully ${action === 'delete' ? 'deleted' : action === 'learn' ? 'added to learning' : 'archived'} ${processed} items`,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// DELETE /api/content/:id - Delete a single content item
+contentRouter.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+
+    // Verify ownership
+    const content = await prisma.content.findFirst({
+      where: {
+        id,
+        userId: req.user!.id,
+      },
+    });
+
+    if (!content) {
+      return res.status(404).json({ error: 'Content not found' });
+    }
+
+    await prisma.content.delete({
+      where: { id },
+    });
+
+    return res.json({
+      success: true,
+      message: 'Content deleted successfully',
     });
   } catch (error) {
     return next(error);

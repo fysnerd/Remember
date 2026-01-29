@@ -62,12 +62,14 @@ interface ContentDetailResponse extends Content {
 type ViewMode = 'grid' | 'list';
 type PlatformFilter = 'all' | 'YOUTUBE' | 'SPOTIFY' | 'TIKTOK';
 type StatusFilter = 'all' | 'PENDING' | 'READY' | 'FAILED';
+type CategoryFilter = 'all' | 'learning' | 'archived';
 
 export function LibraryPage() {
   const [page, setPage] = useState(1);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('learning');
   const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -82,11 +84,12 @@ export function LibraryPage() {
   queryParams.set('limit', '20');
   if (platformFilter !== 'all') queryParams.set('platform', platformFilter);
   if (statusFilter !== 'all') queryParams.set('status', statusFilter);
+  if (categoryFilter !== 'all') queryParams.set('category', categoryFilter);
   if (searchQuery) queryParams.set('search', searchQuery);
   if (selectedTags.length > 0) queryParams.set('tags', selectedTags.join(','));
 
   const { data, isLoading } = useQuery<ContentResponse>({
-    queryKey: ['content', page, platformFilter, statusFilter, searchQuery, selectedTags],
+    queryKey: ['content', page, platformFilter, statusFilter, categoryFilter, searchQuery, selectedTags],
     queryFn: async () => {
       const res = await api.get<ContentResponse>(`/content?${queryParams.toString()}`);
       return res.data;
@@ -155,7 +158,7 @@ export function LibraryPage() {
     return configs[status];
   };
 
-  const activeFilters = (platformFilter !== 'all' ? 1 : 0) + (statusFilter !== 'all' ? 1 : 0) + (selectedTags.length > 0 ? 1 : 0);
+  const activeFilters = (platformFilter !== 'all' ? 1 : 0) + (statusFilter !== 'all' ? 1 : 0) + (categoryFilter !== 'learning' ? 1 : 0) + (selectedTags.length > 0 ? 1 : 0);
 
   const handleExportAll = async () => {
     try {
@@ -310,12 +313,25 @@ export function LibraryPage() {
                   <option value="FAILED">Failed</option>
                 </select>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-cream-muted mb-2">Category</label>
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => { setCategoryFilter(e.target.value as CategoryFilter); setPage(1); }}
+                  className="input text-sm bg-void-100"
+                >
+                  <option value="all">All content</option>
+                  <option value="learning">Learning</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </div>
               {activeFilters > 0 && (
                 <div className="flex items-end">
                   <button
                     onClick={() => {
                       setPlatformFilter('all');
                       setStatusFilter('all');
+                      setCategoryFilter('learning');
                       setSelectedTags([]);
                       setPage(1);
                     }}

@@ -160,8 +160,10 @@ model Content {
 }
 
 enum ContentStatus {
-  PENDING       // Waiting for user to select
-  SELECTED      // User clicked "Generate Quiz"
+  INBOX         // Just imported, pending triage
+  ARCHIVED      // User archived, no quiz generation
+  PENDING       // Legacy - migrated to SELECTED
+  SELECTED      // User wants to learn, pending transcription
   TRANSCRIBING  // Transcription in progress
   GENERATING    // Quiz generation in progress
   READY         // Quiz ready

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Flame, PlayCircle, BookOpen, TrendingUp, ArrowRight, Zap, Clock } from 'lucide-react';
+import { Flame, PlayCircle, BookOpen, TrendingUp, ArrowRight, Zap, Clock, Inbox } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { api } from '../lib/api';
 
@@ -15,6 +15,7 @@ interface ReviewStats {
 interface OAuthStatus {
   youtube: { platform: string; lastSyncAt: string | null } | null;
   spotify: { platform: string; lastSyncAt: string | null } | null;
+  tiktok: { platform: string; lastSyncAt: string | null } | null;
 }
 
 export function DashboardPage() {
@@ -40,7 +41,16 @@ export function DashboardPage() {
     },
   });
 
-  const isConnected = oauthStatus?.youtube || oauthStatus?.spotify;
+  const { data: inboxData } = useQuery({
+    queryKey: ['inbox-count'],
+    queryFn: async () => {
+      const res = await api.get<{ count: number }>('/content/inbox/count');
+      return res.data;
+    },
+  });
+
+  const inboxCount = inboxData?.count || 0;
+  const isConnected = oauthStatus?.youtube || oauthStatus?.spotify || oauthStatus?.tiktok;
 
   // Get greeting based on time
   const getGreeting = () => {
@@ -134,6 +144,31 @@ export function DashboardPage() {
             </div>
           ))}
         </div>
+
+        {/* Inbox Prompt */}
+        {inboxCount > 0 && (
+          <Link
+            to="/inbox"
+            className="block mb-8 p-5 rounded-2xl bg-gradient-to-r from-amber/10 to-amber/5 border border-amber/20 hover:border-amber/40 transition-all animate-slide-up stagger-5 group"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-amber/20 flex items-center justify-center">
+                  <Inbox size={24} className="text-amber" />
+                </div>
+                <div>
+                  <h3 className="font-display text-cream text-lg">
+                    {inboxCount} new {inboxCount === 1 ? 'item' : 'items'} to review
+                  </h3>
+                  <p className="text-cream-dark text-sm">
+                    Triage your inbox to start learning
+                  </p>
+                </div>
+              </div>
+              <ArrowRight size={20} className="text-amber group-hover:translate-x-1 transition-transform" />
+            </div>
+          </Link>
+        )}
 
         {/* Main CTA */}
         {stats?.dueToday ? (

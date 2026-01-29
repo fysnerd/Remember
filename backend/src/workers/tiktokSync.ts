@@ -197,7 +197,7 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
           authorUsername: video.author.uniqueId,
           viewCount: video.stats?.playCount || null,
           capturedAt: new Date(video.createTime * 1000),
-          status: ContentStatus.PENDING,
+          status: ContentStatus.INBOX,
         },
       });
 

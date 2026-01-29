@@ -149,7 +149,7 @@ async function syncUserSpotify(userId: string, connectionId: string): Promise<nu
               listenProgress,
               fullyPlayed,
               capturedAt: new Date(item.added_at),
-              status: ContentStatus.PENDING,
+              status: ContentStatus.INBOX,
             },
           });
           newEpisodesCount++;

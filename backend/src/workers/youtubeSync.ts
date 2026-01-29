@@ -125,7 +125,7 @@ async function syncUserYouTube(userId: string, connectionId: string): Promise<nu
             description: item.snippet.description?.substring(0, 1000) || null,
             thumbnailUrl,
             capturedAt: new Date(item.snippet.publishedAt),
-            status: ContentStatus.PENDING,
+            status: ContentStatus.INBOX,
           },
         });
 
