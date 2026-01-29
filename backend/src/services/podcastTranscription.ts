@@ -109,22 +109,53 @@ function normalizeForMatch(str: string): string {
 }
 
 /**
- * Calculate similarity between two strings (0-1)
+ * Calculate Levenshtein distance between two strings
+ */
+function levenshteinDistance(a: string, b: string): number {
+  const matrix: number[][] = [];
+
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j;
+  }
+
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substitution
+          matrix[i][j - 1] + 1,     // insertion
+          matrix[i - 1][j] + 1      // deletion
+        );
+      }
+    }
+  }
+
+  return matrix[b.length][a.length];
+}
+
+/**
+ * Calculate similarity between two strings (0-1) using Levenshtein distance
  */
 function stringSimilarity(a: string, b: string): number {
   const normA = normalizeForMatch(a);
   const normB = normalizeForMatch(b);
 
   if (normA === normB) return 1;
-  if (normA.includes(normB) || normB.includes(normA)) return 0.8;
+  if (normA.length === 0 || normB.length === 0) return 0;
 
-  // Count common characters
-  const setA = new Set(normA.split(''));
-  const setB = new Set(normB.split(''));
-  const intersection = [...setA].filter(x => setB.has(x)).length;
-  const union = new Set([...setA, ...setB]).size;
+  // Check if one contains the other (substring match)
+  if (normA.includes(normB) || normB.includes(normA)) return 0.85;
 
-  return intersection / union;
+  // Use Levenshtein distance for proper string similarity
+  const distance = levenshteinDistance(normA, normB);
+  const maxLength = Math.max(normA.length, normB.length);
+
+  return 1 - (distance / maxLength);
 }
 
 /**
@@ -164,7 +195,8 @@ async function findPodcastRSS(showName: string, episodeTitle: string): Promise<P
       console.log(`[Podcast] Best match: "${bestPodcast.collectionName}" (score: ${bestScore.toFixed(2)})`);
 
       const feedUrl = bestPodcast.feedUrl;
-      if (feedUrl && bestScore > 0.3) {
+      // IMPORTANT: Increased threshold from 0.3 to 0.5 to avoid false positives
+      if (feedUrl && bestScore > 0.5) {
         console.log(`[Podcast] Found RSS: ${feedUrl}`);
 
         // Parse RSS to find episode
@@ -185,21 +217,24 @@ async function findPodcastRSS(showName: string, episodeTitle: string): Promise<P
 
             console.log(`[Podcast] Best episode match: "${bestEpisode?.title}" (score: ${bestEpisodeScore.toFixed(2)})`);
 
-            // Only use if match is good enough (> 0.4)
-            if (bestEpisode && bestEpisode.enclosure?.url && bestEpisodeScore > 0.4) {
-              console.log(`[Podcast] Found episode audio: ${bestEpisode.title}`);
+            // IMPORTANT: Increased threshold from 0.4 to 0.5 to avoid false positives
+            // A score of 0.5+ with Levenshtein means strings are fairly similar
+            if (bestEpisode && bestEpisode.enclosure?.url && bestEpisodeScore > 0.5) {
+              console.log(`[Podcast] ✓ Found episode audio: ${bestEpisode.title}`);
               return {
                 rssUrl: feedUrl,
                 episodeAudioUrl: bestEpisode.enclosure.url,
                 episodeTitle: bestEpisode.title,
               };
             } else {
-              console.log(`[Podcast] Episode match score too low (${bestEpisodeScore.toFixed(2)}), skipping`);
+              console.log(`[Podcast] ✗ Episode match score too low (${bestEpisodeScore.toFixed(2)} < 0.5), skipping to avoid wrong transcription`);
             }
           }
         } catch (rssError) {
           console.error(`[Podcast] Failed to parse RSS:`, rssError);
         }
+      } else {
+        console.log(`[Podcast] ✗ Podcast match score too low (${bestScore.toFixed(2)} < 0.5) for "${showName}" → found "${bestPodcast.collectionName}"`);
       }
     }
   } catch (error) {
