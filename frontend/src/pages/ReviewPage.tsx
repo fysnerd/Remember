@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Flame, Target, Clock, ArrowLeft, Keyboard, Brain, Sparkles, Trophy, Star, Zap, Settings } from 'lucide-react';
+import { Flame, Target, Clock, ArrowLeft, Keyboard, Brain, Sparkles, Trophy, Star, Zap, Settings, AlertCircle, FileText, X, Loader2, ExternalLink } from 'lucide-react';
 import { api } from '../lib/api';
 
 interface Quiz {
@@ -66,6 +66,31 @@ interface StreakInfo {
   isNewRecord: boolean;
 }
 
+interface Mistake {
+  id: string;
+  rating: string;
+  question: string;
+  options: string[];
+  correctAnswer: string;
+  explanation: string | null;
+  content: {
+    id: string;
+    title: string;
+    platform: string;
+    url: string;
+  };
+}
+
+interface MistakesResponse {
+  mistakes: Mistake[];
+  count: number;
+}
+
+interface MemoResponse {
+  memo: string;
+  generatedAt: string;
+}
+
 interface SessionCardsResponse {
   cards: Card[];
   count: number;
@@ -96,6 +121,8 @@ export function ReviewPage() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [milestoneToShow, setMilestoneToShow] = useState<number | null>(null);
   const [isNewRecord, setIsNewRecord] = useState(false);
+  const [showMistakes, setShowMistakes] = useState(false);
+  const [aiMemo, setAiMemo] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -136,6 +163,27 @@ export function ReviewPage() {
     mutationFn: async () => {
       if (!sessionId) return null;
       return api.post(`/reviews/session/${sessionId}/complete`);
+    },
+  });
+
+  // Fetch mistakes for session
+  const { data: mistakesData, isLoading: isLoadingMistakes } = useQuery<MistakesResponse>({
+    queryKey: ['session-mistakes', sessionId],
+    queryFn: async () => {
+      const res = await api.get<MistakesResponse>(`/reviews/session/${sessionId}/mistakes`);
+      return res.data;
+    },
+    enabled: !!sessionId && sessionComplete,
+  });
+
+  // Generate AI memo mutation
+  const generateMemo = useMutation({
+    mutationFn: async () => {
+      const res = await api.post<MemoResponse>(`/reviews/session/${sessionId}/memo`);
+      return res.data;
+    },
+    onSuccess: (data) => {
+      setAiMemo(data.memo);
     },
   });
 
@@ -257,15 +305,76 @@ export function ReviewPage() {
     );
   }
 
+  const mistakesCount = sessionStats.again + sessionStats.hard;
+  const correctCount = sessionStats.good + sessionStats.easy;
+  const accuracy = totalReviewed > 0 ? Math.round((correctCount / totalReviewed) * 100) : 0;
+
   // Session complete - show summary
   if (sessionComplete || !data?.cards.length) {
     return (
-      <div className="fixed inset-0 bg-void flex items-center justify-center p-8">
+      <div className="fixed inset-0 bg-void flex items-center justify-center p-8 overflow-auto">
         {/* Ambient glows */}
         <div className="fixed top-20 right-20 w-64 h-64 bg-amber/10 rounded-full blur-3xl pointer-events-none" />
         <div className="fixed bottom-20 left-20 w-48 h-48 bg-sage/10 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="max-w-md w-full relative">
+        {/* Mistakes Modal */}
+        {showMistakes && (
+          <div className="modal-backdrop z-50" onClick={() => setShowMistakes(false)}>
+            <div className="modal-content max-w-2xl max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+              <div className="p-6 border-b border-void-200 flex items-center justify-between">
+                <h3 className="text-xl font-display text-cream">Questions to Review</h3>
+                <button
+                  onClick={() => setShowMistakes(false)}
+                  className="p-2 text-cream-dark hover:text-cream rounded-lg hover:bg-void-100"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                {isLoadingMistakes ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-8 h-8 text-amber animate-spin" />
+                  </div>
+                ) : mistakesData?.mistakes.length === 0 ? (
+                  <p className="text-center text-cream-muted py-8">No mistakes to review!</p>
+                ) : (
+                  mistakesData?.mistakes.map((mistake, idx) => (
+                    <div key={mistake.id} className="bg-void-100 border border-void-200 rounded-xl p-4">
+                      <div className="flex items-start justify-between gap-4 mb-3">
+                        <p className="text-cream font-medium">
+                          <span className="text-amber mr-2">{idx + 1}.</span>
+                          {mistake.question}
+                        </p>
+                        <span className={`px-2 py-1 rounded text-xs font-medium flex-shrink-0 ${
+                          mistake.rating === 'AGAIN' ? 'bg-rust/20 text-rust' : 'bg-amber/20 text-amber'
+                        }`}>
+                          {mistake.rating}
+                        </span>
+                      </div>
+                      <p className="text-sm text-sage mb-2">
+                        Correct: {mistake.options.find(o => o.startsWith(mistake.correctAnswer))}
+                      </p>
+                      {mistake.explanation && (
+                        <p className="text-sm text-cream-dark mb-3">{mistake.explanation}</p>
+                      )}
+                      <a
+                        href={mistake.content.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-amber hover:underline flex items-center gap-1"
+                      >
+                        {mistake.content.title}
+                        <ExternalLink size={12} />
+                      </a>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="max-w-md w-full relative my-8">
           <div className="card animate-scale-in">
             {totalReviewed > 0 ? (
               <>
@@ -275,30 +384,31 @@ export function ReviewPage() {
                 <h2 className="text-3xl font-display text-cream mb-2 text-center">
                   Session Complete
                 </h2>
-                <p className="text-cream-muted text-center mb-8">
-                  Neural pathways strengthened. You reviewed {totalReviewed} card{totalReviewed !== 1 ? 's' : ''}.
+                <p className="text-cream-muted text-center mb-6">
+                  {totalReviewed} question{totalReviewed !== 1 ? 's' : ''} · {accuracy}% correct
                 </p>
 
                 {/* Session Stats */}
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="bg-void-50 border border-void-200 rounded-xl p-4">
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                      <Clock className="w-4 h-4 text-cream-muted" />
-                      <span className="text-sm text-cream-muted">Duration</span>
-                    </div>
-                    <p className="text-2xl font-display text-cream text-center">{getSessionDuration()}</p>
+                <div className="grid grid-cols-3 gap-3 mb-6">
+                  <div className="bg-void-50 border border-void-200 rounded-xl p-3 text-center">
+                    <Clock className="w-5 h-5 text-cream-muted mx-auto mb-1" />
+                    <p className="text-xl font-display text-cream">{getSessionDuration()}</p>
+                    <p className="text-xs text-cream-dark">Duration</p>
                   </div>
-                  <div className="bg-void-50 border border-void-200 rounded-xl p-4">
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                      <Flame className="w-4 h-4 text-amber" />
-                      <span className="text-sm text-cream-muted">Streak</span>
-                    </div>
-                    <p className="text-2xl font-display text-cream text-center">{stats?.currentStreak || 0} days</p>
+                  <div className="bg-void-50 border border-void-200 rounded-xl p-3 text-center">
+                    <Flame className="w-5 h-5 text-amber mx-auto mb-1" />
+                    <p className="text-xl font-display text-cream">{stats?.currentStreak || 0}</p>
+                    <p className="text-xs text-cream-dark">Day streak</p>
+                  </div>
+                  <div className="bg-void-50 border border-void-200 rounded-xl p-3 text-center">
+                    <AlertCircle className="w-5 h-5 text-rust mx-auto mb-1" />
+                    <p className="text-xl font-display text-cream">{mistakesCount}</p>
+                    <p className="text-xs text-cream-dark">To review</p>
                   </div>
                 </div>
 
                 {/* Rating breakdown */}
-                <div className="flex flex-wrap justify-center gap-2 mb-8">
+                <div className="flex flex-wrap justify-center gap-2 mb-6">
                   {sessionStats.again > 0 && (
                     <span className="px-3 py-1.5 bg-rust/20 text-rust border border-rust/30 rounded-lg text-sm">
                       Again: {sessionStats.again}
@@ -320,6 +430,50 @@ export function ReviewPage() {
                     </span>
                   )}
                 </div>
+
+                {/* AI Memo Section */}
+                {sessionId && (
+                  <div className="mb-6">
+                    {aiMemo ? (
+                      <div className="bg-info/10 border border-info/20 rounded-xl p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <FileText size={16} className="text-info" />
+                          <span className="text-sm font-medium text-info">AI Study Memo</span>
+                        </div>
+                        <p className="text-sm text-cream whitespace-pre-wrap">{aiMemo}</p>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => generateMemo.mutate()}
+                        disabled={generateMemo.isPending}
+                        className="w-full py-3 px-4 rounded-xl bg-info/20 border border-info/30 text-info hover:bg-info/30 transition-colors flex items-center justify-center gap-2"
+                      >
+                        {generateMemo.isPending ? (
+                          <>
+                            <Loader2 size={18} className="animate-spin" />
+                            Generating memo...
+                          </>
+                        ) : (
+                          <>
+                            <FileText size={18} />
+                            Generate AI Memo
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Action buttons */}
+                {sessionId && mistakesCount > 0 && (
+                  <button
+                    onClick={() => setShowMistakes(true)}
+                    className="w-full mb-4 py-3 px-4 rounded-xl bg-rust/20 border border-rust/30 text-rust hover:bg-rust/30 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <AlertCircle size={18} />
+                    View {mistakesCount} Mistake{mistakesCount !== 1 ? 's' : ''}
+                  </button>
+                )}
 
                 <p className="text-sm text-cream-dark text-center mb-6">
                   Return tomorrow to maintain your streak.

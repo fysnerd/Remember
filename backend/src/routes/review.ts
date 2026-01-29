@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../config/database.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { Rating, Platform } from '@prisma/client';
+import { generateText } from '../services/llm.js';
 
 export const reviewRouter = Router();
 
@@ -494,6 +495,158 @@ reviewRouter.post('/session/:id/complete', async (req: Request, res: Response, n
         correctCount,
         accuracy: totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0,
       },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// POST /api/reviews/session/:id/memo - Generate AI memo for session
+reviewRouter.post('/session/:id/memo', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const session = await prisma.quizSession.findFirst({
+      where: {
+        id: req.params.id,
+        userId: req.user!.id,
+      },
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    if (!session.completedAt) {
+      return res.status(400).json({ error: 'Session not completed yet' });
+    }
+
+    // If memo already generated, return it
+    if (session.aiMemo) {
+      return res.json({ memo: session.aiMemo, generatedAt: session.memoGeneratedAt });
+    }
+
+    // Get all reviewed content from this session
+    const reviews = await prisma.review.findMany({
+      where: { sessionId: session.id },
+      include: {
+        card: {
+          include: {
+            quiz: {
+              include: {
+                content: {
+                  select: {
+                    id: true,
+                    title: true,
+                    platform: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (reviews.length === 0) {
+      return res.status(400).json({ error: 'No reviews in this session' });
+    }
+
+    // Collect unique content and questions reviewed
+    const contentMap = new Map<string, { title: string; platform: string; questions: string[] }>();
+
+    for (const review of reviews) {
+      const content = review.card.quiz.content;
+      if (!contentMap.has(content.id)) {
+        contentMap.set(content.id, {
+          title: content.title,
+          platform: content.platform,
+          questions: [],
+        });
+      }
+      contentMap.get(content.id)!.questions.push(review.card.quiz.question);
+    }
+
+    // Build prompt for memo generation
+    const contentSummary = Array.from(contentMap.values())
+      .map(c => `- ${c.title} (${c.platform})\n  Questions: ${c.questions.slice(0, 3).join('; ')}${c.questions.length > 3 ? '...' : ''}`)
+      .join('\n');
+
+    const systemPrompt = `You are a learning assistant. Generate a concise study memo summarizing the key concepts the user just reviewed. Focus on 3-5 main takeaways that would help them remember the material. Be practical and actionable. Use bullet points.`;
+
+    const userPrompt = `The user just completed a review session with ${reviews.length} questions from the following content:
+
+${contentSummary}
+
+Generate a brief memo (max 200 words) with the main takeaways and concepts to remember.`;
+
+    const memo = await generateText(userPrompt, { system: systemPrompt, temperature: 0.7 });
+
+    // Save memo to session
+    await prisma.quizSession.update({
+      where: { id: session.id },
+      data: {
+        aiMemo: memo,
+        memoGeneratedAt: new Date(),
+      },
+    });
+
+    return res.json({ memo, generatedAt: new Date() });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// GET /api/reviews/session/:id/mistakes - Get questions answered incorrectly
+reviewRouter.get('/session/:id/mistakes', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const session = await prisma.quizSession.findFirst({
+      where: {
+        id: req.params.id,
+        userId: req.user!.id,
+      },
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Get reviews where user struggled (AGAIN or HARD)
+    const mistakes = await prisma.review.findMany({
+      where: {
+        sessionId: session.id,
+        rating: { in: ['AGAIN', 'HARD'] },
+      },
+      include: {
+        card: {
+          include: {
+            quiz: {
+              include: {
+                content: {
+                  select: {
+                    id: true,
+                    title: true,
+                    platform: true,
+                    url: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return res.json({
+      mistakes: mistakes.map(m => ({
+        id: m.id,
+        rating: m.rating,
+        question: m.card.quiz.question,
+        options: m.card.quiz.options,
+        correctAnswer: m.card.quiz.correctAnswer,
+        explanation: m.card.quiz.explanation,
+        content: m.card.quiz.content,
+      })),
+      count: mistakes.length,
     });
   } catch (error) {
     return next(error);
