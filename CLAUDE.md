@@ -197,3 +197,69 @@ FRONTEND_URL="http://localhost:5173"
 - `docs/remember-ux-design.md` - Design UX
 - `docs/remember-product-brief.md` - Brief produit
 
+---
+
+## Git & Branches (Multi-Claude Workflow)
+
+### Repo GitHub
+**https://github.com/fysnerd/Remember** (privé)
+
+### Concept des branches
+```
+master (code stable, testé)
+    │
+    ├── feature/youtube-history   ← Claude 1 travaille ici
+    │
+    ├── feature/quiz-ui           ← Claude 2 travaille ici
+    │
+    └── fix/spotify-sync          ← Claude 3 travaille ici
+```
+
+Chaque instance de Claude travaille sur sa **branche isolée**. Quand c'est fini et testé, on **merge** dans `master`.
+
+### Commandes essentielles
+
+**Créer une nouvelle branche avant de donner une tâche à Claude :**
+```bash
+cd C:\Users\vmsan\Desktop\FREE\PB\VIBE\Remember
+git checkout -b feature/nom-de-la-feature
+```
+
+**Quand Claude a fini, vérifier et merger :**
+```bash
+git checkout master                    # Retour sur master
+git pull                               # Récupérer les derniers changements
+git merge feature/nom-de-la-feature    # Fusionner la branche
+git push                               # Envoyer sur GitHub
+git branch -d feature/nom-de-la-feature  # Supprimer la branche locale
+```
+
+**Voir toutes les branches :**
+```bash
+git branch -a
+```
+
+**Changer de branche :**
+```bash
+git checkout nom-de-la-branche
+```
+
+### Conventions de nommage des branches
+- `feature/xxx` - Nouvelle fonctionnalité
+- `fix/xxx` - Correction de bug
+- `refactor/xxx` - Refactoring de code
+- `docs/xxx` - Documentation
+
+### Exemple de workflow multi-Claude
+
+| Terminal | Commande | Tâche |
+|----------|----------|-------|
+| Terminal 1 | `git checkout -b feature/quiz-ui` | "Améliore le design des quiz" |
+| Terminal 2 | `git checkout -b feature/watch-history` | "Ajoute l'historique YouTube" |
+| Terminal 3 | `git checkout -b fix/spotify-sync` | "Corrige le bug de sync Spotify" |
+
+### Résoudre les conflits
+Si deux branches modifient le même fichier, Git demandera de résoudre les conflits manuellement lors du merge. Dans ce cas :
+1. Git marquera les conflits dans les fichiers
+2. Édite les fichiers pour choisir quelle version garder
+3. `git add .` puis `git commit` pour finaliser
