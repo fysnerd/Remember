@@ -1,0 +1,288 @@
+// Prisma schema for Remember app
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// User & Authentication
+// ============================================================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String?   // Null if using OAuth only
+  name          String?
+  avatarUrl     String?
+
+  // Email verification
+  emailVerified Boolean   @default(false)
+  verifyToken   String?
+
+  // Trial & Subscription
+  trialEndsAt   DateTime?
+  plan          Plan      @default(FREE)
+
+  // Timestamps
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+
+  // Relations
+  oauthAccounts OAuthAccount[]
+  connectedPlatforms ConnectedPlatform[]
+  contents      Content[]
+  reviews       Review[]
+  settings      UserSettings?
+
+  @@index([email])
+}
+
+model UserSettings {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Review preferences
+  dailyReminderTime String  @default("09:00")
+  timezone          String  @default("UTC")
+  newCardsPerDay    Int     @default(20)
+
+  // Notifications
+  emailReminders    Boolean @default(true)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+enum Plan {
+  FREE
+  PRO
+  LIFETIME
+}
+
+// OAuth accounts for user signup (Google, etc.)
+model OAuthAccount {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  provider      String   // 'google'
+  providerAccountId String
+
+  createdAt     DateTime @default(now())
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+// ============================================================================
+// Connected Platforms (YouTube, Spotify)
+// ============================================================================
+
+model ConnectedPlatform {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  platform      Platform
+
+  // OAuth tokens (encrypted)
+  accessToken   String
+  refreshToken  String?
+  expiresAt     DateTime?
+
+  // Sync tracking
+  lastSyncAt    DateTime?
+  lastSyncError String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, platform])
+  @@index([userId])
+}
+
+enum Platform {
+  YOUTUBE
+  SPOTIFY
+}
+
+// ============================================================================
+// Content & Transcripts
+// ============================================================================
+
+model Content {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  platform      Platform
+  externalId    String   // YouTube video ID or Spotify episode ID
+  url           String
+
+  // Metadata
+  title         String
+  description   String?
+  thumbnailUrl  String?
+  duration      Int?     // in seconds
+
+  // For Spotify podcasts
+  showName       String?
+  listenProgress Int?      // Listening progress percentage (0-100)
+  fullyPlayed    Boolean   @default(false)
+
+  // Processing status
+  status        ContentStatus @default(PENDING)
+
+  // Timestamps
+  capturedAt    DateTime // When user liked/played it
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  transcript    Transcript?
+  quizzes       Quiz[]
+  tags          Tag[]    @relation("ContentTags")
+
+  @@unique([userId, platform, externalId])
+  @@index([userId])
+  @@index([status])
+}
+
+enum ContentStatus {
+  PENDING       // Waiting for user to select
+  SELECTED      // User clicked "Generate Quiz"
+  TRANSCRIBING  // Transcription in progress
+  GENERATING    // Quiz generation in progress
+  READY         // Quiz ready
+  FAILED        // Processing failed
+  UNSUPPORTED   // Spotify Exclusive, etc.
+}
+
+model Transcript {
+  id          String   @id @default(cuid())
+  contentId   String   @unique
+  content     Content  @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  text        String   // Full transcript text
+  segments    Json?    // Timestamped segments [{ start, duration, text }]
+  language    String   @default("en")
+
+  // Processing info
+  source      TranscriptSource
+
+  createdAt   DateTime @default(now())
+}
+
+enum TranscriptSource {
+  YOUTUBE_SUBTITLES  // Free via youtube-transcript-api
+  WHISPER            // Paid via Whisper API
+}
+
+// ============================================================================
+// Quiz & Spaced Repetition
+// ============================================================================
+
+model Quiz {
+  id          String   @id @default(cuid())
+  contentId   String
+  content     Content  @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  question    String
+  type        QuizType
+  options     Json     // ["A) ...", "B) ...", ...]
+  correctAnswer String // "A", "B", etc.
+  explanation String?
+
+  createdAt   DateTime @default(now())
+
+  // Spaced repetition
+  cards       Card[]
+
+  @@index([contentId])
+}
+
+enum QuizType {
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  FLASHCARD
+}
+
+model Card {
+  id          String   @id @default(cuid())
+  quizId      String
+  quiz        Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  userId      String
+
+  // SM-2 Algorithm fields
+  easeFactor  Float    @default(2.5)
+  interval    Int      @default(1)   // days
+  repetitions Int      @default(0)
+
+  // Scheduling
+  nextReviewAt DateTime @default(now())
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  reviews     Review[]
+
+  @@unique([quizId, userId])
+  @@index([userId, nextReviewAt])
+}
+
+model Review {
+  id          String   @id @default(cuid())
+  cardId      String
+  card        Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  rating      Rating
+  responseTime Int?    // milliseconds
+
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+enum Rating {
+  AGAIN  // 1 - Complete blackout
+  HARD   // 2 - Incorrect but remembered
+  GOOD   // 3 - Correct with effort
+  EASY   // 4 - Perfect recall
+}
+
+// ============================================================================
+// Tags
+// ============================================================================
+
+model Tag {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  contents    Content[] @relation("ContentTags")
+
+  createdAt   DateTime  @default(now())
+
+  @@index([name])
+}
+
+// ============================================================================
+// Streak Tracking
+// ============================================================================
+
+model Streak {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+
+  currentStreak Int      @default(0)
+  longestStreak Int      @default(0)
+  lastReviewDate DateTime?
+
+  updatedAt     DateTime @updatedAt
+}

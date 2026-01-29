@@ -1,0 +1,566 @@
+# Sprint Status - Remember
+# Generated: 2026-01-28
+# Based on: PRD v1.1, Architecture v1.1
+
+project:
+  name: Remember
+  description: Active Learning from Social Media
+  start_date: 2026-02-03  # Suggested start
+  sprint_duration: 2 weeks
+  velocity_estimate: 20  # points per sprint (solo dev)
+
+# ============================================================================
+# EPICS OVERVIEW
+# ============================================================================
+
+epics:
+  - id: E1
+    name: Content Capture Foundation
+    status: not_started
+    priority: must_have
+    total_points: 26
+    stories: [S001, S002, S003, S004]
+
+  - id: E2
+    name: Content Processing
+    status: not_started
+    priority: must_have
+    total_points: 31  # Adjusted for new architecture
+    stories: [S005, S005b, S006, S007]
+
+  - id: E3
+    name: Spaced Repetition Review
+    status: completed
+    priority: must_have
+    total_points: 29
+    stories: [S008, S009, S010, S011]
+
+  - id: E4
+    name: Content Library
+    status: completed
+    priority: should_have
+    total_points: 18
+    stories: [S012, S013, S014]
+
+  - id: E5
+    name: Export & Integrations
+    status: in_progress
+    priority: should_have
+    total_points: 13
+    stories: [S015, S016]
+
+  - id: E6
+    name: User Management & Billing
+    status: completed
+    priority: must_have
+    total_points: 16
+    stories: [S018, S019, S020]
+
+# ============================================================================
+# ALL STORIES
+# ============================================================================
+
+stories:
+  # --- Epic 1: Content Capture ---
+  - id: S001
+    title: YouTube OAuth Integration
+    epic: E1
+    points: 8
+    priority: must_have
+    status: not_started
+    sprint: 1
+    description: |
+      Connect YouTube account via OAuth to access liked videos.
+      - "Connect YouTube" button triggers Google OAuth
+      - Store access_token + refresh_token securely
+      - Show connection status and last sync time
+    acceptance_criteria:
+      - OAuth popup opens with correct scopes
+      - Tokens stored encrypted in database
+      - Connection status visible in settings
+      - Can disconnect and reconnect
+
+  - id: S002
+    title: Spotify OAuth Integration
+    epic: E1
+    points: 8
+    priority: must_have
+    status: not_started
+    sprint: 1
+    description: |
+      Connect Spotify account via OAuth to access listening history.
+      - "Connect Spotify" button triggers Spotify OAuth
+      - Store access_token + refresh_token securely
+      - Show connection status and last sync time
+    acceptance_criteria:
+      - OAuth popup opens with correct scopes
+      - Tokens stored encrypted in database
+      - Connection status visible in settings
+      - Can disconnect and reconnect
+
+  - id: S003
+    title: YouTube Sync Cron Job
+    epic: E1
+    points: 5
+    priority: must_have
+    status: completed
+    sprint: 2
+    depends_on: [S001]
+    description: |
+      Background job to fetch new liked videos from YouTube.
+      - Runs every 15 minutes
+      - Fetches from YouTube Data API (likes playlist)
+      - Only processes new videos since last sync
+    acceptance_criteria:
+      - Cron job runs reliably every 15 min
+      - Handles API rate limits gracefully
+      - Deduplicates content
+      - Updates last_sync_timestamp
+
+  - id: S004
+    title: Spotify Sync Cron Job
+    epic: E1
+    points: 5
+    priority: must_have
+    status: completed
+    sprint: 2
+    depends_on: [S002]
+    description: |
+      Background job to fetch recent podcast episodes from Spotify.
+      - Runs every 30 minutes
+      - Fetches from Spotify recently-played API
+      - Filters for podcast episodes only (not music)
+    acceptance_criteria:
+      - Cron job runs reliably every 30 min
+      - Filters out music tracks
+      - Deduplicates content
+      - Updates last_sync_timestamp
+
+  # --- Epic 2: Content Processing ---
+  - id: S005
+    title: YouTube Transcription (youtube-transcript-api)
+    epic: E2
+    points: 5  # Reduced from 13 - much simpler with youtube-transcript-api
+    priority: must_have
+    status: completed
+    sprint: 2
+    depends_on: [S003]
+    description: |
+      Fetch transcripts for YouTube videos using youtube-transcript-api.
+      - Use youtube-transcript-api Python library (FREE)
+      - Fallback to yt-dlp + Whisper if no subtitles (rare)
+      - Store timestamped transcript in database
+    acceptance_criteria:
+      - Transcripts fetched for 95%+ of videos
+      - Fallback works for videos without subtitles
+      - Timestamps preserved
+      - Multiple languages supported (EN, FR, ES, DE)
+
+  - id: S005b
+    title: Spotify Podcast Transcription (RSS + Whisper)
+    epic: E2
+    points: 10  # New story
+    priority: must_have
+    status: completed
+    sprint: 3
+    depends_on: [S004]
+    description: |
+      Transcribe Spotify podcasts via RSS feed + Whisper API.
+      - Lookup RSS feed using Listen Notes API
+      - Download MP3 from RSS feed
+      - Send to Whisper API for transcription
+      - Handle "Spotify Exclusive" gracefully (unsupported)
+    acceptance_criteria:
+      - RSS feed found for 80%+ of podcasts
+      - Audio downloaded and transcribed
+      - Spotify Exclusives marked as "unsupported"
+      - Processing time <5min for 1-hour episode
+
+  - id: S006
+    title: AI Quiz Generation from Transcripts
+    epic: E2
+    points: 13
+    priority: must_have
+    status: completed
+    sprint: 3
+    depends_on: [S005]
+    description: |
+      Generate quiz questions from video/podcast transcripts using LLM.
+      - Send transcript to GPT-4/Claude
+      - Generate 3-5 multiple choice questions
+      - Include quality filter (skip non-educational)
+    acceptance_criteria:
+      - 3-5 questions generated per content
+      - Questions are factual and educational
+      - User can preview before adding to queue
+      - User can regenerate if quality poor
+
+  - id: S007
+    title: AI Quiz from Podcast Transcripts
+    epic: E2
+    points: 3  # Reduced - same logic as S006, just different source
+    priority: must_have
+    status: completed
+    sprint: 3
+    depends_on: [S005b, S006]
+    description: |
+      Apply quiz generation to podcast transcripts.
+      - Reuse S006 logic for podcast content
+      - Handle longer transcripts (chunk if needed)
+    acceptance_criteria:
+      - Quiz generation works on podcast transcripts
+      - Handles long episodes (>1 hour)
+      - Quality filter applied
+
+  # --- Epic 3: Spaced Repetition ---
+  - id: S008
+    title: Review Session Interface
+    epic: E3
+    points: 8
+    priority: must_have
+    status: completed
+    sprint: 4
+    depends_on: [S006]
+    description: |
+      Clean, focused UI for quiz review sessions.
+      - Full-screen review mode
+      - Show question, reveal answer, rate difficulty
+      - Progress bar and session summary
+    acceptance_criteria:
+      - Distraction-free full-screen UI
+      - Keyboard shortcuts (Space, 1-4)
+      - Progress bar updates
+      - Session summary at end
+
+  - id: S009
+    title: SM-2 Spaced Repetition Algorithm
+    epic: E3
+    points: 13
+    priority: must_have
+    status: completed
+    sprint: 4
+    depends_on: [S008]
+    description: |
+      Implement SM-2 algorithm for optimal review scheduling.
+      - Calculate next review date based on difficulty rating
+      - Intervals: 1d, 3d, 1w, 2w, 1m, 3m
+      - Track ease factor per card
+    acceptance_criteria:
+      - SM-2 algorithm correctly implemented
+      - Cards scheduled based on rating
+      - New cards introduced gradually (20/day max)
+      - Due cards ordered oldest first
+
+  - id: S010
+    title: Daily Review Reminders
+    epic: E3
+    points: 5
+    priority: must_have
+    status: completed
+    sprint: 5
+    depends_on: [S009]
+    description: |
+      Email reminders to encourage daily review habit.
+      - Configurable reminder time (default 9am)
+      - Shows number of cards due
+      - Direct link to review session
+    acceptance_criteria:
+      - Email sent at configured time
+      - Shows card count
+      - Can snooze or skip
+      - User can disable
+
+  - id: S011
+    title: Streak Tracking
+    epic: E3
+    points: 3
+    priority: must_have
+    status: completed
+    sprint: 5
+    depends_on: [S009]
+    description: |
+      Track consecutive days of review for motivation.
+      - Streak counter on dashboard
+      - Celebration on milestones (7, 30, 100 days)
+      - Longest streak tracked
+    acceptance_criteria:
+      - Streak increments daily
+      - Resets if day missed
+      - Milestone celebrations work
+      - Longest streak persisted
+
+  # --- Epic 4: Content Library ---
+  - id: S012
+    title: Content Library List View
+    epic: E4
+    points: 5
+    priority: should_have
+    status: completed
+    sprint: 5
+    description: |
+      View all captured content in a browsable list.
+      - Grid/list view with thumbnails
+      - Shows title, platform, date, card count
+      - Pagination
+    acceptance_criteria:
+      - Content displayed with thumbnails
+      - Click to view details
+      - Pagination works (20/page)
+
+  - id: S013
+    title: Search & Filter
+    epic: E4
+    points: 8
+    priority: should_have
+    status: completed
+    sprint: 6
+    depends_on: [S012]
+    description: |
+      Search and filter content library.
+      - Full-text search on titles + transcripts
+      - Filter by platform, date, tags
+      - Instant search results
+    acceptance_criteria:
+      - Search returns relevant results
+      - Filters combine correctly
+      - Results update as user types
+
+  - id: S014
+    title: Auto-Tagging with AI
+    epic: E4
+    points: 5
+    priority: should_have
+    status: completed
+    sprint: 6
+    depends_on: [S006]
+    description: |
+      Automatically tag content using AI.
+      - Generate 3-5 tags per item from transcript
+      - Tags editable by user
+      - Tag cloud in library
+    acceptance_criteria:
+      - Tags generated automatically
+      - User can edit/delete tags
+      - Tags used in filtering
+
+  # --- Epic 5: Export ---
+  - id: S015
+    title: Markdown Export
+    epic: E5
+    points: 5
+    priority: should_have
+    status: completed
+    sprint: 6
+    description: |
+      Export content as Markdown files.
+      - Single item or bulk export
+      - Includes transcript, quizzes, metadata
+      - Download as .zip for bulk
+    acceptance_criteria:
+      - Markdown properly formatted
+      - Bulk export works
+      - Zip download functional
+
+  - id: S016
+    title: Notion Integration
+    epic: E5
+    points: 8
+    priority: should_have
+    status: not_started
+    sprint: 7
+    depends_on: [S015]
+    description: |
+      Export content directly to Notion database.
+      - OAuth connection to Notion
+      - Select target database
+      - One-click export
+    acceptance_criteria:
+      - Notion OAuth works
+      - Database selection works
+      - Content appears in Notion
+      - No duplicates on re-export
+
+  # --- Epic 6: User Management ---
+  - id: S018
+    title: User Sign Up
+    epic: E6
+    points: 5
+    priority: must_have
+    status: completed
+    sprint: 1
+    description: |
+      User registration system.
+      - Email + password signup
+      - Google OAuth signup
+      - Email verification
+      - Free trial starts (14 days)
+    acceptance_criteria:
+      - Both signup methods work
+      - Email verification sent
+      - Trial period tracked
+      - User can login after signup
+
+  - id: S019
+    title: Subscription Management
+    epic: E6
+    points: 8
+    priority: must_have
+    status: completed
+    sprint: 5
+    depends_on: [S018]
+    description: |
+      Stripe integration for subscriptions.
+      - Stripe Checkout for payment
+      - Monthly ($9) and yearly ($90) options
+      - Auto-renewal
+    acceptance_criteria:
+      - Checkout flow works
+      - Subscription created in Stripe
+      - User status updated in app
+      - Email confirmation sent
+
+  - id: S020
+    title: Billing Portal
+    epic: E6
+    points: 3
+    priority: should_have
+    status: completed
+    sprint: 6
+    depends_on: [S019]
+    description: |
+      Access to Stripe Customer Portal.
+      - View billing history
+      - Update payment method
+      - Cancel subscription
+    acceptance_criteria:
+      - Portal link works
+      - User can manage subscription
+      - Changes reflected in app
+
+# ============================================================================
+# SPRINT PLAN
+# ============================================================================
+
+sprints:
+  - number: 1
+    name: "Foundation & Auth"
+    start_date: 2026-02-03
+    end_date: 2026-02-14
+    goal: "Users can sign up and connect YouTube/Spotify accounts"
+    stories: [S018, S001, S002]
+    total_points: 21
+    status: not_started
+
+  - number: 2
+    name: "Sync & YouTube Transcription"
+    start_date: 2026-02-17
+    end_date: 2026-02-28
+    goal: "Content syncs automatically, YouTube videos get transcripts"
+    stories: [S003, S004, S005]
+    total_points: 15
+    status: completed
+
+  - number: 3
+    name: "Podcast Transcription & Quiz Generation"
+    start_date: 2026-03-03
+    end_date: 2026-03-14
+    goal: "Podcasts transcribed, AI generates quizzes from all content"
+    stories: [S005b, S006, S007]
+    total_points: 26
+    status: completed
+
+  - number: 4
+    name: "Review System Core"
+    start_date: 2026-03-17
+    end_date: 2026-03-28
+    goal: "Users can review quizzes with spaced repetition"
+    stories: [S008, S009]
+    total_points: 21
+    status: completed
+
+  - number: 5
+    name: "Engagement & Monetization"
+    start_date: 2026-03-31
+    end_date: 2026-04-11
+    goal: "Daily reminders, streaks, and subscription payments"
+    stories: [S010, S011, S012, S019]
+    total_points: 21
+    status: completed
+
+  - number: 6
+    name: "Library & Export"
+    start_date: 2026-04-14
+    end_date: 2026-04-25
+    goal: "Content library with search, tags, and export"
+    stories: [S013, S014, S015, S020]
+    total_points: 21
+    status: completed
+
+  - number: 7
+    name: "Polish & Integrations"
+    start_date: 2026-04-28
+    end_date: 2026-05-09
+    goal: "Notion integration, bug fixes, polish"
+    stories: [S016]
+    total_points: 8
+    status: not_started
+    notes: "Buffer sprint for bug fixes and polish"
+
+# ============================================================================
+# SUMMARY
+# ============================================================================
+
+summary:
+  total_stories: 19
+  total_points: 133
+  must_have_points: 102
+  should_have_points: 31
+
+  mvp_sprints: 5  # Sprints 1-5 = core MVP
+  mvp_end_date: 2026-04-11
+
+  full_v1_sprints: 7
+  full_v1_end_date: 2026-05-09
+
+  velocity_assumption: "20 points/sprint (solo developer)"
+
+  risks:
+    - "Whisper API costs for Spotify podcasts (monitor usage)"
+    - "Listen Notes API availability/reliability"
+    - "YouTube transcript availability varies by video"
+    - "LLM quality for quiz generation (may need prompt tuning)"
+
+# ============================================================================
+# NOTES
+# ============================================================================
+
+notes: |
+  ## Architecture Decisions (v1.1)
+  - Web App only (no Chrome Extension)
+  - YouTube: youtube-transcript-api (FREE) for subtitles
+  - Spotify: RSS feed → Whisper API ($0.36/hour)
+  - Quiz generation: GPT-4 or Claude
+
+  ## MVP Definition (Sprints 1-5)
+  - User can sign up and connect YouTube + Spotify
+  - Content syncs automatically
+  - User selects content to quiz
+  - Transcripts generated (YouTube free, Spotify paid)
+  - AI generates quizzes
+  - Spaced repetition review system
+  - Daily reminders and streaks
+  - Stripe subscription for Pro plan
+
+  ## Post-MVP (Sprints 6-7)
+  - Search & filter content
+  - Auto-tagging
+  - Markdown export
+  - Notion integration
+  - Billing portal
+
+  ## Excluded from v1
+  - Mobile app (future)
+  - Instagram/TikTok (future - needs scraping)
+  - Twitter (API too expensive)
+  - Team features
+  - Obsidian integration (could add later)
