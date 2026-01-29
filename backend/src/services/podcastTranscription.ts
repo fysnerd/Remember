@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { exec } from 'child_process';
+import * as crypto from 'crypto';
 
 // Initialize Groq client (free Whisper) - falls back to OpenAI if Groq not available
 const groqClient = config.groq?.apiKey
@@ -159,15 +160,137 @@ function stringSimilarity(a: string, b: string): number {
 }
 
 /**
- * Search for podcast RSS feed using iTunes Search API (free, no key required)
- * Falls back to Listen Notes if configured
+ * Generate Podcast Index API auth headers
+ */
+function getPodcastIndexHeaders(): Record<string, string> {
+  const apiKey = config.podcastIndex?.apiKey;
+  const apiSecret = config.podcastIndex?.apiSecret;
+
+  if (!apiKey || !apiSecret) {
+    throw new Error('Podcast Index API credentials not configured');
+  }
+
+  const apiHeaderTime = Math.floor(Date.now() / 1000);
+  const hash = crypto
+    .createHash('sha1')
+    .update(apiKey + apiSecret + apiHeaderTime)
+    .digest('hex');
+
+  return {
+    'X-Auth-Date': apiHeaderTime.toString(),
+    'X-Auth-Key': apiKey,
+    'Authorization': hash,
+    'User-Agent': 'Remember/1.0',
+  };
+}
+
+/**
+ * Search for podcast using Podcast Index API (4.4M+ podcasts, free)
+ */
+async function searchPodcastIndex(showName: string, episodeTitle: string): Promise<PodcastRSSResult | null> {
+  if (!config.podcastIndex?.apiKey || !config.podcastIndex?.apiSecret) {
+    console.log('[Podcast] Podcast Index not configured, skipping');
+    return null;
+  }
+
+  try {
+    console.log(`[Podcast] Searching Podcast Index for: "${showName}"`);
+
+    // Search for the podcast by title
+    const headers = getPodcastIndexHeaders();
+    const searchResponse = await axios.get('https://api.podcastindex.org/api/1.0/search/byterm', {
+      params: { q: showName },
+      headers,
+      timeout: 15000,
+    });
+
+    const feeds = searchResponse.data.feeds;
+    if (!feeds || feeds.length === 0) {
+      console.log('[Podcast] No results from Podcast Index');
+      return null;
+    }
+
+    // Find best match by name similarity
+    let bestFeed = feeds[0];
+    let bestScore = 0;
+
+    for (const feed of feeds) {
+      const score = stringSimilarity(feed.title || '', showName);
+      if (score > bestScore) {
+        bestScore = score;
+        bestFeed = feed;
+      }
+    }
+
+    console.log(`[Podcast] Podcast Index best match: "${bestFeed.title}" (score: ${bestScore.toFixed(2)})`);
+
+    if (bestScore < 0.5) {
+      console.log(`[Podcast] ✗ Podcast Index match score too low (${bestScore.toFixed(2)} < 0.5)`);
+      return null;
+    }
+
+    const feedUrl = bestFeed.url;
+    if (!feedUrl) {
+      console.log('[Podcast] No RSS URL in Podcast Index result');
+      return null;
+    }
+
+    console.log(`[Podcast] Found RSS via Podcast Index: ${feedUrl}`);
+
+    // Parse RSS to find episode
+    const feed = await rssParser.parseURL(feedUrl);
+    if (!feed || !feed.items || feed.items.length === 0) {
+      console.log('[Podcast] RSS feed empty or invalid');
+      return null;
+    }
+
+    // Find matching episode by title similarity
+    let bestEpisode = null;
+    let bestEpisodeScore = 0;
+
+    for (const item of feed.items) {
+      const score = stringSimilarity(item.title || '', episodeTitle);
+      if (score > bestEpisodeScore) {
+        bestEpisodeScore = score;
+        bestEpisode = item;
+      }
+    }
+
+    console.log(`[Podcast] Best episode match: "${bestEpisode?.title}" (score: ${bestEpisodeScore.toFixed(2)})`);
+
+    if (bestEpisode && bestEpisode.enclosure?.url && bestEpisodeScore > 0.5) {
+      console.log(`[Podcast] ✓ Found episode via Podcast Index: ${bestEpisode.title}`);
+      return {
+        rssUrl: feedUrl,
+        episodeAudioUrl: bestEpisode.enclosure.url,
+        episodeTitle: bestEpisode.title,
+      };
+    }
+
+    console.log(`[Podcast] ✗ Episode match score too low (${bestEpisodeScore.toFixed(2)} < 0.5)`);
+    return null;
+
+  } catch (error: any) {
+    console.error('[Podcast] Podcast Index API error:', error.message || error);
+    return null;
+  }
+}
+
+/**
+ * Search for podcast RSS feed - tries Podcast Index first, then iTunes
  */
 async function findPodcastRSS(showName: string, episodeTitle: string): Promise<PodcastRSSResult> {
   console.log(`[Podcast] Searching for: "${showName}" - "${episodeTitle}"`);
 
-  // Method 1: iTunes Search API (free, no key required)
+  // Method 1: Podcast Index API (4.4M+ podcasts, better coverage)
+  const podcastIndexResult = await searchPodcastIndex(showName, episodeTitle);
+  if (podcastIndexResult) {
+    return podcastIndexResult;
+  }
+
+  // Method 2: iTunes Search API (fallback, free, no key required)
   try {
-    console.log(`[Podcast] Searching iTunes for: ${showName}`);
+    console.log(`[Podcast] Falling back to iTunes for: ${showName}`);
     const itunesResponse = await axios.get('https://itunes.apple.com/search', {
       params: {
         term: showName,

@@ -56,6 +56,10 @@ const envSchema = z.object({
   // Listen Notes (RSS feed lookup for podcasts)
   LISTEN_NOTES_API_KEY: z.string().optional(),
 
+  // Podcast Index (RSS feed lookup - free, open source)
+  PODCAST_INDEX_API_KEY: z.string().optional(),
+  PODCAST_INDEX_API_SECRET: z.string().optional(),
+
   // Email (Resend)
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().email().default('noreply@remember.app'),
@@ -137,6 +141,11 @@ export const config = {
 
   listenNotes: {
     apiKey: env.LISTEN_NOTES_API_KEY,
+  },
+
+  podcastIndex: {
+    apiKey: env.PODCAST_INDEX_API_KEY,
+    apiSecret: env.PODCAST_INDEX_API_SECRET,
   },
 
   email: {
