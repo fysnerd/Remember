@@ -37,6 +37,7 @@ model User {
   connectedPlatforms ConnectedPlatform[]
   contents      Content[]
   reviews       Review[]
+  quizSessions  QuizSession[]
   settings      UserSettings?
 
   @@index([email])
@@ -250,12 +251,17 @@ model Review {
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // Optional session tracking
+  sessionId   String?
+  session     QuizSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
   rating      Rating
   responseTime Int?    // milliseconds
 
   createdAt   DateTime @default(now())
 
   @@index([userId, createdAt])
+  @@index([sessionId])
 }
 
 enum Rating {
@@ -277,6 +283,36 @@ model Tag {
   createdAt   DateTime  @default(now())
 
   @@index([name])
+}
+
+// ============================================================================
+// Quiz Sessions (Customizable Review Sessions)
+// ============================================================================
+
+model QuizSession {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Configuration
+  questionLimit Int?      // null = unlimited
+  platforms     Platform[] // Filter by platform (empty = all)
+  tagIds        String[]  // Filter by tag IDs
+  contentIds    String[]  // Specific content selection (empty = all matching)
+
+  // Results
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+  correctCount  Int       @default(0)
+  totalCount    Int       @default(0)
+
+  // AI Memo (generated on request)
+  aiMemo        String?
+  memoGeneratedAt DateTime?
+
+  reviews       Review[]
+
+  @@index([userId, startedAt])
 }
 
 // ============================================================================

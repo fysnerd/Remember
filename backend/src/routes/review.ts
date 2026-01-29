@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/database.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { Rating } from '@prisma/client';
+import { Rating, Platform } from '@prisma/client';
 
 export const reviewRouter = Router();
 
@@ -217,6 +217,7 @@ const submitReviewSchema = z.object({
   cardId: z.string(),
   rating: z.enum(['AGAIN', 'HARD', 'GOOD', 'EASY']),
   responseTime: z.number().optional(),
+  sessionId: z.string().optional(),
 });
 
 // POST /api/reviews - Submit a review
@@ -291,6 +292,7 @@ reviewRouter.post('/', async (req: Request, res: Response, next: NextFunction) =
           userId: req.user!.id,
           rating: data.rating as Rating,
           responseTime: data.responseTime,
+          sessionId: data.sessionId,
         },
       }),
     ]);
@@ -319,6 +321,259 @@ reviewRouter.post('/', async (req: Request, res: Response, next: NextFunction) =
     return next(error);
   }
 });
+
+// ============================================================================
+// Quiz Session Endpoints
+// ============================================================================
+
+// Validation schema for session creation
+const createSessionSchema = z.object({
+  questionLimit: z.number().min(1).max(100).nullable().optional(),
+  platforms: z.array(z.enum(['YOUTUBE', 'SPOTIFY', 'TIKTOK'])).optional(),
+  tagIds: z.array(z.string()).optional(),
+  contentIds: z.array(z.string()).optional(),
+});
+
+// POST /api/reviews/session - Create a new quiz session
+reviewRouter.post('/session', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = createSessionSchema.parse(req.body);
+    const userId = req.user!.id;
+
+    // Create session
+    const session = await prisma.quizSession.create({
+      data: {
+        userId,
+        questionLimit: data.questionLimit ?? null,
+        platforms: data.platforms as Platform[] || [],
+        tagIds: data.tagIds || [],
+        contentIds: data.contentIds || [],
+      },
+    });
+
+    // Get matching cards count
+    const matchingCards = await getSessionCards(userId, session, true);
+
+    return res.status(201).json({
+      session,
+      matchingCardsCount: matchingCards,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        error: 'Validation error',
+        details: error.errors,
+      });
+    }
+    return next(error);
+  }
+});
+
+// GET /api/reviews/session/preview - Preview matching cards without creating session
+reviewRouter.get('/session/preview', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+    const { platforms, tagIds, contentIds } = req.query;
+
+    const config = {
+      platforms: platforms ? (platforms as string).split(',').filter(Boolean) as Platform[] : [],
+      tagIds: tagIds ? (tagIds as string).split(',').filter(Boolean) : [],
+      contentIds: contentIds ? (contentIds as string).split(',').filter(Boolean) : [],
+    };
+
+    const count = await getSessionCards(userId, config, true);
+
+    return res.json({ matchingCardsCount: count });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// GET /api/reviews/session/:id - Get session details
+reviewRouter.get('/session/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const session = await prisma.quizSession.findFirst({
+      where: {
+        id: req.params.id,
+        userId: req.user!.id,
+      },
+      include: {
+        reviews: {
+          include: {
+            card: {
+              include: {
+                quiz: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    return res.json(session);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// GET /api/reviews/session/:id/cards - Get cards for a session
+reviewRouter.get('/session/:id/cards', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+
+    const session = await prisma.quizSession.findFirst({
+      where: {
+        id: req.params.id,
+        userId,
+      },
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const cards = await getSessionCards(userId, session, false);
+
+    return res.json({
+      cards,
+      count: Array.isArray(cards) ? cards.length : 0,
+      session,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// POST /api/reviews/session/:id/complete - Mark session as complete
+reviewRouter.post('/session/:id/complete', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const session = await prisma.quizSession.findFirst({
+      where: {
+        id: req.params.id,
+        userId: req.user!.id,
+      },
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    if (session.completedAt) {
+      return res.status(400).json({ error: 'Session already completed' });
+    }
+
+    // Count reviews in this session
+    const reviewStats = await prisma.review.groupBy({
+      by: ['rating'],
+      where: { sessionId: session.id },
+      _count: true,
+    });
+
+    const totalCount = reviewStats.reduce((sum, r) => sum + r._count, 0);
+    const correctCount = reviewStats
+      .filter(r => r.rating === 'GOOD' || r.rating === 'EASY')
+      .reduce((sum, r) => sum + r._count, 0);
+
+    const updatedSession = await prisma.quizSession.update({
+      where: { id: session.id },
+      data: {
+        completedAt: new Date(),
+        totalCount,
+        correctCount,
+      },
+    });
+
+    return res.json({
+      session: updatedSession,
+      stats: {
+        totalCount,
+        correctCount,
+        accuracy: totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// Helper function to get cards matching session filters
+async function getSessionCards(
+  userId: string,
+  config: { platforms: Platform[]; tagIds: string[]; contentIds: string[]; questionLimit?: number | null },
+  countOnly: true
+): Promise<number>;
+async function getSessionCards(
+  userId: string,
+  config: { platforms: Platform[]; tagIds: string[]; contentIds: string[]; questionLimit?: number | null },
+  countOnly: false
+): Promise<any[]>;
+async function getSessionCards(
+  userId: string,
+  config: { platforms: Platform[]; tagIds: string[]; contentIds: string[]; questionLimit?: number | null },
+  countOnly: boolean
+): Promise<number | any[]> {
+  // Build content filter
+  const contentWhere: any = {
+    userId,
+    status: 'READY',
+  };
+
+  if (config.platforms && config.platforms.length > 0) {
+    contentWhere.platform = { in: config.platforms };
+  }
+
+  if (config.contentIds && config.contentIds.length > 0) {
+    contentWhere.id = { in: config.contentIds };
+  }
+
+  if (config.tagIds && config.tagIds.length > 0) {
+    contentWhere.tags = {
+      some: {
+        id: { in: config.tagIds },
+      },
+    };
+  }
+
+  // Build card filter
+  const cardWhere: any = {
+    userId,
+    nextReviewAt: { lte: new Date() },
+    quiz: {
+      content: contentWhere,
+    },
+  };
+
+  if (countOnly) {
+    return prisma.card.count({ where: cardWhere });
+  }
+
+  const limit = config.questionLimit ?? 50;
+
+  return prisma.card.findMany({
+    where: cardWhere,
+    orderBy: { nextReviewAt: 'asc' },
+    take: limit,
+    include: {
+      quiz: {
+        include: {
+          content: {
+            select: {
+              id: true,
+              title: true,
+              url: true,
+              platform: true,
+              tags: true,
+            },
+          },
+        },
+      },
+    },
+  });
+}
 
 // GET /api/reviews/settings - Get review settings
 reviewRouter.get('/settings', async (req: Request, res: Response, next: NextFunction) => {

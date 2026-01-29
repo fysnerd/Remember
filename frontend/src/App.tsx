@@ -8,6 +8,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import { LibraryPage } from './pages/LibraryPage';
 import { ReviewPage } from './pages/ReviewPage';
 import { InboxPage } from './pages/InboxPage';
+import { SessionBuilderPage } from './pages/SessionBuilderPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore();
@@ -39,6 +40,7 @@ function App() {
         <Route path="inbox" element={<InboxPage />} />
         <Route path="library" element={<LibraryPage />} />
         <Route path="review" element={<ReviewPage />} />
+        <Route path="review/configure" element={<SessionBuilderPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
 

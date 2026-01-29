@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
-import { Flame, Target, Clock, ArrowLeft, Keyboard, Brain, Sparkles, Trophy, Star, Zap } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Flame, Target, Clock, ArrowLeft, Keyboard, Brain, Sparkles, Trophy, Star, Zap, Settings } from 'lucide-react';
 import { api } from '../lib/api';
 
 interface Quiz {
@@ -66,7 +66,22 @@ interface StreakInfo {
   isNewRecord: boolean;
 }
 
+interface SessionCardsResponse {
+  cards: Card[];
+  count: number;
+  session: {
+    id: string;
+    questionLimit: number | null;
+    platforms: string[];
+    tagIds: string[];
+    contentIds: string[];
+  };
+}
+
 export function ReviewPage() {
+  const [searchParams] = useSearchParams();
+  const sessionId = searchParams.get('session');
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
@@ -84,9 +99,25 @@ export function ReviewPage() {
 
   const queryClient = useQueryClient();
 
+  // Fetch cards - either from session or default due cards
   const { data, isLoading } = useQuery<DueCardsResponse>({
-    queryKey: ['due-cards'],
-    queryFn: async () => {
+    queryKey: sessionId ? ['session-cards', sessionId] : ['due-cards'],
+    queryFn: async (): Promise<DueCardsResponse> => {
+      if (sessionId) {
+        const res = await api.get<SessionCardsResponse>(`/reviews/session/${sessionId}/cards`);
+        // Transform to match DueCardsResponse structure
+        return {
+          cards: res.data.cards,
+          count: res.data.count,
+          stats: {
+            reviewDue: res.data.count,
+            newDue: 0,
+            newCardsToday: 0,
+            newCardsLimit: 20,
+            remainingNewToday: 0,
+          },
+        };
+      }
       const res = await api.get<DueCardsResponse>('/reviews/due');
       return res.data;
     },
@@ -100,9 +131,17 @@ export function ReviewPage() {
     },
   });
 
+  // Complete session mutation
+  const completeSession = useMutation({
+    mutationFn: async () => {
+      if (!sessionId) return null;
+      return api.post(`/reviews/session/${sessionId}/complete`);
+    },
+  });
+
   const submitReview = useMutation({
     mutationFn: async ({ cardId, rating }: { cardId: string; rating: Rating }) => {
-      return api.post<{ streak: StreakInfo }>('/reviews', { cardId, rating });
+      return api.post<{ streak: StreakInfo }>('/reviews', { cardId, rating, sessionId });
     },
     onSuccess: (response, variables) => {
       setSessionStats((prev) => ({
@@ -123,8 +162,13 @@ export function ReviewPage() {
       if (data && currentIndex < data.cards.length - 1) {
         setCurrentIndex((i) => i + 1);
       } else {
+        // Complete session if using one
+        if (sessionId) {
+          completeSession.mutate();
+        }
         setSessionComplete(true);
         queryClient.invalidateQueries({ queryKey: ['due-cards'] });
+        queryClient.invalidateQueries({ queryKey: ['session-cards'] });
         queryClient.invalidateQueries({ queryKey: ['review-stats'] });
       }
     },
@@ -349,6 +393,15 @@ export function ReviewPage() {
               </div>
             </div>
             <div className="flex items-center gap-4">
+              {!sessionId && (
+                <Link
+                  to="/review/configure"
+                  className="text-cream-dark hover:text-cream transition-colors"
+                  title="Configure session"
+                >
+                  <Settings size={18} />
+                </Link>
+              )}
               <button
                 onClick={() => setShowShortcuts((prev) => !prev)}
                 className="text-cream-dark hover:text-cream transition-colors"

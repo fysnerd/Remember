@@ -201,7 +201,7 @@ export function DashboardPage() {
                 </div>
               </div>
               <Link
-                to="/review"
+                to="/review/configure"
                 className="btn-primary flex items-center gap-2 group"
               >
                 Start Session
