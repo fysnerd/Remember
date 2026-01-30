@@ -39,6 +39,7 @@
 |---------|-------|
 | YouTube Data API v3 | Récupération des vidéos likées |
 | Spotify Web API | Récupération des podcasts écoutés |
+| Podcast Index API | Découverte RSS podcasts (4.4M+, primary) |
 | Mistral AI | Génération de quiz |
 | Groq (Whisper) | Transcription audio podcasts |
 
@@ -299,6 +300,19 @@ Description:
 ---
 
 ## Changelog récent
+
+### 2026-01-30 - Podcast Index API (REM-39)
+- **Type:** Feature
+- **Description:** Ajout de Podcast Index comme source principale pour la découverte de podcasts RSS
+- **Raison:** iTunes ne couvrait que ~500k podcasts, Podcast Index en a 4.4M+
+- **Fichiers modifiés:**
+  - `backend/src/services/podcastTranscription.ts` (nouvelle fonction `searchPodcastIndex()`)
+  - `backend/src/config/env.ts` (ajout config Podcast Index)
+- **Prérequis ajoutés:**
+  - `npm install podcast-index-api`
+  - Variables `.env`: `PODCAST_INDEX_API_KEY`, `PODCAST_INDEX_API_SECRET`
+- **Flow:** Podcast Index (primary) → iTunes (fallback) → UNSUPPORTED
+- **Testé:** "Reflets d'Acide" (introuvable sur iTunes) → transcrit et quiz générés ✅
 
 ### 2025-01-29 - Transcription YouTube via yt-dlp
 - **Type:** Improvement
