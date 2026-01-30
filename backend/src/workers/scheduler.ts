@@ -2,8 +2,10 @@
 import cron from 'node-cron';
 import { runYouTubeSync } from './youtubeSync.js';
 import { runSpotifySync } from './spotifySync.js';
+import { runTikTokSync } from './tiktokSync.js';
 import { runTranscriptionWorker } from '../services/transcription.js';
 import { runPodcastTranscriptionWorker } from '../services/podcastTranscription.js';
+import { runTikTokTranscriptionWorker } from '../services/tiktokTranscription.js';
 import { runQuizGenerationWorker } from '../services/quizGeneration.js';
 import { runReminderWorker } from './reminderWorker.js';
 import { runAutoTaggingWorker } from '../services/tagging.js';
@@ -57,6 +59,12 @@ export function startScheduler(): void {
     await runJob('spotify-sync', runSpotifySync);
   });
 
+  // TikTok Sync - Every 30 minutes
+  cron.schedule('*/30 * * * *', async () => {
+    console.log('[Scheduler] Running TikTok sync...');
+    await runJob('tiktok-sync', runTikTokSync);
+  });
+
   // YouTube Transcription Worker - Every 5 minutes
   // Processes pending YouTube transcription requests (free via subtitles)
   cron.schedule('*/5 * * * *', async () => {
@@ -69,6 +77,13 @@ export function startScheduler(): void {
   cron.schedule('*/10 * * * *', async () => {
     console.log('[Scheduler] Running podcast transcription worker...');
     await runJob('podcast-transcription', runPodcastTranscriptionWorker);
+  });
+
+  // TikTok Transcription Worker - Every 5 minutes
+  // Processes pending TikTok transcriptions (via yt-dlp + Whisper)
+  cron.schedule('*/5 * * * *', async () => {
+    console.log('[Scheduler] Running TikTok transcription worker...');
+    await runJob('tiktok-transcription', runTikTokTranscriptionWorker);
   });
 
   // Quiz Generation Worker - Every 5 minutes
@@ -96,8 +111,10 @@ export function startScheduler(): void {
   console.log('[Scheduler] All cron jobs scheduled:');
   console.log('  - YouTube Sync: every 15 minutes');
   console.log('  - Spotify Sync: every 30 minutes');
+  console.log('  - TikTok Sync: every 30 minutes');
   console.log('  - YouTube Transcription: every 5 minutes');
   console.log('  - Podcast Transcription: every 10 minutes');
+  console.log('  - TikTok Transcription: every 5 minutes');
   console.log('  - Quiz Generation: every 5 minutes');
   console.log('  - Daily Reminders: every 5 minutes');
   console.log('  - Auto-Tagging: every 15 minutes');
@@ -113,12 +130,14 @@ export async function runAllSyncsNow(): Promise<void> {
   await Promise.allSettled([
     runJob('youtube-sync', runYouTubeSync),
     runJob('spotify-sync', runSpotifySync),
+    runJob('tiktok-sync', runTikTokSync),
   ]);
 
   // Phase 2: Transcribe content
   await Promise.allSettled([
     runJob('youtube-transcription', runTranscriptionWorker),
     runJob('podcast-transcription', runPodcastTranscriptionWorker),
+    runJob('tiktok-transcription', runTikTokTranscriptionWorker),
   ]);
 
   // Phase 3: Generate quizzes
@@ -131,7 +150,7 @@ export async function runAllSyncsNow(): Promise<void> {
  * Run a specific job manually
  */
 export async function triggerJob(
-  jobName: 'youtube' | 'spotify' | 'transcription' | 'podcast-transcription' | 'quiz-generation' | 'reminder' | 'auto-tagging'
+  jobName: 'youtube' | 'spotify' | 'tiktok' | 'transcription' | 'podcast-transcription' | 'tiktok-transcription' | 'quiz-generation' | 'reminder' | 'auto-tagging'
 ): Promise<{ success: boolean; message: string }> {
   switch (jobName) {
     case 'youtube':
@@ -142,6 +161,10 @@ export async function triggerJob(
       await runJob('spotify-sync', runSpotifySync);
       return { success: true, message: 'Spotify sync completed' };
 
+    case 'tiktok':
+      await runJob('tiktok-sync', runTikTokSync);
+      return { success: true, message: 'TikTok sync completed' };
+
     case 'transcription':
       await runJob('youtube-transcription', runTranscriptionWorker);
       return { success: true, message: 'YouTube transcription worker completed' };
@@ -149,6 +172,10 @@ export async function triggerJob(
     case 'podcast-transcription':
       await runJob('podcast-transcription', runPodcastTranscriptionWorker);
       return { success: true, message: 'Podcast transcription worker completed' };
+
+    case 'tiktok-transcription':
+      await runJob('tiktok-transcription', runTikTokTranscriptionWorker);
+      return { success: true, message: 'TikTok transcription worker completed' };
 
     case 'quiz-generation':
       await runJob('quiz-generation', runQuizGenerationWorker);
@@ -181,8 +208,10 @@ export function getSchedulerStatus(): {
     jobs: [
       { name: 'youtube-sync', schedule: '*/15 * * * *' },
       { name: 'spotify-sync', schedule: '*/30 * * * *' },
+      { name: 'tiktok-sync', schedule: '*/30 * * * *' },
       { name: 'youtube-transcription', schedule: '*/5 * * * *' },
       { name: 'podcast-transcription', schedule: '*/10 * * * *' },
+      { name: 'tiktok-transcription', schedule: '*/5 * * * *' },
       { name: 'quiz-generation', schedule: '*/5 * * * *' },
       { name: 'reminder', schedule: '*/5 * * * *' },
       { name: 'auto-tagging', schedule: '*/15 * * * *' },
