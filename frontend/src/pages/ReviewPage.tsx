@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Flame, Target, Clock, ArrowLeft, Keyboard, Brain, Sparkles, Trophy, Star, Zap, Settings, AlertCircle, FileText, X, Loader2, ExternalLink } from 'lucide-react';
+import { Flame, Target, Clock, ArrowLeft, Keyboard, Brain, Sparkles, Trophy, Star, Zap, Settings, AlertCircle, FileText, X, Loader2, ExternalLink, Copy, Check, BookOpen } from 'lucide-react';
 import { api } from '../lib/api';
 
 interface Quiz {
@@ -122,7 +122,9 @@ export function ReviewPage() {
   const [milestoneToShow, setMilestoneToShow] = useState<number | null>(null);
   const [isNewRecord, setIsNewRecord] = useState(false);
   const [showMistakes, setShowMistakes] = useState(false);
+  const [showMemo, setShowMemo] = useState(false);
   const [aiMemo, setAiMemo] = useState<string | null>(null);
+  const [memoCopied, setMemoCopied] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -246,6 +248,7 @@ export function ReviewPage() {
       }
 
       if (!showAnswer) {
+        // Before answer: Space/Enter to reveal, 1-4 to select option
         if (e.code === 'Space' || e.code === 'Enter') {
           e.preventDefault();
           handleRevealAnswer();
@@ -255,18 +258,15 @@ export function ReviewPage() {
           handleSelectOption(parseInt(e.key) - 1);
         }
       } else {
-        if (e.key === '1') {
+        // After answer: Space/Enter to continue (auto-rating based on correctness)
+        if (e.code === 'Space' || e.code === 'Enter') {
           e.preventDefault();
-          handleRating('AGAIN');
-        } else if (e.key === '2') {
-          e.preventDefault();
-          handleRating('HARD');
-        } else if (e.key === '3') {
-          e.preventDefault();
-          handleRating('GOOD');
-        } else if (e.key === '4') {
-          e.preventDefault();
-          handleRating('EASY');
+          if (data) {
+            const card = data.cards[currentIndex];
+            const optionLetter = selectedOption !== null ? card.quiz.options[selectedOption]?.charAt(0) : null;
+            const isCorrect = optionLetter === card.quiz.correctAnswer;
+            handleRating(isCorrect ? 'GOOD' : 'AGAIN');
+          }
         }
       }
 
@@ -281,13 +281,57 @@ export function ReviewPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showAnswer, handleRating, handleRevealAnswer, handleSelectOption]);
+  }, [showAnswer, handleRating, handleRevealAnswer, handleSelectOption, data, currentIndex, selectedOption]);
 
   const getSessionDuration = () => {
     const ms = Date.now() - sessionStats.startTime;
     const minutes = Math.floor(ms / 60000);
     const seconds = Math.floor((ms % 60000) / 1000);
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  // Parse memo into structured sections
+  const parseMemo = (memo: string) => {
+    const lines = memo.split('\n').filter(line => line.trim());
+    const sections: { title?: string; points: string[] }[] = [];
+    let currentSection: { title?: string; points: string[] } = { points: [] };
+
+    for (const line of lines) {
+      const cleaned = line
+        .replace(/\*\*([^*]+)\*\*/g, '$1')
+        .replace(/\*([^*]+)\*/g, '$1')
+        .trim();
+
+      // Check if it's a title (ends with : or starts with #)
+      if (/^#+\s*/.test(line) || (cleaned.endsWith(':') && !cleaned.startsWith('-'))) {
+        if (currentSection.points.length > 0 || currentSection.title) {
+          sections.push(currentSection);
+        }
+        currentSection = { title: cleaned.replace(/^#+\s*/, '').replace(/:$/, ''), points: [] };
+      } else if (/^[-•]\s/.test(cleaned)) {
+        currentSection.points.push(cleaned.replace(/^[-•]\s*/, ''));
+      } else if (cleaned) {
+        currentSection.points.push(cleaned);
+      }
+    }
+
+    if (currentSection.points.length > 0 || currentSection.title) {
+      sections.push(currentSection);
+    }
+
+    return sections;
+  };
+
+  // Copy memo to clipboard
+  const copyMemo = async () => {
+    if (!aiMemo) return;
+    try {
+      await navigator.clipboard.writeText(aiMemo);
+      setMemoCopied(true);
+      setTimeout(() => setMemoCopied(false), 2000);
+    } catch {
+      console.error('Failed to copy memo');
+    }
   };
 
   const totalReviewed = sessionStats.again + sessionStats.hard + sessionStats.good + sessionStats.easy;
@@ -299,7 +343,7 @@ export function ReviewPage() {
           <div className="w-16 h-16 rounded-2xl bg-amber/20 flex items-center justify-center mx-auto mb-6 animate-pulse-glow">
             <Brain size={32} className="text-amber" />
           </div>
-          <p className="text-cream-muted">Preparing your neural training...</p>
+          <p className="text-cream-muted">Préparation de ta session...</p>
         </div>
       </div>
     );
@@ -322,7 +366,7 @@ export function ReviewPage() {
           <div className="modal-backdrop z-50" onClick={() => setShowMistakes(false)}>
             <div className="modal-content max-w-2xl max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
               <div className="p-6 border-b border-void-200 flex items-center justify-between">
-                <h3 className="text-xl font-display text-cream">Questions to Review</h3>
+                <h3 className="text-xl font-display text-cream">Questions à revoir</h3>
                 <button
                   onClick={() => setShowMistakes(false)}
                   className="p-2 text-cream-dark hover:text-cream rounded-lg hover:bg-void-100"
@@ -336,7 +380,7 @@ export function ReviewPage() {
                     <Loader2 className="w-8 h-8 text-amber animate-spin" />
                   </div>
                 ) : mistakesData?.mistakes.length === 0 ? (
-                  <p className="text-center text-cream-muted py-8">No mistakes to review!</p>
+                  <p className="text-center text-cream-muted py-8">Aucune erreur à revoir !</p>
                 ) : (
                   mistakesData?.mistakes.map((mistake, idx) => (
                     <div key={mistake.id} className="bg-void-100 border border-void-200 rounded-xl p-4">
@@ -352,7 +396,7 @@ export function ReviewPage() {
                         </span>
                       </div>
                       <p className="text-sm text-sage mb-2">
-                        Correct: {mistake.options.find(o => o.startsWith(mistake.correctAnswer))}
+                        Correct : {mistake.options.find(o => o.startsWith(mistake.correctAnswer))}
                       </p>
                       {mistake.explanation && (
                         <p className="text-sm text-cream-dark mb-3">{mistake.explanation}</p>
@@ -374,6 +418,67 @@ export function ReviewPage() {
           </div>
         )}
 
+        {/* Memo Modal */}
+        {showMemo && aiMemo && (
+          <div className="modal-backdrop z-50" onClick={() => setShowMemo(false)}>
+            <div className="modal-content max-w-2xl max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+              <div className="p-6 border-b border-void-200 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-info/20 flex items-center justify-center">
+                    <BookOpen size={20} className="text-info" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-display text-cream">Mémo de révision</h3>
+                    <p className="text-xs text-cream-dark">Points clés à retenir</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={copyMemo}
+                    className="p-2 text-cream-dark hover:text-info rounded-lg hover:bg-info/10 transition-colors"
+                    title="Copier le mémo"
+                  >
+                    {memoCopied ? <Check size={20} className="text-sage" /> : <Copy size={20} />}
+                  </button>
+                  <button
+                    onClick={() => setShowMemo(false)}
+                    className="p-2 text-cream-dark hover:text-cream rounded-lg hover:bg-void-100"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                {parseMemo(aiMemo).map((section, idx) => (
+                  <div key={idx} className="bg-void-100 border border-void-200 rounded-xl p-4">
+                    {section.title && (
+                      <h4 className="text-info font-medium mb-3 flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-lg bg-info/20 flex items-center justify-center text-xs">
+                          {idx + 1}
+                        </span>
+                        {section.title}
+                      </h4>
+                    )}
+                    <ul className="space-y-2">
+                      {section.points.map((point, pointIdx) => (
+                        <li key={pointIdx} className="text-sm text-cream flex items-start gap-2">
+                          <span className="text-info mt-1">•</span>
+                          <span>{point}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+              {memoCopied && (
+                <div className="p-3 bg-sage/20 border-t border-sage/30 text-center">
+                  <p className="text-sm text-sage">Mémo copié dans le presse-papier !</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="max-w-md w-full relative my-8">
           <div className="card animate-scale-in">
             {totalReviewed > 0 ? (
@@ -382,7 +487,7 @@ export function ReviewPage() {
                   <Target className="w-10 h-10 text-void" />
                 </div>
                 <h2 className="text-3xl font-display text-cream mb-2 text-center">
-                  Session Complete
+                  Session terminée
                 </h2>
                 <p className="text-cream-muted text-center mb-6">
                   {totalReviewed} question{totalReviewed !== 1 ? 's' : ''} · {accuracy}% correct
@@ -393,17 +498,17 @@ export function ReviewPage() {
                   <div className="bg-void-50 border border-void-200 rounded-xl p-3 text-center">
                     <Clock className="w-5 h-5 text-cream-muted mx-auto mb-1" />
                     <p className="text-xl font-display text-cream">{getSessionDuration()}</p>
-                    <p className="text-xs text-cream-dark">Duration</p>
+                    <p className="text-xs text-cream-dark">Durée</p>
                   </div>
                   <div className="bg-void-50 border border-void-200 rounded-xl p-3 text-center">
                     <Flame className="w-5 h-5 text-amber mx-auto mb-1" />
                     <p className="text-xl font-display text-cream">{stats?.currentStreak || 0}</p>
-                    <p className="text-xs text-cream-dark">Day streak</p>
+                    <p className="text-xs text-cream-dark">Jours de streak</p>
                   </div>
                   <div className="bg-void-50 border border-void-200 rounded-xl p-3 text-center">
                     <AlertCircle className="w-5 h-5 text-rust mx-auto mb-1" />
                     <p className="text-xl font-display text-cream">{mistakesCount}</p>
-                    <p className="text-xs text-cream-dark">To review</p>
+                    <p className="text-xs text-cream-dark">À revoir</p>
                   </div>
                 </div>
 
@@ -431,17 +536,18 @@ export function ReviewPage() {
                   )}
                 </div>
 
-                {/* AI Memo Section */}
+                {/* Action buttons */}
                 {sessionId && (
-                  <div className="mb-6">
+                  <div className="space-y-3 mb-6">
+                    {/* AI Memo Button */}
                     {aiMemo ? (
-                      <div className="bg-info/10 border border-info/20 rounded-xl p-4">
-                        <div className="flex items-center gap-2 mb-3">
-                          <FileText size={16} className="text-info" />
-                          <span className="text-sm font-medium text-info">AI Study Memo</span>
-                        </div>
-                        <p className="text-sm text-cream whitespace-pre-wrap">{aiMemo}</p>
-                      </div>
+                      <button
+                        onClick={() => setShowMemo(true)}
+                        className="w-full py-3 px-4 rounded-xl bg-info/20 border border-info/30 text-info hover:bg-info/30 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <BookOpen size={18} />
+                        Voir le mémo de révision
+                      </button>
                     ) : (
                       <button
                         onClick={() => generateMemo.mutate()}
@@ -451,32 +557,32 @@ export function ReviewPage() {
                         {generateMemo.isPending ? (
                           <>
                             <Loader2 size={18} className="animate-spin" />
-                            Generating memo...
+                            Génération du mémo...
                           </>
                         ) : (
                           <>
                             <FileText size={18} />
-                            Generate AI Memo
+                            Générer un mémo IA
                           </>
                         )}
+                      </button>
+                    )}
+
+                    {/* Mistakes Button */}
+                    {mistakesCount > 0 && (
+                      <button
+                        onClick={() => setShowMistakes(true)}
+                        className="w-full py-3 px-4 rounded-xl bg-rust/20 border border-rust/30 text-rust hover:bg-rust/30 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <AlertCircle size={18} />
+                        Voir {mistakesCount} erreur{mistakesCount !== 1 ? 's' : ''}
                       </button>
                     )}
                   </div>
                 )}
 
-                {/* Action buttons */}
-                {sessionId && mistakesCount > 0 && (
-                  <button
-                    onClick={() => setShowMistakes(true)}
-                    className="w-full mb-4 py-3 px-4 rounded-xl bg-rust/20 border border-rust/30 text-rust hover:bg-rust/30 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <AlertCircle size={18} />
-                    View {mistakesCount} Mistake{mistakesCount !== 1 ? 's' : ''}
-                  </button>
-                )}
-
                 <p className="text-sm text-cream-dark text-center mb-6">
-                  Return tomorrow to maintain your streak.
+                  Reviens demain pour maintenir ton streak.
                 </p>
               </>
             ) : (
@@ -485,27 +591,27 @@ export function ReviewPage() {
                   <Sparkles className="w-10 h-10 text-void" />
                 </div>
                 <h2 className="text-3xl font-display text-cream mb-2 text-center">
-                  All Caught Up
+                  Tout est à jour
                 </h2>
                 {stats && stats.newDue > 0 && stats.remainingNewToday === 0 ? (
                   <div className="mb-6 text-center">
                     <p className="text-cream-muted mb-2">
-                      You've reached your daily limit of {stats.newCardsLimit} new cards.
+                      Tu as atteint ta limite quotidienne de {stats.newCardsLimit} nouvelles cartes.
                     </p>
                     <p className="text-sm text-cream-dark">
-                      {stats.newDue} new cards waiting for tomorrow.
+                      {stats.newDue} nouvelles cartes t'attendent demain.
                     </p>
                   </div>
                 ) : (
                   <p className="text-cream-muted text-center mb-6">
-                    No cards due right now. Your neural archive is up to date.
+                    Aucune carte à réviser pour l'instant. Ton archive est à jour.
                   </p>
                 )}
               </>
             )}
 
             <Link to="/" className="btn-primary w-full flex items-center justify-center gap-2">
-              Back to Dashboard
+              Retour à Apprendre
             </Link>
           </div>
         </div>
@@ -528,20 +634,20 @@ export function ReviewPage() {
                 className="text-cream-muted hover:text-cream flex items-center gap-2 transition-colors"
               >
                 <ArrowLeft size={18} />
-                <span className="text-sm">Exit</span>
+                <span className="text-sm">Quitter</span>
               </Link>
               <div className="flex items-center gap-3">
                 <span className="text-sm text-cream-muted">
-                  {currentIndex + 1} of {data.cards.length}
+                  {currentIndex + 1} sur {data.cards.length}
                 </span>
                 {card.repetitions === 0 && (
                   <span className="px-2.5 py-1 bg-amber/20 text-amber border border-amber/30 text-xs rounded-lg font-medium">
-                    New
+                    Nouveau
                   </span>
                 )}
                 {data.stats && (
                   <span className="text-xs text-cream-dark">
-                    ({data.stats.newCardsToday}/{data.stats.newCardsLimit} new today)
+                    ({data.stats.newCardsToday}/{data.stats.newCardsLimit} nouveaux aujourd'hui)
                   </span>
                 )}
               </div>
@@ -585,15 +691,13 @@ export function ReviewPage() {
       {showShortcuts && (
         <div className="modal-backdrop" onClick={() => setShowShortcuts(false)}>
           <div className="modal-content max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-xl font-display text-cream mb-6">Keyboard Shortcuts</h3>
+            <h3 className="text-xl font-display text-cream mb-6">Raccourcis clavier</h3>
             <div className="space-y-3 text-sm">
               {[
-                { action: 'Reveal answer', key: 'Space' },
-                { action: 'Rate: Again', key: '1' },
-                { action: 'Rate: Hard', key: '2' },
-                { action: 'Rate: Good', key: '3' },
-                { action: 'Rate: Easy', key: '4' },
-                { action: 'Exit session', key: 'Esc' },
+                { action: 'Sélectionner option', key: '1-4' },
+                { action: 'Voir la réponse', key: 'Espace' },
+                { action: 'Continuer', key: 'Espace' },
+                { action: 'Quitter la session', key: 'Échap' },
               ].map(({ action, key }) => (
                 <div key={action} className="flex justify-between items-center">
                   <span className="text-cream-muted">{action}</span>
@@ -607,7 +711,7 @@ export function ReviewPage() {
               onClick={() => setShowShortcuts(false)}
               className="mt-6 w-full btn-secondary text-sm"
             >
-              Close
+              Fermer
             </button>
           </div>
         </div>
@@ -627,20 +731,20 @@ export function ReviewPage() {
               )}
             </div>
             <h3 className="text-3xl font-display text-cream mb-2">
-              {milestoneToShow} Day Streak!
+              {milestoneToShow} jours de streak !
             </h3>
             <p className="text-cream-muted mb-8">
               {milestoneToShow >= 100
-                ? 'Legendary dedication! Your neural archive is unmatched.'
+                ? 'Incroyable ! Ta constance est légendaire.'
                 : milestoneToShow >= 30
-                ? 'Remarkable consistency! Knowledge is becoming wisdom.'
-                : 'Building strong neural pathways. Keep going!'}
+                ? 'Impressionnant ! Ta connaissance devient sagesse.'
+                : 'Tu construis de solides habitudes. Continue !'}
             </p>
             <button
               onClick={() => setMilestoneToShow(null)}
               className="btn-primary"
             >
-              Continue Training
+              Continuer
             </button>
           </div>
         </div>
@@ -654,16 +758,16 @@ export function ReviewPage() {
               <Zap size={40} className="text-void" />
             </div>
             <h3 className="text-3xl font-display text-cream mb-2">
-              New Personal Best!
+              Nouveau record personnel !
             </h3>
             <p className="text-cream-muted mb-8">
-              You've surpassed your previous record. The archive grows stronger.
+              Tu as dépassé ton précédent record. Continue comme ça !
             </p>
             <button
               onClick={() => setIsNewRecord(false)}
               className="btn-primary"
             >
-              Outstanding!
+              Super !
             </button>
           </div>
         </div>
@@ -734,64 +838,48 @@ export function ReviewPage() {
                 onClick={handleRevealAnswer}
                 className="btn-primary w-full"
               >
-                Reveal Answer
-                <span className="ml-2 text-xs opacity-75">(Space)</span>
+                Voir la réponse
+                <span className="ml-2 text-xs opacity-75">(Espace)</span>
               </button>
             ) : (
               <div>
                 {card.quiz.explanation && (
                   <div className="mb-6 p-4 bg-info/10 border border-info/20 rounded-xl">
                     <p className="text-sm text-cream">
-                      <span className="font-medium text-info">Explanation:</span> {card.quiz.explanation}
+                      <span className="font-medium text-info">Explication :</span> {card.quiz.explanation}
                     </p>
                   </div>
                 )}
 
-                <p className="text-center text-sm text-cream-muted mb-4">
-                  How well did you recall this?
-                </p>
-
-                <div className="grid grid-cols-4 gap-2">
-                  <button
-                    onClick={() => handleRating('AGAIN')}
-                    disabled={submitReview.isPending}
-                    className="py-3 px-2 bg-rust/20 text-rust border border-rust/30 rounded-xl hover:bg-rust/30 font-medium transition-all disabled:opacity-50"
-                  >
-                    <span className="block text-sm">Again</span>
-                    <span className="text-xs opacity-75">1</span>
-                  </button>
-                  <button
-                    onClick={() => handleRating('HARD')}
-                    disabled={submitReview.isPending}
-                    className="py-3 px-2 bg-amber/20 text-amber border border-amber/30 rounded-xl hover:bg-amber/30 font-medium transition-all disabled:opacity-50"
-                  >
-                    <span className="block text-sm">Hard</span>
-                    <span className="text-xs opacity-75">2</span>
-                  </button>
-                  <button
-                    onClick={() => handleRating('GOOD')}
-                    disabled={submitReview.isPending}
-                    className="py-3 px-2 bg-sage/20 text-sage border border-sage/30 rounded-xl hover:bg-sage/30 font-medium transition-all disabled:opacity-50"
-                  >
-                    <span className="block text-sm">Good</span>
-                    <span className="text-xs opacity-75">3</span>
-                  </button>
-                  <button
-                    onClick={() => handleRating('EASY')}
-                    disabled={submitReview.isPending}
-                    className="py-3 px-2 bg-info/20 text-info border border-info/30 rounded-xl hover:bg-info/30 font-medium transition-all disabled:opacity-50"
-                  >
-                    <span className="block text-sm">Easy</span>
-                    <span className="text-xs opacity-75">4</span>
-                  </button>
-                </div>
+                {/* Auto-rating: correct = GOOD, wrong = AGAIN */}
+                <button
+                  onClick={() => {
+                    const optionLetter = selectedOption !== null ? card.quiz.options[selectedOption]?.charAt(0) : null;
+                    const isCorrect = optionLetter === card.quiz.correctAnswer;
+                    handleRating(isCorrect ? 'GOOD' : 'AGAIN');
+                  }}
+                  disabled={submitReview.isPending}
+                  className="btn-primary w-full flex items-center justify-center gap-2"
+                >
+                  {submitReview.isPending ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      Chargement...
+                    </>
+                  ) : (
+                    <>
+                      Continuer
+                      <span className="text-xs opacity-75">(Espace)</span>
+                    </>
+                  )}
+                </button>
               </div>
             )}
 
             {/* Source */}
             <div className="mt-6 pt-4 border-t border-void-200">
               <p className="text-sm text-cream-dark">
-                From:{' '}
+                Source :{' '}
                 <a
                   href={card.quiz.content.url}
                   target="_blank"
@@ -804,7 +892,11 @@ export function ReviewPage() {
                   className={`ml-2 px-2 py-0.5 rounded-lg text-xs font-medium ${
                     card.quiz.content.platform === 'YOUTUBE'
                       ? 'bg-[#FF0000]/10 text-[#FF6B6B] border border-[#FF0000]/20'
-                      : 'bg-[#1DB954]/10 text-[#1DB954] border border-[#1DB954]/20'
+                      : card.quiz.content.platform === 'SPOTIFY'
+                      ? 'bg-[#1DB954]/10 text-[#1DB954] border border-[#1DB954]/20'
+                      : card.quiz.content.platform === 'TIKTOK'
+                      ? 'bg-gradient-to-r from-[#00f2ea]/10 to-[#ff0050]/10 text-[#00f2ea] border border-[#00f2ea]/20'
+                      : 'bg-gradient-to-r from-[#833AB4]/10 via-[#FD1D1D]/10 to-[#F77737]/10 text-[#FD1D1D] border border-[#FD1D1D]/20'
                   }`}
                 >
                   {card.quiz.content.platform}

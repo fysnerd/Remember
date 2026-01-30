@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import {
   Brain, ArrowLeft, Filter, Hash, Layers, Zap,
-  CheckSquare, Square, ChevronDown, Loader2, Inbox, ArrowRight
+  CheckSquare, Square, ChevronDown, Loader2, Play
 } from 'lucide-react';
 import { api } from '../lib/api';
 import clsx from 'clsx';
@@ -17,42 +17,53 @@ interface Tag {
 interface Content {
   id: string;
   title: string;
-  platform: 'YOUTUBE' | 'SPOTIFY' | 'TIKTOK';
+  platform: 'YOUTUBE' | 'SPOTIFY' | 'TIKTOK' | 'INSTAGRAM';
   thumbnailUrl: string | null;
   _count: { quizzes: number };
 }
 
-type Platform = 'YOUTUBE' | 'SPOTIFY' | 'TIKTOK';
+type Platform = 'YOUTUBE' | 'SPOTIFY' | 'TIKTOK' | 'INSTAGRAM';
 type QuestionLimit = 5 | 10 | 20 | null;
+
+const platformColors: Record<Platform, string> = {
+  YOUTUBE: 'bg-[#FF0000]/20 text-[#FF6B6B] border-[#FF0000]/30',
+  SPOTIFY: 'bg-[#1DB954]/20 text-[#1DB954] border-[#1DB954]/30',
+  TIKTOK: 'bg-gradient-to-r from-[#00f2ea]/20 to-[#ff0050]/20 text-[#00f2ea] border-[#00f2ea]/30',
+  INSTAGRAM: 'bg-gradient-to-r from-[#833AB4]/20 via-[#FD1D1D]/20 to-[#F77737]/20 text-[#FD1D1D] border-[#FD1D1D]/30',
+};
 
 export function SessionBuilderPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const urlContentIds = searchParams.get('contentIds');
 
   // Session config state
-  const [questionLimit, setQuestionLimit] = useState<QuestionLimit>(10);
+  const [questionLimit, setQuestionLimit] = useState<QuestionLimit>(null); // Default to "All" for quick mode
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [selectedContentIds, setSelectedContentIds] = useState<string[]>([]);
   const [showContentPicker, setShowContentPicker] = useState(false);
 
-  // Fetch inbox count
-  const { data: inboxData } = useQuery<{ count: number }>({
-    queryKey: ['inbox-count'],
-    queryFn: async () => {
-      const res = await api.get<{ count: number }>('/content/inbox/count');
-      return res.data;
-    },
-  });
+  // Quick mode = contentIds passed via URL
+  const isQuickMode = !!urlContentIds;
 
-  const inboxCount = inboxData?.count || 0;
+  // Initialize selectedContentIds from URL params
+  useEffect(() => {
+    if (urlContentIds) {
+      const ids = urlContentIds.split(',').filter(Boolean);
+      setSelectedContentIds(ids);
+      setQuestionLimit(null); // Default to all questions for specific content
+    }
+  }, [urlContentIds]);
 
-  // Fetch tags
+  // Fetch tags (only in full mode)
   const { data: tags } = useQuery<Tag[]>({
     queryKey: ['tags'],
     queryFn: async () => {
       const res = await api.get<Tag[]>('/content/tags');
       return res.data;
     },
+    enabled: !isQuickMode,
   });
 
   // Fetch ready content for specific selection
@@ -62,7 +73,7 @@ export function SessionBuilderPage() {
       const res = await api.get<{ contents: Content[] }>('/content?status=READY&limit=100');
       return res.data;
     },
-    enabled: showContentPicker,
+    enabled: showContentPicker || isQuickMode,
   });
 
   // Preview matching cards count
@@ -100,7 +111,6 @@ export function SessionBuilderPage() {
         ? prev.filter(p => p !== platform)
         : [...prev, platform]
     );
-    // Clear specific content when changing filters
     setSelectedContentIds([]);
   };
 
@@ -110,7 +120,6 @@ export function SessionBuilderPage() {
         ? prev.filter(id => id !== tagId)
         : [...prev, tagId]
     );
-    // Clear specific content when changing filters
     setSelectedContentIds([]);
   };
 
@@ -132,15 +141,166 @@ export function SessionBuilderPage() {
     { value: 5, label: '5' },
     { value: 10, label: '10' },
     { value: 20, label: '20' },
-    { value: null, label: 'All' },
+    { value: null, label: 'Tout' },
   ];
 
   const platforms: { value: Platform; label: string; color: string }[] = [
-    { value: 'YOUTUBE', label: 'YouTube', color: 'bg-[#FF0000]/20 text-[#FF6B6B] border-[#FF0000]/30' },
-    { value: 'SPOTIFY', label: 'Spotify', color: 'bg-[#1DB954]/20 text-[#1DB954] border-[#1DB954]/30' },
-    { value: 'TIKTOK', label: 'TikTok', color: 'bg-gradient-to-r from-[#00f2ea]/20 to-[#ff0050]/20 text-[#00f2ea] border-[#00f2ea]/30' },
+    { value: 'YOUTUBE', label: 'YouTube', color: platformColors.YOUTUBE },
+    { value: 'SPOTIFY', label: 'Spotify', color: platformColors.SPOTIFY },
+    { value: 'TIKTOK', label: 'TikTok', color: platformColors.TIKTOK },
+    { value: 'INSTAGRAM', label: 'Instagram', color: platformColors.INSTAGRAM },
   ];
 
+  // Get selected content details for quick mode
+  const selectedContents = readyContent?.contents.filter(c => selectedContentIds.includes(c.id)) || [];
+
+  // ===== QUICK MODE UI =====
+  if (isQuickMode) {
+    return (
+      <div className="min-h-screen p-8">
+        {/* Ambient glow */}
+        <div className="fixed top-0 right-0 w-96 h-96 bg-amber/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="fixed bottom-0 left-64 w-64 h-64 bg-sage/5 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="max-w-lg mx-auto relative">
+          {/* Header */}
+          <div className="mb-8 animate-fade-in">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-2 text-cream-muted hover:text-cream transition-colors mb-6"
+            >
+              <ArrowLeft size={18} />
+              <span>Retour</span>
+            </Link>
+
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-amber/20 flex items-center justify-center">
+                <Play size={28} className="text-amber" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-display text-cream">Lancer la révision</h1>
+                <p className="text-cream-dark">Prêt à apprendre ?</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Mode Card */}
+          <div className="card animate-slide-up">
+            {/* Selected Content Preview */}
+            <div className="mb-6">
+              <p className="text-sm font-medium text-cream-muted mb-3">Contenu sélectionné</p>
+              <div className="space-y-2">
+                {selectedContents.map((content) => (
+                  <div
+                    key={content.id}
+                    className="flex items-center gap-3 p-3 rounded-xl bg-void-100 border border-void-200"
+                  >
+                    {content.thumbnailUrl ? (
+                      <img
+                        src={content.thumbnailUrl}
+                        alt=""
+                        className="w-20 h-12 rounded-lg object-cover flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="w-20 h-12 rounded-lg bg-void-200 flex-shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-cream font-medium truncate">{content.title}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className={clsx(
+                          'px-2 py-0.5 rounded text-xs font-medium border',
+                          platformColors[content.platform]
+                        )}>
+                          {content.platform}
+                        </span>
+                        <span className="text-xs text-cream-dark">
+                          {content._count.quizzes} quiz
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {selectedContents.length === 0 && !isPreviewLoading && (
+                  <p className="text-cream-dark text-sm py-2">Chargement...</p>
+                )}
+              </div>
+            </div>
+
+            {/* Question Count */}
+            <div className="mb-6">
+              <label className="flex items-center gap-2 text-sm font-medium text-cream-muted mb-3">
+                <Hash size={16} />
+                Nombre de questions
+              </label>
+              <div className="flex gap-2">
+                {questionOptions.map(({ value, label }) => (
+                  <button
+                    key={label}
+                    onClick={() => setQuestionLimit(value)}
+                    className={clsx(
+                      'flex-1 py-3 px-4 rounded-xl border font-medium transition-all',
+                      questionLimit === value
+                        ? 'bg-amber/20 border-amber/50 text-amber'
+                        : 'bg-void-100 border-void-200 text-cream-muted hover:border-void-300 hover:text-cream'
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Quiz count info */}
+            <div className="p-4 rounded-xl bg-sage/10 border border-sage/20 mb-6">
+              <div className="flex items-center justify-between">
+                <span className="text-cream-muted">Quiz disponibles</span>
+                {isPreviewLoading ? (
+                  <Loader2 size={18} className="text-sage animate-spin" />
+                ) : (
+                  <span className="text-2xl font-display text-sage">{matchingCards}</span>
+                )}
+              </div>
+              {matchingCards > 0 && questionLimit && questionLimit < matchingCards && (
+                <p className="text-xs text-cream-dark mt-2">
+                  Tu vas réviser {questionLimit} sur {matchingCards} quiz
+                </p>
+              )}
+            </div>
+
+            {/* Start Button */}
+            <button
+              onClick={() => createSession.mutate()}
+              disabled={matchingCards === 0 || createSession.isPending}
+              className="btn-primary w-full flex items-center justify-center gap-3 py-4 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {createSession.isPending ? (
+                <>
+                  <Loader2 size={22} className="animate-spin" />
+                  Démarrage...
+                </>
+              ) : (
+                <>
+                  <Zap size={22} />
+                  C'est parti !
+                  {cardsToReview > 0 && (
+                    <span className="text-sm opacity-75">({cardsToReview} quiz)</span>
+                  )}
+                </>
+              )}
+            </button>
+
+            {matchingCards === 0 && !isPreviewLoading && (
+              <p className="text-center text-cream-dark text-sm mt-4">
+                Ce contenu n'a pas encore de quiz. Reviens plus tard !
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ===== FULL MODE UI (no contentIds in URL) =====
   return (
     <div className="min-h-screen p-8">
       {/* Ambient glow */}
@@ -155,7 +315,7 @@ export function SessionBuilderPage() {
             className="inline-flex items-center gap-2 text-cream-muted hover:text-cream transition-colors mb-6"
           >
             <ArrowLeft size={18} />
-            <span>Back to Dashboard</span>
+            <span>Retour</span>
           </Link>
 
           <div className="flex items-center gap-4">
@@ -163,36 +323,11 @@ export function SessionBuilderPage() {
               <Brain size={28} className="text-amber" />
             </div>
             <div>
-              <h1 className="text-3xl font-display text-cream">Configure Session</h1>
-              <p className="text-cream-dark">Customize your review experience</p>
+              <h1 className="text-3xl font-display text-cream">Configurer la session</h1>
+              <p className="text-cream-dark">Personnalise ton expérience de révision</p>
             </div>
           </div>
         </div>
-
-        {/* Inbox Triage Prompt */}
-        {inboxCount > 0 && (
-          <Link
-            to="/inbox"
-            className="block mb-6 p-5 rounded-2xl bg-gradient-to-r from-amber/10 to-amber/5 border border-amber/30 hover:border-amber/50 transition-all animate-slide-up group"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-amber/20 flex items-center justify-center">
-                  <Inbox size={24} className="text-amber" />
-                </div>
-                <div>
-                  <h3 className="font-display text-cream text-lg">
-                    Review your inbox first
-                  </h3>
-                  <p className="text-cream-dark text-sm">
-                    {inboxCount} new item{inboxCount !== 1 ? 's' : ''} waiting to be triaged
-                  </p>
-                </div>
-              </div>
-              <ArrowRight size={20} className="text-amber group-hover:translate-x-1 transition-transform" />
-            </div>
-          </Link>
-        )}
 
         {/* Configuration Card */}
         <div className="card animate-slide-up">
@@ -200,7 +335,7 @@ export function SessionBuilderPage() {
           <div className="mb-8">
             <label className="flex items-center gap-2 text-sm font-medium text-cream-muted mb-4">
               <Hash size={16} />
-              Questions per session
+              Questions par session
             </label>
             <div className="flex gap-2">
               {questionOptions.map(({ value, label }) => (
@@ -224,7 +359,7 @@ export function SessionBuilderPage() {
           <div className="mb-8">
             <label className="flex items-center gap-2 text-sm font-medium text-cream-muted mb-4">
               <Layers size={16} />
-              Filter by source
+              Filtrer par plateforme
             </label>
             <div className="flex flex-wrap gap-2">
               {platforms.map(({ value, label, color }) => (
@@ -248,19 +383,19 @@ export function SessionBuilderPage() {
               ))}
             </div>
             {selectedPlatforms.length === 0 && (
-              <p className="text-xs text-cream-dark mt-2">All platforms included</p>
+              <p className="text-xs text-cream-dark mt-2">Toutes les plateformes incluses</p>
             )}
           </div>
 
-          {/* Tags Filter */}
+          {/* Tags Filter - Top 10 only */}
           {tags && tags.length > 0 && (
             <div className="mb-8">
               <label className="flex items-center gap-2 text-sm font-medium text-cream-muted mb-4">
                 <Filter size={16} />
-                Filter by topic
+                Filtrer par thème
               </label>
               <div className="flex flex-wrap gap-2">
-                {tags.map((tag) => (
+                {tags.slice(0, 10).map((tag) => (
                   <button
                     key={tag.id}
                     onClick={() => toggleTag(tag.id)}
@@ -276,6 +411,11 @@ export function SessionBuilderPage() {
                   </button>
                 ))}
               </div>
+              {tags.length > 10 && (
+                <p className="text-xs text-cream-dark mt-2">
+                  +{tags.length - 10} autres thèmes disponibles
+                </p>
+              )}
             </div>
           )}
 
@@ -285,7 +425,7 @@ export function SessionBuilderPage() {
               <div className="w-full border-t border-void-200" />
             </div>
             <div className="relative flex justify-center">
-              <span className="bg-void-50 px-4 text-sm text-cream-dark">OR</span>
+              <span className="bg-void-50 px-4 text-sm text-cream-dark">OU</span>
             </div>
           </div>
 
@@ -297,8 +437,8 @@ export function SessionBuilderPage() {
             >
               <span className="text-cream font-medium">
                 {hasSpecificContent
-                  ? `${selectedContentIds.length} video${selectedContentIds.length !== 1 ? 's' : ''} selected`
-                  : 'Select specific videos...'}
+                  ? `${selectedContentIds.length} contenu${selectedContentIds.length !== 1 ? 's' : ''} sélectionné${selectedContentIds.length !== 1 ? 's' : ''}`
+                  : 'Sélectionner des contenus spécifiques...'}
               </span>
               <ChevronDown
                 size={20}
@@ -336,7 +476,7 @@ export function SessionBuilderPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-cream truncate">{content.title}</p>
                       <p className="text-xs text-cream-dark">
-                        {content._count.quizzes} cards
+                        {content._count.quizzes} quiz
                       </p>
                     </div>
                     {selectedContentIds.includes(content.id) && (
@@ -345,19 +485,19 @@ export function SessionBuilderPage() {
                   </button>
                 ))}
                 {readyContent?.contents.length === 0 && (
-                  <p className="text-center text-cream-dark py-4">No content with quizzes yet</p>
+                  <p className="text-center text-cream-dark py-4">Aucun contenu avec des quiz</p>
                 )}
               </div>
             )}
             {hasFilters && showContentPicker && (
-              <p className="text-xs text-amber mt-2">Clear platform/topic filters to select specific videos</p>
+              <p className="text-xs text-amber mt-2">Retire les filtres pour sélectionner des contenus spécifiques</p>
             )}
           </div>
 
           {/* Preview */}
           <div className="p-4 rounded-xl bg-void-100 border border-void-200 mb-8">
             <div className="flex items-center justify-between">
-              <span className="text-cream-muted">Cards matching criteria</span>
+              <span className="text-cream-muted">Quiz disponibles</span>
               {isPreviewLoading ? (
                 <Loader2 size={18} className="text-amber animate-spin" />
               ) : (
@@ -366,7 +506,7 @@ export function SessionBuilderPage() {
             </div>
             {matchingCards > 0 && questionLimit && questionLimit < matchingCards && (
               <p className="text-xs text-cream-dark mt-2">
-                You'll review {questionLimit} of {matchingCards} available cards
+                Tu vas réviser {questionLimit} sur {matchingCards} quiz disponibles
               </p>
             )}
           </div>
@@ -380,14 +520,14 @@ export function SessionBuilderPage() {
             {createSession.isPending ? (
               <>
                 <Loader2 size={22} className="animate-spin" />
-                Starting...
+                Démarrage...
               </>
             ) : (
               <>
                 <Zap size={22} />
-                Start Session
+                Lancer la session
                 {cardsToReview > 0 && (
-                  <span className="text-sm opacity-75">({cardsToReview} cards)</span>
+                  <span className="text-sm opacity-75">({cardsToReview} quiz)</span>
                 )}
               </>
             )}
@@ -395,7 +535,7 @@ export function SessionBuilderPage() {
 
           {matchingCards === 0 && (
             <p className="text-center text-cream-dark text-sm mt-4">
-              No cards match your criteria. Try adjusting filters or add more content.
+              Aucun quiz ne correspond à tes critères. Essaie d'ajuster les filtres.
             </p>
           )}
         </div>
@@ -406,7 +546,7 @@ export function SessionBuilderPage() {
             to="/review"
             className="text-cream-muted hover:text-amber transition-colors text-sm"
           >
-            Or start a quick session with default settings
+            Ou lancer une session rapide avec les paramètres par défaut
           </Link>
         </div>
       </div>

@@ -125,16 +125,20 @@ contentRouter.get('/', async (req: Request, res: Response, next: NextFunction) =
       where.status = status as ContentStatus;
     }
 
-    // Category filter (learning vs archived)
-    const { category } = req.query;
+    // Category filter (UX v2.0: active vs passed)
+    const { category, excludeArchived } = req.query;
     if (category === 'learning') {
       // Learning = everything except INBOX and ARCHIVED
       where.status = { notIn: [ContentStatus.INBOX, ContentStatus.ARCHIVED] };
     } else if (category === 'archived') {
+      // Archived = only ARCHIVED status (passé)
       where.status = ContentStatus.ARCHIVED;
+    } else if (excludeArchived === 'true') {
+      // UX v2.0: "Actifs" = show INBOX (nouveau) + all ready content, exclude ARCHIVED
+      where.status = { not: ContentStatus.ARCHIVED };
     }
-    // Default: exclude INBOX from main library view (unless explicitly requested)
-    if (!status && !category) {
+    // Default: if no category filter, show everything except INBOX
+    if (!status && !category && excludeArchived !== 'true') {
       where.status = { not: ContentStatus.INBOX };
     }
 
@@ -185,16 +189,19 @@ contentRouter.get('/', async (req: Request, res: Response, next: NextFunction) =
     const orderByField = validSortFields.includes(sortBy as string) ? sortBy as string : 'capturedAt';
     const orderByDirection = sortOrder === 'asc' ? 'asc' : 'desc';
 
-    // Build orderBy array - prioritize listened content for Spotify
+    // Build orderBy array
     const orderBy: Prisma.ContentOrderByWithRelationInput[] = [];
 
-    // If filtering by Spotify or showing all, sort by listen progress first
-    if (!platform || platform === 'SPOTIFY') {
+    // UX v2.0: Si tri explicite par capturedAt desc, priorité au tri chronologique
+    const explicitChronoSort = sortBy === 'capturedAt' && sortOrder === 'desc';
+
+    // Legacy: prioritize listened content for Spotify (sauf si tri chrono explicite)
+    if (!explicitChronoSort && (!platform || platform === 'SPOTIFY')) {
       orderBy.push({ fullyPlayed: 'desc' });  // Fully played first
       orderBy.push({ listenProgress: 'desc' }); // Then by progress percentage
     }
 
-    // Then apply the user's sort preference
+    // Apply the user's sort preference
     orderBy.push({ [orderByField]: orderByDirection });
 
     const [contents, total] = await Promise.all([
@@ -251,6 +258,46 @@ contentRouter.get('/tags', async (req: Request, res: Response, next: NextFunctio
     });
 
     return res.json(tags);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// GET /api/content/stats - Get content statistics for Stats page
+contentRouter.get('/stats', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+
+    // Total content count
+    const total = await prisma.content.count({
+      where: { userId },
+    });
+
+    // Count by platform
+    const byPlatform = await prisma.content.groupBy({
+      by: ['platform'],
+      where: { userId },
+      _count: { id: true },
+    });
+
+    // Count by status
+    const byStatus = await prisma.content.groupBy({
+      by: ['status'],
+      where: { userId },
+      _count: { id: true },
+    });
+
+    return res.json({
+      total,
+      byPlatform: byPlatform.map(p => ({
+        platform: p.platform,
+        count: p._count.id,
+      })),
+      byStatus: byStatus.map(s => ({
+        status: s.status,
+        count: s._count.id,
+      })),
+    });
   } catch (error) {
     return next(error);
   }

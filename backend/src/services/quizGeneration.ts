@@ -127,32 +127,35 @@ Respond with JSON only:
     const chunk = chunks[i];
     const questionsNeeded = i === 0 ? 3 : 2; // 3 from first chunk, 2 from second
 
-    const questionPrompt = `Generate ${questionsNeeded} high-quality multiple choice quiz questions based on this ${contentType} transcript.
+    const questionPrompt = `Génère ${questionsNeeded} questions de quiz à choix multiples de haute qualité basées sur cette transcription de ${contentType === 'video' ? 'vidéo' : 'podcast'}.
 
-Title: "${contentTitle}"
-Main topics: ${assessment.mainTopics?.join(', ') || 'General knowledge'}
+IMPORTANT: Génère tout le contenu EN FRANÇAIS (questions, options, explications).
 
-Transcript:
+Titre: "${contentTitle}"
+Sujets principaux: ${assessment.mainTopics?.join(', ') || 'Culture générale'}
+
+Transcription:
 """
 ${chunk}
 """
 
-Requirements:
-1. Questions must test understanding of specific facts or concepts from the transcript
-2. Each question must have exactly 4 options (A, B, C, D)
-3. Only one option should be correct
-4. Include a brief explanation for the correct answer
-5. Questions should be educational and help reinforce learning
-6. Avoid trivial questions or those that can be answered without understanding the content
+Exigences:
+1. Les questions doivent tester la compréhension de faits ou concepts spécifiques de la transcription
+2. Chaque question doit avoir exactement 4 options (A, B, C, D)
+3. Une seule option doit être correcte
+4. Inclure une brève explication pour la réponse correcte
+5. Les questions doivent être éducatives et aider à renforcer l'apprentissage
+6. Éviter les questions triviales ou celles qui peuvent être répondues sans comprendre le contenu
+7. TOUTES les questions, options et explications DOIVENT être en FRANÇAIS
 
-Respond with JSON only:
+Réponds uniquement avec du JSON:
 {
   "questions": [
     {
-      "question": "Clear, specific question text?",
-      "options": ["A) First option", "B) Second option", "C) Third option", "D) Fourth option"],
+      "question": "Question claire et spécifique en français ?",
+      "options": ["A) Première option", "B) Deuxième option", "C) Troisième option", "D) Quatrième option"],
       "correctAnswer": "A",
-      "explanation": "Brief explanation of why this is correct"
+      "explanation": "Brève explication en français de pourquoi c'est correct"
     }
   ]
 }`;
@@ -162,7 +165,7 @@ Respond with JSON only:
         messages: [
           {
             role: 'system',
-            content: 'You are an expert educator creating quiz questions. Generate clear, educational questions that test understanding. Respond only with valid JSON.',
+            content: 'Tu es un éducateur expert créant des questions de quiz. Génère des questions claires et éducatives en FRANÇAIS qui testent la compréhension. Réponds uniquement avec du JSON valide.',
           },
           {
             role: 'user',

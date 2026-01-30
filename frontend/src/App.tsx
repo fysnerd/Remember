@@ -3,12 +3,12 @@ import { useAuthStore } from './stores/authStore';
 import { Layout } from './components/Layout';
 import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
-import { DashboardPage } from './pages/DashboardPage';
+import { LearnPage } from './pages/LearnPage';
+import { StatsPage } from './pages/StatsPage';
 import { SettingsPage } from './pages/SettingsPage';
-import { LibraryPage } from './pages/LibraryPage';
-import { InboxPage } from './pages/InboxPage';
 import { ReviewPage } from './pages/ReviewPage';
 import { SessionBuilderPage } from './pages/SessionBuilderPage';
+import { NotesPage } from './pages/NotesPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore();
@@ -27,7 +27,7 @@ function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
 
-      {/* Protected routes */}
+      {/* Protected routes - UX v2.0: 3 pages (Apprendre, Stats, Settings) */}
       <Route
         path="/"
         element={
@@ -36,12 +36,13 @@ function App() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<DashboardPage />} />
-        <Route path="inbox" element={<InboxPage />} />
-        <Route path="library" element={<LibraryPage />} />
+        <Route index element={<LearnPage />} />
+        <Route path="notes" element={<NotesPage />} />
+        <Route path="stats" element={<StatsPage />} />
+        <Route path="settings" element={<SettingsPage />} />
+        {/* Review routes (intégrés dans le flow Apprendre) */}
         <Route path="review" element={<ReviewPage />} />
         <Route path="review/configure" element={<SessionBuilderPage />} />
-        <Route path="settings" element={<SettingsPage />} />
       </Route>
 
       {/* Catch all */}

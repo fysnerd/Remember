@@ -570,13 +570,13 @@ reviewRouter.post('/session/:id/memo', async (req: Request, res: Response, next:
       .map(c => `- ${c.title} (${c.platform})\n  Questions: ${c.questions.slice(0, 3).join('; ')}${c.questions.length > 3 ? '...' : ''}`)
       .join('\n');
 
-    const systemPrompt = `You are a learning assistant. Generate a concise study memo summarizing the key concepts the user just reviewed. Focus on 3-5 main takeaways that would help them remember the material. Be practical and actionable. Use bullet points.`;
+    const systemPrompt = `Tu es un assistant d'apprentissage. Génère un mémo d'étude concis résumant les concepts clés que l'utilisateur vient de réviser. Concentre-toi sur 3-5 points principaux à retenir. Sois pratique et actionnable. Utilise des bullet points. Réponds UNIQUEMENT en français.`;
 
-    const userPrompt = `The user just completed a review session with ${reviews.length} questions from the following content:
+    const userPrompt = `L'utilisateur vient de terminer une session de révision avec ${reviews.length} questions sur le contenu suivant :
 
 ${contentSummary}
 
-Generate a brief memo (max 200 words) with the main takeaways and concepts to remember.`;
+Génère un bref mémo (max 150 mots) en français avec les points clés à retenir. Format simple avec des tirets (-), pas de markdown complexe.`;
 
     const memo = await generateText(userPrompt, { system: systemPrompt, temperature: 0.7 });
 
@@ -776,6 +776,65 @@ reviewRouter.patch('/settings', async (req: Request, res: Response, next: NextFu
         details: error.errors,
       });
     }
+    return next(error);
+  }
+});
+
+// GET /api/reviews/memos - Get all sessions with memos
+reviewRouter.get('/memos', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const sessions = await prisma.quizSession.findMany({
+      where: {
+        userId: req.user!.id,
+        aiMemo: { not: null },
+      },
+      orderBy: { completedAt: 'desc' },
+      include: {
+        reviews: {
+          include: {
+            card: {
+              include: {
+                quiz: {
+                  include: {
+                    content: {
+                      select: {
+                        id: true,
+                        title: true,
+                        platform: true,
+                        thumbnailUrl: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Format response with content info
+    const memos = sessions.map(session => {
+      // Get unique contents from this session
+      const contentMap = new Map<string, { id: string; title: string; platform: string; thumbnailUrl: string | null }>();
+      for (const review of session.reviews) {
+        const content = review.card.quiz.content;
+        if (!contentMap.has(content.id)) {
+          contentMap.set(content.id, content);
+        }
+      }
+
+      return {
+        id: session.id,
+        memo: session.aiMemo,
+        createdAt: session.memoGeneratedAt || session.completedAt,
+        questionsCount: session.reviews.length,
+        contents: Array.from(contentMap.values()),
+      };
+    });
+
+    return res.json({ memos });
+  } catch (error) {
     return next(error);
   }
 });
