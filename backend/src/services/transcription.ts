@@ -1,12 +1,23 @@
 // Transcription Service - Fetches transcripts for YouTube videos
 // Uses yt-dlp (primary) for robust subtitle extraction including auto-generated captions
+// Uses global TranscriptCache to avoid redundant calls across users
 import { prisma } from '../config/database.js';
-import { ContentStatus, TranscriptSource, Platform } from '@prisma/client';
+import { ContentStatus, TranscriptSource, TranscriptCacheStatus, Platform } from '@prisma/client';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import {
+  generateWorkerId,
+  getOrCreateCacheWithLock,
+  markCacheSuccess,
+  markCacheUnavailable,
+  markCacheFailed,
+  linkCacheToContent,
+  copyTranscriptFromCache,
+  cleanupExpiredLocks,
+} from './transcriptCache.js';
 
 const execAsync = promisify(exec);
 
@@ -175,11 +186,12 @@ export async function fetchYouTubeTranscript(
 /**
  * Process a content item to get its transcript
  * Called when user clicks "Generate Quiz" on content
+ * Uses global cache to avoid redundant transcription calls
  */
 export async function processContentTranscript(contentId: string): Promise<boolean> {
   const content = await prisma.content.findUnique({
     where: { id: contentId },
-    include: { transcript: true },
+    include: { transcript: true, transcriptCache: true },
   });
 
   if (!content) {
@@ -199,26 +211,93 @@ export async function processContentTranscript(contentId: string): Promise<boole
     return false;
   }
 
+  // Check if we have a cached transcript
+  if (content.transcriptCache?.status === TranscriptCacheStatus.SUCCESS && content.transcriptCache.text) {
+    // Copy from cache
+    await copyTranscriptFromCache(contentId, content.transcriptCache);
+    console.log(`[Transcription] Content ${contentId} - copied from cache`);
+    return true;
+  }
+
+  // Check if cache exists but is UNAVAILABLE
+  if (content.transcriptCache?.status === TranscriptCacheStatus.UNAVAILABLE) {
+    console.log(`[Transcription] Content ${contentId} - cache UNAVAILABLE`);
+    return false;
+  }
+
   // Update status to transcribing
   await prisma.content.update({
     where: { id: contentId },
     data: { status: ContentStatus.TRANSCRIBING },
   });
 
+  const workerId = generateWorkerId();
+
   try {
+    // Get or create cache with lock
+    const cacheResult = await getOrCreateCacheWithLock(content.platform, content.externalId, workerId);
+
+    if (!cacheResult) {
+      // Cache is locked, wait and retry
+      console.log(`[Transcription] Content ${contentId} - cache locked, will retry later`);
+      await prisma.content.update({
+        where: { id: contentId },
+        data: { status: ContentStatus.SELECTED },
+      });
+      return false;
+    }
+
+    const { cache, acquired } = cacheResult;
+
+    // Cache hit - copy transcript
+    if (cache.status === TranscriptCacheStatus.SUCCESS && cache.text) {
+      await linkCacheToContent(content.platform, content.externalId, cache.id);
+      await copyTranscriptFromCache(contentId, cache);
+      await prisma.content.update({
+        where: { id: contentId },
+        data: { status: ContentStatus.SELECTED },
+      });
+      console.log(`[Transcription] ✅ Content ${contentId} - cache hit`);
+      return true;
+    }
+
+    // Need to fetch transcript
+    if (!acquired) {
+      // Cache is being processed by another worker
+      await prisma.content.update({
+        where: { id: contentId },
+        data: { status: ContentStatus.SELECTED },
+      });
+      return false;
+    }
+
     const result = await fetchYouTubeTranscript(content.externalId);
 
     if (!result) {
-      // No transcript available - mark as failed
+      // No transcript available
+      await markCacheUnavailable(cache.id, 'No subtitles available', workerId);
       await prisma.content.update({
         where: { id: contentId },
         data: {
           status: ContentStatus.FAILED,
+          transcriptionFailed: true,
+          transcriptCacheId: cache.id,
         },
       });
-      console.log(`[Transcription] No transcript available for ${content.externalId}`);
+      console.log(`[Transcription] No transcript available for ${content.externalId} - marked as failed`);
       return false;
     }
+
+    // Save to cache
+    await markCacheSuccess(cache.id, {
+      text: result.text,
+      segments: result.segments,
+      language: result.language,
+      source: TranscriptSource.YOUTUBE_SUBTITLES,
+    }, workerId);
+
+    // Link and copy
+    await linkCacheToContent(content.platform, content.externalId, cache.id);
 
     // Save transcript to database
     await prisma.transcript.create({
@@ -279,20 +358,46 @@ export async function batchProcessTranscripts(contentIds: string[]): Promise<{
 
 /**
  * Background worker to process pending transcriptions
- * Processes content items that are in SELECTED status
+ * Uses global TranscriptCache to avoid redundant calls across users
+ * Processes content items that are in SELECTED or INBOX status
  */
 export async function runTranscriptionWorker(): Promise<void> {
   console.log('[Transcription Worker] Starting...');
 
-  // Get content items that need transcription (SELECTED status, no transcript, YouTube only)
+  const workerId = generateWorkerId();
+
+  // Clean up any expired locks from crashed workers
+  await cleanupExpiredLocks();
+
+  // Get content items that need transcription:
+  // 1. SELECTED status (user clicked "Learn") - priority
+  // 2. INBOX YouTube content (pre-transcription for faster UX) - free via yt-dlp
+  // Excludes content where transcription already failed (no subtitles available)
   const pendingContent = await prisma.content.findMany({
     where: {
-      status: ContentStatus.SELECTED,
-      platform: Platform.YOUTUBE,
-      transcript: null,
+      OR: [
+        // Priority: User-selected content
+        {
+          status: ContentStatus.SELECTED,
+          platform: Platform.YOUTUBE,
+          transcript: null,
+          transcriptionFailed: false,
+        },
+        // Pre-transcription: INBOX YouTube (gratuit via sous-titres)
+        {
+          status: ContentStatus.INBOX,
+          platform: Platform.YOUTUBE,
+          transcript: null,
+          transcriptionFailed: false,
+        },
+      ],
     },
-    take: 5, // Process 5 at a time (yt-dlp is slower than API calls)
-    orderBy: { createdAt: 'asc' },
+    take: 20, // Increased since we deduplicate
+    orderBy: [
+      // Process SELECTED first, then INBOX
+      { status: 'asc' },
+      { createdAt: 'asc' },
+    ],
   });
 
   if (pendingContent.length === 0) {
@@ -300,11 +405,178 @@ export async function runTranscriptionWorker(): Promise<void> {
     return;
   }
 
-  console.log(`[Transcription Worker] Processing ${pendingContent.length} items`);
+  // Deduplicate by externalId (multiple users may have liked the same video)
+  const uniqueVideos = new Map<string, typeof pendingContent[0]>();
+  for (const content of pendingContent) {
+    if (!uniqueVideos.has(content.externalId)) {
+      uniqueVideos.set(content.externalId, content);
+    }
+  }
 
-  const { success, failed } = await batchProcessTranscripts(
-    pendingContent.map(c => c.id)
-  );
+  const selectedCount = pendingContent.filter(c => c.status === ContentStatus.SELECTED).length;
+  const inboxCount = pendingContent.filter(c => c.status === ContentStatus.INBOX).length;
+  console.log(`[Transcription Worker] Processing ${pendingContent.length} items → ${uniqueVideos.size} unique videos (${selectedCount} SELECTED, ${inboxCount} INBOX)`);
 
-  console.log(`[Transcription Worker] Completed: ${success} success, ${failed} failed`);
+  let success = 0;
+  let cacheHits = 0;
+  let failed = 0;
+
+  for (const [_externalId, content] of uniqueVideos) {
+    const result = await processWithCache(workerId, content);
+    if (result === 'success') {
+      success++;
+    } else if (result === 'cache_hit') {
+      cacheHits++;
+    } else {
+      failed++;
+    }
+    // Small delay to avoid rate limiting
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+
+  console.log(`[Transcription Worker] Completed: ${success} transcribed, ${cacheHits} cache hits, ${failed} failed`);
 }
+
+/**
+ * Process a content item using the global cache
+ */
+async function processWithCache(
+  workerId: string,
+  content: { id: string; platform: Platform; externalId: string; status: ContentStatus }
+): Promise<'success' | 'cache_hit' | 'failed'> {
+  // Try to get or create cache entry with lock
+  const result = await getOrCreateCacheWithLock(content.platform, content.externalId, workerId);
+
+  if (!result) {
+    // Cache is locked by another worker, skip for now
+    return 'failed';
+  }
+
+  const { cache, acquired } = result;
+
+  // If cache already has transcript (SUCCESS), just link and copy
+  if (cache.status === TranscriptCacheStatus.SUCCESS && cache.text) {
+    // Link cache to all Content records with this externalId
+    await linkCacheToContent(content.platform, content.externalId, cache.id);
+
+    // Copy transcript to Content's Transcript table for backward compatibility
+    await copyTranscriptToAllContent(content.platform, content.externalId, cache);
+
+    console.log(`[Transcription] Cache hit for ${content.externalId}`);
+    return 'cache_hit';
+  }
+
+  // If cache is UNAVAILABLE and not retrying, mark content as failed
+  if (cache.status === TranscriptCacheStatus.UNAVAILABLE && !acquired) {
+    await markContentTranscriptionFailed(content.platform, content.externalId);
+    return 'failed';
+  }
+
+  // We acquired the lock, need to fetch transcript
+  if (!acquired) {
+    return 'failed';
+  }
+
+  try {
+    const transcript = await fetchYouTubeTranscript(content.externalId);
+
+    if (transcript) {
+      // Mark cache as success
+      await markCacheSuccess(cache.id, {
+        text: transcript.text,
+        segments: transcript.segments,
+        language: transcript.language,
+        source: TranscriptSource.YOUTUBE_SUBTITLES,
+      }, workerId);
+
+      // Link and copy to all Content records
+      await linkCacheToContent(content.platform, content.externalId, cache.id);
+      await copyTranscriptToAllContent(content.platform, content.externalId, {
+        text: transcript.text,
+        segments: transcript.segments,
+        language: transcript.language,
+        source: TranscriptSource.YOUTUBE_SUBTITLES,
+      });
+
+      // Update status for SELECTED content
+      await updateContentStatusAfterTranscription(content.platform, content.externalId);
+
+      console.log(`[Transcription] ✅ ${content.externalId} - SUCCESS (${transcript.text.length} chars)`);
+      return 'success';
+
+    } else {
+      // No subtitles available
+      await markCacheUnavailable(cache.id, 'No subtitles available', workerId);
+      await markContentTranscriptionFailed(content.platform, content.externalId);
+
+      console.log(`[Transcription] ${content.externalId} - UNAVAILABLE`);
+      return 'failed';
+    }
+
+  } catch (error: any) {
+    await markCacheFailed(cache.id, error, workerId);
+    console.error(`[Transcription] ${content.externalId} - ERROR: ${error.message}`);
+    return 'failed';
+  }
+}
+
+/**
+ * Copy transcript from cache to all Content records with this externalId
+ */
+async function copyTranscriptToAllContent(
+  platform: Platform,
+  externalId: string,
+  cache: { text: string | null; segments: any; language: string | null; source: TranscriptSource | null }
+): Promise<void> {
+  if (!cache.text || !cache.source) return;
+
+  // Get all content IDs that need transcripts
+  const contents = await prisma.content.findMany({
+    where: {
+      platform,
+      externalId,
+      transcript: null,
+    },
+    select: { id: true },
+  });
+
+  for (const content of contents) {
+    try {
+      await copyTranscriptFromCache(content.id, cache);
+    } catch (error) {
+      // Ignore duplicate errors
+    }
+  }
+}
+
+/**
+ * Update content status after successful transcription
+ */
+async function updateContentStatusAfterTranscription(
+  _platform: Platform,
+  _externalId: string
+): Promise<void> {
+  // SELECTED content stays SELECTED (quiz worker picks it up)
+  // INBOX content stays INBOX (pre-transcription)
+  // No status change needed - just having the transcript is enough
+}
+
+/**
+ * Mark all content with this externalId as transcription failed
+ */
+async function markContentTranscriptionFailed(
+  platform: Platform,
+  externalId: string
+): Promise<void> {
+  await prisma.content.updateMany({
+    where: {
+      platform,
+      externalId,
+      transcriptionFailed: false,
+    },
+    data: {
+      transcriptionFailed: true,
+    },
+  });
+}
+

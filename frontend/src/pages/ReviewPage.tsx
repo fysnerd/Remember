@@ -103,6 +103,13 @@ interface SessionCardsResponse {
   };
 }
 
+const platformColors: Record<string, string> = {
+  YOUTUBE: 'bg-red-100 text-red-700 border-red-200',
+  SPOTIFY: 'bg-green-100 text-green-700 border-green-200',
+  TIKTOK: 'bg-gray-100 text-gray-700 border-gray-200',
+  INSTAGRAM: 'bg-pink-100 text-pink-700 border-pink-200',
+};
+
 export function ReviewPage() {
   const [searchParams] = useSearchParams();
   const sessionId = searchParams.get('session');
@@ -134,7 +141,6 @@ export function ReviewPage() {
     queryFn: async (): Promise<DueCardsResponse> => {
       if (sessionId) {
         const res = await api.get<SessionCardsResponse>(`/reviews/session/${sessionId}/cards`);
-        // Transform to match DueCardsResponse structure
         return {
           cards: res.data.cards,
           count: res.data.count,
@@ -212,7 +218,6 @@ export function ReviewPage() {
       if (data && currentIndex < data.cards.length - 1) {
         setCurrentIndex((i) => i + 1);
       } else {
-        // Complete session if using one
         if (sessionId) {
           completeSession.mutate();
         }
@@ -248,7 +253,6 @@ export function ReviewPage() {
       }
 
       if (!showAnswer) {
-        // Before answer: Space/Enter to reveal, 1-4 to select option
         if (e.code === 'Space' || e.code === 'Enter') {
           e.preventDefault();
           handleRevealAnswer();
@@ -258,7 +262,6 @@ export function ReviewPage() {
           handleSelectOption(parseInt(e.key) - 1);
         }
       } else {
-        // After answer: Space/Enter to continue (auto-rating based on correctness)
         if (e.code === 'Space' || e.code === 'Enter') {
           e.preventDefault();
           if (data) {
@@ -302,7 +305,6 @@ export function ReviewPage() {
         .replace(/\*([^*]+)\*/g, '$1')
         .trim();
 
-      // Check if it's a title (ends with : or starts with #)
       if (/^#+\s*/.test(line) || (cleaned.endsWith(':') && !cleaned.startsWith('-'))) {
         if (currentSection.points.length > 0 || currentSection.title) {
           sections.push(currentSection);
@@ -338,12 +340,12 @@ export function ReviewPage() {
 
   if (isLoading) {
     return (
-      <div className="fixed inset-0 bg-void flex items-center justify-center">
+      <div className="fixed inset-0 bg-white flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 rounded-2xl bg-amber/20 flex items-center justify-center mx-auto mb-6 animate-pulse-glow">
-            <Brain size={32} className="text-amber" />
+          <div className="w-16 h-16 rounded-lg bg-gray-100 flex items-center justify-center mx-auto mb-6 animate-pulse">
+            <Brain size={32} className="text-gray-400" />
           </div>
-          <p className="text-cream-muted">Préparation de ta session...</p>
+          <p className="text-gray-500">Préparation de ta session...</p>
         </div>
       </div>
     );
@@ -356,56 +358,52 @@ export function ReviewPage() {
   // Session complete - show summary
   if (sessionComplete || !data?.cards.length) {
     return (
-      <div className="fixed inset-0 bg-void flex items-center justify-center p-8 overflow-auto">
-        {/* Ambient glows */}
-        <div className="fixed top-20 right-20 w-64 h-64 bg-amber/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="fixed bottom-20 left-20 w-48 h-48 bg-sage/10 rounded-full blur-3xl pointer-events-none" />
-
+      <div className="fixed inset-0 bg-white flex items-center justify-center p-6 overflow-auto">
         {/* Mistakes Modal */}
         {showMistakes && (
-          <div className="modal-backdrop z-50" onClick={() => setShowMistakes(false)}>
-            <div className="modal-content max-w-2xl max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-              <div className="p-6 border-b border-void-200 flex items-center justify-between">
-                <h3 className="text-xl font-display text-cream">Questions à revoir</h3>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowMistakes(false)}>
+            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col border border-gray-200" onClick={(e) => e.stopPropagation()}>
+              <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Questions à revoir</h3>
                 <button
                   onClick={() => setShowMistakes(false)}
-                  className="p-2 text-cream-dark hover:text-cream rounded-lg hover:bg-void-100"
+                  className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
                 >
                   <X size={20} />
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {isLoadingMistakes ? (
                   <div className="flex justify-center py-8">
-                    <Loader2 className="w-8 h-8 text-amber animate-spin" />
+                    <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
                   </div>
                 ) : mistakesData?.mistakes.length === 0 ? (
-                  <p className="text-center text-cream-muted py-8">Aucune erreur à revoir !</p>
+                  <p className="text-center text-gray-500 py-8">Aucune erreur à revoir !</p>
                 ) : (
                   mistakesData?.mistakes.map((mistake, idx) => (
-                    <div key={mistake.id} className="bg-void-100 border border-void-200 rounded-xl p-4">
+                    <div key={mistake.id} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                       <div className="flex items-start justify-between gap-4 mb-3">
-                        <p className="text-cream font-medium">
-                          <span className="text-amber mr-2">{idx + 1}.</span>
+                        <p className="text-gray-900 font-medium">
+                          <span className="text-gray-500 mr-2">{idx + 1}.</span>
                           {mistake.question}
                         </p>
                         <span className={`px-2 py-1 rounded text-xs font-medium flex-shrink-0 ${
-                          mistake.rating === 'AGAIN' ? 'bg-rust/20 text-rust' : 'bg-amber/20 text-amber'
+                          mistake.rating === 'AGAIN' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
                         }`}>
                           {mistake.rating}
                         </span>
                       </div>
-                      <p className="text-sm text-sage mb-2">
+                      <p className="text-sm text-green-600 mb-2">
                         Correct : {mistake.options.find(o => o.startsWith(mistake.correctAnswer))}
                       </p>
                       {mistake.explanation && (
-                        <p className="text-sm text-cream-dark mb-3">{mistake.explanation}</p>
+                        <p className="text-sm text-gray-500 mb-3">{mistake.explanation}</p>
                       )}
                       <a
                         href={mistake.content.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs text-amber hover:underline flex items-center gap-1"
+                        className="text-xs text-gray-500 hover:underline flex items-center gap-1"
                       >
                         {mistake.content.title}
                         <ExternalLink size={12} />
@@ -420,40 +418,40 @@ export function ReviewPage() {
 
         {/* Memo Modal */}
         {showMemo && aiMemo && (
-          <div className="modal-backdrop z-50" onClick={() => setShowMemo(false)}>
-            <div className="modal-content max-w-2xl max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-              <div className="p-6 border-b border-void-200 flex items-center justify-between">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowMemo(false)}>
+            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col border border-gray-200" onClick={(e) => e.stopPropagation()}>
+              <div className="p-4 border-b border-gray-200 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-info/20 flex items-center justify-center">
-                    <BookOpen size={20} className="text-info" />
+                  <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                    <BookOpen size={20} className="text-gray-600" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-display text-cream">Mémo de révision</h3>
-                    <p className="text-xs text-cream-dark">Points clés à retenir</p>
+                    <h3 className="text-lg font-semibold text-gray-900">Mémo de révision</h3>
+                    <p className="text-xs text-gray-500">Points clés à retenir</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={copyMemo}
-                    className="p-2 text-cream-dark hover:text-info rounded-lg hover:bg-info/10 transition-colors"
+                    className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
                     title="Copier le mémo"
                   >
-                    {memoCopied ? <Check size={20} className="text-sage" /> : <Copy size={20} />}
+                    {memoCopied ? <Check size={20} className="text-green-600" /> : <Copy size={20} />}
                   </button>
                   <button
                     onClick={() => setShowMemo(false)}
-                    className="p-2 text-cream-dark hover:text-cream rounded-lg hover:bg-void-100"
+                    className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
                   >
                     <X size={20} />
                   </button>
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {parseMemo(aiMemo).map((section, idx) => (
-                  <div key={idx} className="bg-void-100 border border-void-200 rounded-xl p-4">
+                  <div key={idx} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                     {section.title && (
-                      <h4 className="text-info font-medium mb-3 flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-lg bg-info/20 flex items-center justify-center text-xs">
+                      <h4 className="text-gray-900 font-medium mb-3 flex items-center gap-2">
+                        <span className="w-6 h-6 rounded bg-gray-200 flex items-center justify-center text-xs text-gray-600">
                           {idx + 1}
                         </span>
                         {section.title}
@@ -461,8 +459,8 @@ export function ReviewPage() {
                     )}
                     <ul className="space-y-2">
                       {section.points.map((point, pointIdx) => (
-                        <li key={pointIdx} className="text-sm text-cream flex items-start gap-2">
-                          <span className="text-info mt-1">•</span>
+                        <li key={pointIdx} className="text-sm text-gray-700 flex items-start gap-2">
+                          <span className="text-gray-400 mt-1">•</span>
                           <span>{point}</span>
                         </li>
                       ))}
@@ -471,66 +469,66 @@ export function ReviewPage() {
                 ))}
               </div>
               {memoCopied && (
-                <div className="p-3 bg-sage/20 border-t border-sage/30 text-center">
-                  <p className="text-sm text-sage">Mémo copié dans le presse-papier !</p>
+                <div className="p-3 bg-green-50 border-t border-green-200 text-center">
+                  <p className="text-sm text-green-600">Mémo copié dans le presse-papier !</p>
                 </div>
               )}
             </div>
           </div>
         )}
 
-        <div className="max-w-md w-full relative my-8">
-          <div className="card animate-scale-in">
+        <div className="max-w-md w-full">
+          <div className="border border-gray-200 rounded-lg p-6">
             {totalReviewed > 0 ? (
               <>
-                <div className="w-20 h-20 bg-gradient-to-br from-sage to-sage-dark rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-glow">
-                  <Target className="w-10 h-10 text-void" />
+                <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-6">
+                  <Target className="w-8 h-8 text-gray-600" />
                 </div>
-                <h2 className="text-3xl font-display text-cream mb-2 text-center">
+                <h2 className="text-2xl font-semibold text-gray-900 mb-2 text-center">
                   Session terminée
                 </h2>
-                <p className="text-cream-muted text-center mb-6">
+                <p className="text-gray-500 text-center mb-6">
                   {totalReviewed} question{totalReviewed !== 1 ? 's' : ''} · {accuracy}% correct
                 </p>
 
                 {/* Session Stats */}
                 <div className="grid grid-cols-3 gap-3 mb-6">
-                  <div className="bg-void-50 border border-void-200 rounded-xl p-3 text-center">
-                    <Clock className="w-5 h-5 text-cream-muted mx-auto mb-1" />
-                    <p className="text-xl font-display text-cream">{getSessionDuration()}</p>
-                    <p className="text-xs text-cream-dark">Durée</p>
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+                    <Clock className="w-5 h-5 text-gray-400 mx-auto mb-1" />
+                    <p className="text-lg font-semibold text-gray-900">{getSessionDuration()}</p>
+                    <p className="text-xs text-gray-500">Durée</p>
                   </div>
-                  <div className="bg-void-50 border border-void-200 rounded-xl p-3 text-center">
-                    <Flame className="w-5 h-5 text-amber mx-auto mb-1" />
-                    <p className="text-xl font-display text-cream">{stats?.currentStreak || 0}</p>
-                    <p className="text-xs text-cream-dark">Jours de streak</p>
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+                    <Flame className="w-5 h-5 text-orange-500 mx-auto mb-1" />
+                    <p className="text-lg font-semibold text-gray-900">{stats?.currentStreak || 0}</p>
+                    <p className="text-xs text-gray-500">Streak</p>
                   </div>
-                  <div className="bg-void-50 border border-void-200 rounded-xl p-3 text-center">
-                    <AlertCircle className="w-5 h-5 text-rust mx-auto mb-1" />
-                    <p className="text-xl font-display text-cream">{mistakesCount}</p>
-                    <p className="text-xs text-cream-dark">À revoir</p>
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+                    <AlertCircle className="w-5 h-5 text-red-500 mx-auto mb-1" />
+                    <p className="text-lg font-semibold text-gray-900">{mistakesCount}</p>
+                    <p className="text-xs text-gray-500">À revoir</p>
                   </div>
                 </div>
 
                 {/* Rating breakdown */}
                 <div className="flex flex-wrap justify-center gap-2 mb-6">
                   {sessionStats.again > 0 && (
-                    <span className="px-3 py-1.5 bg-rust/20 text-rust border border-rust/30 rounded-lg text-sm">
+                    <span className="px-3 py-1.5 bg-red-100 text-red-700 border border-red-200 rounded-lg text-sm">
                       Again: {sessionStats.again}
                     </span>
                   )}
                   {sessionStats.hard > 0 && (
-                    <span className="px-3 py-1.5 bg-amber/20 text-amber border border-amber/30 rounded-lg text-sm">
+                    <span className="px-3 py-1.5 bg-yellow-100 text-yellow-700 border border-yellow-200 rounded-lg text-sm">
                       Hard: {sessionStats.hard}
                     </span>
                   )}
                   {sessionStats.good > 0 && (
-                    <span className="px-3 py-1.5 bg-sage/20 text-sage border border-sage/30 rounded-lg text-sm">
+                    <span className="px-3 py-1.5 bg-green-100 text-green-700 border border-green-200 rounded-lg text-sm">
                       Good: {sessionStats.good}
                     </span>
                   )}
                   {sessionStats.easy > 0 && (
-                    <span className="px-3 py-1.5 bg-info/20 text-info border border-info/30 rounded-lg text-sm">
+                    <span className="px-3 py-1.5 bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-sm">
                       Easy: {sessionStats.easy}
                     </span>
                   )}
@@ -543,7 +541,7 @@ export function ReviewPage() {
                     {aiMemo ? (
                       <button
                         onClick={() => setShowMemo(true)}
-                        className="w-full py-3 px-4 rounded-xl bg-info/20 border border-info/30 text-info hover:bg-info/30 transition-colors flex items-center justify-center gap-2"
+                        className="w-full py-3 px-4 rounded-lg bg-gray-100 border border-gray-200 text-gray-700 hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
                       >
                         <BookOpen size={18} />
                         Voir le mémo de révision
@@ -552,7 +550,7 @@ export function ReviewPage() {
                       <button
                         onClick={() => generateMemo.mutate()}
                         disabled={generateMemo.isPending}
-                        className="w-full py-3 px-4 rounded-xl bg-info/20 border border-info/30 text-info hover:bg-info/30 transition-colors flex items-center justify-center gap-2"
+                        className="w-full py-3 px-4 rounded-lg bg-gray-100 border border-gray-200 text-gray-700 hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
                       >
                         {generateMemo.isPending ? (
                           <>
@@ -572,7 +570,7 @@ export function ReviewPage() {
                     {mistakesCount > 0 && (
                       <button
                         onClick={() => setShowMistakes(true)}
-                        className="w-full py-3 px-4 rounded-xl bg-rust/20 border border-rust/30 text-rust hover:bg-rust/30 transition-colors flex items-center justify-center gap-2"
+                        className="w-full py-3 px-4 rounded-lg bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 transition-colors flex items-center justify-center gap-2"
                       >
                         <AlertCircle size={18} />
                         Voir {mistakesCount} erreur{mistakesCount !== 1 ? 's' : ''}
@@ -581,29 +579,29 @@ export function ReviewPage() {
                   </div>
                 )}
 
-                <p className="text-sm text-cream-dark text-center mb-6">
+                <p className="text-sm text-gray-500 text-center mb-6">
                   Reviens demain pour maintenir ton streak.
                 </p>
               </>
             ) : (
               <>
-                <div className="w-20 h-20 bg-gradient-to-br from-amber to-amber-dark rounded-2xl flex items-center justify-center mx-auto mb-6">
-                  <Sparkles className="w-10 h-10 text-void" />
+                <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-6">
+                  <Sparkles className="w-8 h-8 text-gray-600" />
                 </div>
-                <h2 className="text-3xl font-display text-cream mb-2 text-center">
+                <h2 className="text-2xl font-semibold text-gray-900 mb-2 text-center">
                   Tout est à jour
                 </h2>
                 {stats && stats.newDue > 0 && stats.remainingNewToday === 0 ? (
                   <div className="mb-6 text-center">
-                    <p className="text-cream-muted mb-2">
+                    <p className="text-gray-500 mb-2">
                       Tu as atteint ta limite quotidienne de {stats.newCardsLimit} nouvelles cartes.
                     </p>
-                    <p className="text-sm text-cream-dark">
+                    <p className="text-sm text-gray-400">
                       {stats.newDue} nouvelles cartes t'attendent demain.
                     </p>
                   </div>
                 ) : (
-                  <p className="text-cream-muted text-center mb-6">
+                  <p className="text-gray-500 text-center mb-6">
                     Aucune carte à réviser pour l'instant. Ton archive est à jour.
                   </p>
                 )}
@@ -623,30 +621,30 @@ export function ReviewPage() {
   const progress = ((currentIndex + 1) / data.cards.length) * 100;
 
   return (
-    <div className="fixed inset-0 bg-void flex flex-col">
+    <div className="fixed inset-0 bg-white flex flex-col">
       {/* Header */}
-      <div className="bg-void-50 border-b border-void-200 px-6 py-4">
+      <div className="bg-gray-50 border-b border-gray-200 px-6 py-4">
         <div className="max-w-3xl mx-auto">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-4">
               <Link
                 to="/"
-                className="text-cream-muted hover:text-cream flex items-center gap-2 transition-colors"
+                className="text-gray-500 hover:text-gray-700 flex items-center gap-2 transition-colors"
               >
                 <ArrowLeft size={18} />
                 <span className="text-sm">Quitter</span>
               </Link>
               <div className="flex items-center gap-3">
-                <span className="text-sm text-cream-muted">
+                <span className="text-sm text-gray-500">
                   {currentIndex + 1} sur {data.cards.length}
                 </span>
                 {card.repetitions === 0 && (
-                  <span className="px-2.5 py-1 bg-amber/20 text-amber border border-amber/30 text-xs rounded-lg font-medium">
+                  <span className="px-2.5 py-1 bg-blue-100 text-blue-700 border border-blue-200 text-xs rounded-lg font-medium">
                     Nouveau
                   </span>
                 )}
                 {data.stats && (
-                  <span className="text-xs text-cream-dark">
+                  <span className="text-xs text-gray-400">
                     ({data.stats.newCardsToday}/{data.stats.newCardsLimit} nouveaux aujourd'hui)
                   </span>
                 )}
@@ -656,7 +654,7 @@ export function ReviewPage() {
               {!sessionId && (
                 <Link
                   to="/review/configure"
-                  className="text-cream-dark hover:text-cream transition-colors"
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
                   title="Configure session"
                 >
                   <Settings size={18} />
@@ -664,13 +662,13 @@ export function ReviewPage() {
               )}
               <button
                 onClick={() => setShowShortcuts((prev) => !prev)}
-                className="text-cream-dark hover:text-cream transition-colors"
+                className="text-gray-400 hover:text-gray-600 transition-colors"
                 title="Keyboard shortcuts (?)"
               >
                 <Keyboard size={18} />
               </button>
               {stats && (
-                <div className="flex items-center gap-1.5 text-amber">
+                <div className="flex items-center gap-1.5 text-orange-500">
                   <Flame size={18} />
                   <span className="text-sm font-medium">{stats.currentStreak}</span>
                 </div>
@@ -678,9 +676,9 @@ export function ReviewPage() {
             </div>
           </div>
           {/* Progress bar */}
-          <div className="progress-track">
+          <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
             <div
-              className="progress-fill"
+              className="h-full bg-gray-900 rounded-full transition-all duration-300"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -689,9 +687,9 @@ export function ReviewPage() {
 
       {/* Keyboard shortcuts modal */}
       {showShortcuts && (
-        <div className="modal-backdrop" onClick={() => setShowShortcuts(false)}>
-          <div className="modal-content max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-xl font-display text-cream mb-6">Raccourcis clavier</h3>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowShortcuts(false)}>
+          <div className="bg-white rounded-lg max-w-sm w-full p-6 border border-gray-200" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 mb-6">Raccourcis clavier</h3>
             <div className="space-y-3 text-sm">
               {[
                 { action: 'Sélectionner option', key: '1-4' },
@@ -700,8 +698,8 @@ export function ReviewPage() {
                 { action: 'Quitter la session', key: 'Échap' },
               ].map(({ action, key }) => (
                 <div key={action} className="flex justify-between items-center">
-                  <span className="text-cream-muted">{action}</span>
-                  <kbd className="px-3 py-1.5 bg-void-200 border border-void-300 rounded-lg text-xs text-cream font-mono">
+                  <span className="text-gray-500">{action}</span>
+                  <kbd className="px-3 py-1.5 bg-gray-100 border border-gray-200 rounded-lg text-xs text-gray-700 font-mono">
                     {key}
                   </kbd>
                 </div>
@@ -719,21 +717,21 @@ export function ReviewPage() {
 
       {/* Milestone celebration modal */}
       {milestoneToShow && (
-        <div className="modal-backdrop" onClick={() => setMilestoneToShow(null)}>
-          <div className="modal-content max-w-sm p-8 text-center" onClick={(e) => e.stopPropagation()}>
-            <div className="w-20 h-20 bg-gradient-to-br from-amber to-amber-dark rounded-2xl flex items-center justify-center mx-auto mb-6 animate-pulse-glow">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setMilestoneToShow(null)}>
+          <div className="bg-white rounded-lg max-w-sm w-full p-8 text-center border border-gray-200" onClick={(e) => e.stopPropagation()}>
+            <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-6">
               {milestoneToShow >= 100 ? (
-                <Trophy size={40} className="text-void" />
+                <Trophy size={32} className="text-yellow-500" />
               ) : milestoneToShow >= 30 ? (
-                <Star size={40} className="text-void" />
+                <Star size={32} className="text-yellow-500" />
               ) : (
-                <Flame size={40} className="text-void" />
+                <Flame size={32} className="text-orange-500" />
               )}
             </div>
-            <h3 className="text-3xl font-display text-cream mb-2">
+            <h3 className="text-2xl font-semibold text-gray-900 mb-2">
               {milestoneToShow} jours de streak !
             </h3>
-            <p className="text-cream-muted mb-8">
+            <p className="text-gray-500 mb-8">
               {milestoneToShow >= 100
                 ? 'Incroyable ! Ta constance est légendaire.'
                 : milestoneToShow >= 30
@@ -752,15 +750,15 @@ export function ReviewPage() {
 
       {/* New record celebration */}
       {isNewRecord && !milestoneToShow && (
-        <div className="modal-backdrop" onClick={() => setIsNewRecord(false)}>
-          <div className="modal-content max-w-sm p-8 text-center" onClick={(e) => e.stopPropagation()}>
-            <div className="w-20 h-20 bg-gradient-to-br from-sage to-sage-dark rounded-2xl flex items-center justify-center mx-auto mb-6 animate-pulse-glow">
-              <Zap size={40} className="text-void" />
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setIsNewRecord(false)}>
+          <div className="bg-white rounded-lg max-w-sm w-full p-8 text-center border border-gray-200" onClick={(e) => e.stopPropagation()}>
+            <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-6">
+              <Zap size={32} className="text-yellow-500" />
             </div>
-            <h3 className="text-3xl font-display text-cream mb-2">
+            <h3 className="text-2xl font-semibold text-gray-900 mb-2">
               Nouveau record personnel !
             </h3>
-            <p className="text-cream-muted mb-8">
+            <p className="text-gray-500 mb-8">
               Tu as dépassé ton précédent record. Continue comme ça !
             </p>
             <button
@@ -776,9 +774,9 @@ export function ReviewPage() {
       {/* Card content */}
       <div className="flex-1 flex items-center justify-center p-6 overflow-auto">
         <div className="max-w-2xl w-full">
-          <div className="card animate-fade-in">
+          <div className="border border-gray-200 rounded-lg p-6">
             {/* Question */}
-            <h2 className="text-xl font-display text-cream mb-8 text-center leading-relaxed">
+            <h2 className="text-lg font-semibold text-gray-900 mb-8 text-center leading-relaxed">
               {card.quiz.question}
             </h2>
 
@@ -795,35 +793,35 @@ export function ReviewPage() {
                     key={idx}
                     onClick={() => handleSelectOption(idx)}
                     disabled={showAnswer}
-                    className={`w-full text-left p-4 rounded-xl border transition-all duration-200 ${
+                    className={`w-full text-left p-4 rounded-lg border transition-all duration-200 ${
                       showAnswer
                         ? isCorrect
-                          ? 'border-sage bg-sage/10'
+                          ? 'border-green-500 bg-green-50'
                           : isWrong
-                          ? 'border-rust bg-rust/10'
-                          : 'border-void-200 opacity-50'
+                          ? 'border-red-500 bg-red-50'
+                          : 'border-gray-200 opacity-50'
                         : isSelected
-                        ? 'border-amber bg-amber/10'
-                        : 'border-void-200 hover:border-void-300 hover:bg-void-50'
+                        ? 'border-gray-900 bg-gray-50'
+                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                     }`}
                   >
                     <div className="flex items-center gap-4">
                       <span
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-medium transition-colors ${
+                        className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-medium transition-colors ${
                           showAnswer
                             ? isCorrect
-                              ? 'bg-sage text-void'
+                              ? 'bg-green-500 text-white'
                               : isWrong
-                              ? 'bg-rust text-cream'
-                              : 'bg-void-200 text-cream-dark'
+                              ? 'bg-red-500 text-white'
+                              : 'bg-gray-100 text-gray-400'
                             : isSelected
-                            ? 'bg-amber text-void'
-                            : 'bg-void-200 text-cream-muted'
+                            ? 'bg-gray-900 text-white'
+                            : 'bg-gray-100 text-gray-500'
                         }`}
                       >
                         {idx + 1}
                       </span>
-                      <span className={`flex-1 ${showAnswer && !isCorrect && !isWrong ? 'text-cream-dark' : 'text-cream'}`}>
+                      <span className={`flex-1 ${showAnswer && !isCorrect && !isWrong ? 'text-gray-400' : 'text-gray-900'}`}>
                         {option.substring(3)}
                       </span>
                     </div>
@@ -844,9 +842,9 @@ export function ReviewPage() {
             ) : (
               <div>
                 {card.quiz.explanation && (
-                  <div className="mb-6 p-4 bg-info/10 border border-info/20 rounded-xl">
-                    <p className="text-sm text-cream">
-                      <span className="font-medium text-info">Explication :</span> {card.quiz.explanation}
+                  <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                    <p className="text-sm text-gray-700">
+                      <span className="font-medium text-gray-900">Explication :</span> {card.quiz.explanation}
                     </p>
                   </div>
                 )}
@@ -877,26 +875,20 @@ export function ReviewPage() {
             )}
 
             {/* Source */}
-            <div className="mt-6 pt-4 border-t border-void-200">
-              <p className="text-sm text-cream-dark">
+            <div className="mt-6 pt-4 border-t border-gray-200">
+              <p className="text-sm text-gray-500">
                 Source :{' '}
                 <a
                   href={card.quiz.content.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-medium text-amber hover:text-amber-light transition-colors"
+                  className="font-medium text-gray-700 hover:text-gray-900 transition-colors"
                 >
                   {card.quiz.content.title}
                 </a>
                 <span
-                  className={`ml-2 px-2 py-0.5 rounded-lg text-xs font-medium ${
-                    card.quiz.content.platform === 'YOUTUBE'
-                      ? 'bg-[#FF0000]/10 text-[#FF6B6B] border border-[#FF0000]/20'
-                      : card.quiz.content.platform === 'SPOTIFY'
-                      ? 'bg-[#1DB954]/10 text-[#1DB954] border border-[#1DB954]/20'
-                      : card.quiz.content.platform === 'TIKTOK'
-                      ? 'bg-gradient-to-r from-[#00f2ea]/10 to-[#ff0050]/10 text-[#00f2ea] border border-[#00f2ea]/20'
-                      : 'bg-gradient-to-r from-[#833AB4]/10 via-[#FD1D1D]/10 to-[#F77737]/10 text-[#FD1D1D] border border-[#FD1D1D]/20'
+                  className={`ml-2 px-2 py-0.5 rounded-lg text-xs font-medium border ${
+                    platformColors[card.quiz.content.platform] || 'bg-gray-100 text-gray-600 border-gray-200'
                   }`}
                 >
                   {card.quiz.content.platform}

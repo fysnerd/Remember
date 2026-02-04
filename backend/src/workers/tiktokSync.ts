@@ -184,17 +184,19 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
       }
 
       // Create content entry
+      const authorUsername = video.author.uniqueId;
       await prisma.content.create({
         data: {
           userId,
           platform: Platform.TIKTOK,
           externalId: video.id,
-          url: `https://www.tiktok.com/@${video.author.uniqueId}/video/${video.id}`,
-          title: video.desc?.substring(0, 255) || `TikTok by @${video.author.uniqueId}`,
+          url: `https://www.tiktok.com/@${authorUsername}/video/${video.id}`,
+          title: video.desc?.substring(0, 255) || `TikTok by @${authorUsername}`,
           description: video.desc || null,
           thumbnailUrl: video.video?.cover || null,
           duration: video.video?.duration || null,
-          authorUsername: video.author.uniqueId,
+          authorUsername,
+          channelName: `@${authorUsername}`,  // Unified field for frontend
           viewCount: video.stats?.playCount || null,
           capturedAt: new Date(video.createTime * 1000),
           status: ContentStatus.INBOX,

@@ -1,7 +1,7 @@
 // Quiz Generation Service - Uses LLM to generate quiz questions from transcripts
 import { prisma } from '../config/database.js';
 import { ContentStatus, QuizType } from '@prisma/client';
-import { getLLMClient } from './llm.js';
+import { getLLMClient, generateText } from './llm.js';
 
 interface GeneratedQuestion {
   question: string;
@@ -193,6 +193,36 @@ Réponds uniquement avec du JSON:
 }
 
 /**
+ * Generate study memo from transcript
+ */
+export async function generateMemoFromTranscript(
+  transcript: string,
+  contentTitle: string,
+  tags: string[]
+): Promise<string> {
+  const transcriptText = transcript.slice(0, 8000); // Limit for LLM context
+  const tagsStr = tags.length > 0 ? tags.join(', ') : '';
+
+  const systemPrompt = `Tu es un assistant d'apprentissage expert. Génère un mémo d'étude concis et actionnable à partir de la transcription fournie.
+Le mémo doit:
+- Résumer les 5-7 concepts clés à retenir
+- Être structuré avec des bullet points
+- Être pratique et mémorisable
+- Faire maximum 200 mots
+- Être entièrement en français`;
+
+  const userPrompt = `Titre: ${contentTitle}
+${tagsStr ? `Thèmes: ${tagsStr}` : ''}
+
+Transcription:
+${transcriptText}
+
+Génère un mémo d'étude optimisé pour la rétention avec les points clés.`;
+
+  return generateText(userPrompt, { system: systemPrompt, temperature: 0.7 });
+}
+
+/**
  * Process content to generate quiz questions and create cards
  */
 export async function processContentQuiz(contentId: string): Promise<boolean> {
@@ -201,6 +231,7 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
     include: {
       transcript: true,
       quizzes: true,
+      tags: true, // Include tags for memo generation
     },
   });
 
@@ -287,6 +318,33 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
         data: { status: ContentStatus.READY },
       });
     });
+
+    // Generate memo in parallel (non-blocking, after quiz creation)
+    console.log(`[Quiz] Generating memo for: ${content.title}`);
+    try {
+      const tagNames = content.tags.map(t => t.name);
+      const memo = await generateMemoFromTranscript(
+        content.transcript!.text,
+        content.title,
+        tagNames
+      );
+
+      // Cache memo in transcript segments
+      await prisma.transcript.update({
+        where: { id: content.transcript!.id },
+        data: {
+          segments: {
+            ...(content.transcript!.segments as object || {}),
+            memo,
+            memoGeneratedAt: new Date().toISOString(),
+          },
+        },
+      });
+      console.log(`[Quiz] Memo generated and cached for: ${content.title}`);
+    } catch (memoError) {
+      // Don't fail the whole process if memo generation fails
+      console.error(`[Quiz] Memo generation failed for ${contentId}:`, memoError);
+    }
 
     console.log(`[Quiz] Created ${result.questions.length} questions for ${content.title}`);
     return true;

@@ -10,6 +10,109 @@ export const reviewRouter = Router();
 // All review routes require authentication
 reviewRouter.use(authenticateToken);
 
+// GET /api/reviews - Get contents that have been quizzed at least once
+reviewRouter.get('/', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+
+    // Get contents that have at least one review (quiz has been done)
+    const contentsWithReviews = await prisma.content.findMany({
+      where: {
+        userId,
+        status: 'READY',
+        quizzes: {
+          some: {
+            cards: {
+              some: {
+                reviews: {
+                  some: {}, // At least one review exists
+                },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        platform: true,
+        thumbnailUrl: true,
+        tags: { select: { name: true } },
+      },
+    });
+
+    // Transform to expected format
+    const items = contentsWithReviews.map(content => ({
+      id: content.id,
+      contentId: content.id,
+      contentTitle: content.title,
+      source: content.platform.toLowerCase(),
+      thumbnailUrl: content.thumbnailUrl,
+      topics: content.tags.map(t => t.name),
+    }));
+
+    // Also get topics that have been quizzed (contents with reviews grouped by tag)
+    // We need to count ONLY contents that have been quizzed, not all contents
+    const topicsWithReviews = await prisma.tag.findMany({
+      where: {
+        contents: {
+          some: {
+            userId,
+            status: 'READY',
+            quizzes: {
+              some: {
+                cards: {
+                  some: {
+                    reviews: {
+                      some: {},
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      select: {
+        name: true,
+        contents: {
+          where: {
+            userId,
+            status: 'READY',
+            quizzes: {
+              some: {
+                cards: {
+                  some: {
+                    reviews: {
+                      some: {},
+                    },
+                  },
+                },
+              },
+            },
+          },
+          select: { id: true },
+        },
+      },
+    });
+
+    // Only include topics with 2+ QUIZZED contents (single content = same as content memo)
+    const topics = topicsWithReviews
+      .filter(tag => tag.contents.length >= 2)
+      .map(tag => ({
+        id: `topic:${tag.name}`,
+        type: 'topic' as const,
+        name: tag.name,
+        contentCount: tag.contents.length,
+      }));
+
+    return res.json({ items, topics });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 // GET /api/reviews/due - Get cards due for review
 // Returns review cards (already seen) + new cards (up to daily limit)
 reviewRouter.get('/due', async (req: Request, res: Response, next: NextFunction) => {
@@ -219,6 +322,7 @@ const submitReviewSchema = z.object({
   rating: z.enum(['AGAIN', 'HARD', 'GOOD', 'EASY']),
   responseTime: z.number().optional(),
   sessionId: z.string().optional(),
+  isPractice: z.boolean().optional(), // Practice mode - don't update SM-2 stats
 });
 
 // POST /api/reviews - Submit a review
@@ -236,6 +340,15 @@ reviewRouter.post('/', async (req: Request, res: Response, next: NextFunction) =
 
     if (!card) {
       return res.status(404).json({ error: 'Card not found' });
+    }
+
+    // Practice mode - don't update SM-2 stats or streak
+    if (data.isPractice) {
+      return res.json({
+        card,
+        isPractice: true,
+        message: 'Practice mode - no stats updated',
+      });
     }
 
     // SM-2 Algorithm implementation
@@ -324,6 +437,155 @@ reviewRouter.post('/', async (req: Request, res: Response, next: NextFunction) =
 });
 
 // ============================================================================
+// Practice Mode Endpoint
+// ============================================================================
+
+// POST /api/reviews/practice - Get ALL cards for a content (practice mode)
+reviewRouter.post('/practice', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { contentId } = req.body;
+
+    if (!contentId) {
+      return res.status(400).json({ error: 'contentId is required' });
+    }
+
+    const userId = req.user!.id;
+
+    // Verify content belongs to user and has quizzes
+    const content = await prisma.content.findFirst({
+      where: {
+        id: contentId,
+        userId,
+        status: 'READY',
+      },
+      include: {
+        _count: { select: { quizzes: true } },
+      },
+    });
+
+    if (!content) {
+      return res.status(404).json({ error: 'Content not found' });
+    }
+
+    if (content._count.quizzes === 0) {
+      return res.status(400).json({ error: 'Content has no quizzes' });
+    }
+
+    // Get ALL cards for this content (not just due ones)
+    const cards = await prisma.card.findMany({
+      where: {
+        userId,
+        quiz: {
+          contentId,
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+      include: {
+        quiz: {
+          include: {
+            content: {
+              select: {
+                id: true,
+                title: true,
+                url: true,
+                platform: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return res.json({
+      cards,
+      count: cards.length,
+      content: {
+        id: content.id,
+        title: content.title,
+        platform: content.platform,
+      },
+      isPractice: true,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// POST /api/reviews/practice/topic - Get ALL cards for a topic (mixed from all contents)
+reviewRouter.post('/practice/topic', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { topicName } = req.body;
+
+    if (!topicName) {
+      return res.status(400).json({ error: 'topicName is required' });
+    }
+
+    const userId = req.user!.id;
+
+    // Find all contents with this tag that belong to the user and are READY
+    const contents = await prisma.content.findMany({
+      where: {
+        userId,
+        status: 'READY',
+        tags: {
+          some: {
+            name: topicName,
+          },
+        },
+      },
+      select: { id: true, title: true },
+    });
+
+    if (contents.length === 0) {
+      return res.status(404).json({ error: 'No content found for this topic' });
+    }
+
+    const contentIds = contents.map(c => c.id);
+
+    // Get ALL cards for these contents
+    const cards = await prisma.card.findMany({
+      where: {
+        userId,
+        quiz: {
+          contentId: { in: contentIds },
+        },
+      },
+      include: {
+        quiz: {
+          include: {
+            content: {
+              select: {
+                id: true,
+                title: true,
+                url: true,
+                platform: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (cards.length === 0) {
+      return res.status(400).json({ error: 'No quizzes found for this topic' });
+    }
+
+    // Shuffle the cards randomly
+    const shuffledCards = cards.sort(() => Math.random() - 0.5);
+
+    return res.json({
+      cards: shuffledCards,
+      count: shuffledCards.length,
+      topic: topicName,
+      contentCount: contents.length,
+      isPractice: true,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// ============================================================================
 // Quiz Session Endpoints
 // ============================================================================
 
@@ -333,6 +595,7 @@ const createSessionSchema = z.object({
   platforms: z.array(z.enum(['YOUTUBE', 'SPOTIFY', 'TIKTOK'])).optional(),
   tagIds: z.array(z.string()).optional(),
   contentIds: z.array(z.string()).optional(),
+  mode: z.enum(['due', 'practice']).optional().default('practice'), // 'practice' = all cards, 'due' = only due cards
 });
 
 // POST /api/reviews/session - Create a new quiz session
@@ -340,8 +603,9 @@ reviewRouter.post('/session', async (req: Request, res: Response, next: NextFunc
   try {
     const data = createSessionSchema.parse(req.body);
     const userId = req.user!.id;
+    const mode = data.mode || 'practice'; // Default to practice mode (all cards)
 
-    // Create session
+    // Create session with mode
     const session = await prisma.quizSession.create({
       data: {
         userId,
@@ -349,14 +613,16 @@ reviewRouter.post('/session', async (req: Request, res: Response, next: NextFunc
         platforms: data.platforms as Platform[] || [],
         tagIds: data.tagIds || [],
         contentIds: data.contentIds || [],
+        mode, // Store mode in session
       },
     });
 
-    // Get matching cards count
-    const matchingCards = await getSessionCards(userId, session, true);
+    // Get matching cards count (pass mode to determine if we filter by nextReviewAt)
+    const sessionConfig = { ...session, mode };
+    const matchingCards = await getSessionCards(userId, sessionConfig, true);
 
     return res.status(201).json({
-      session,
+      session: { ...session, mode },
       matchingCardsCount: matchingCards,
     });
   } catch (error) {
@@ -437,12 +703,15 @@ reviewRouter.get('/session/:id/cards', async (req: Request, res: Response, next:
       return res.status(404).json({ error: 'Session not found' });
     }
 
-    const cards = await getSessionCards(userId, session, false);
+    // Pass mode to getSessionCards (default to 'practice' if not set)
+    const sessionConfig = { ...session, mode: (session as any).mode || 'practice' };
+    const cards = await getSessionCards(userId, sessionConfig, false);
 
     return res.json({
       cards,
       count: Array.isArray(cards) ? cards.length : 0,
       session,
+      mode: sessionConfig.mode,
     });
   } catch (error) {
     return next(error);
@@ -656,19 +925,21 @@ reviewRouter.get('/session/:id/mistakes', async (req: Request, res: Response, ne
 // Helper function to get cards matching session filters
 async function getSessionCards(
   userId: string,
-  config: { platforms: Platform[]; tagIds: string[]; contentIds: string[]; questionLimit?: number | null },
+  config: { platforms: Platform[]; tagIds: string[]; contentIds: string[]; questionLimit?: number | null; mode?: string },
   countOnly: true
 ): Promise<number>;
 async function getSessionCards(
   userId: string,
-  config: { platforms: Platform[]; tagIds: string[]; contentIds: string[]; questionLimit?: number | null },
+  config: { platforms: Platform[]; tagIds: string[]; contentIds: string[]; questionLimit?: number | null; mode?: string },
   countOnly: false
 ): Promise<any[]>;
 async function getSessionCards(
   userId: string,
-  config: { platforms: Platform[]; tagIds: string[]; contentIds: string[]; questionLimit?: number | null },
+  config: { platforms: Platform[]; tagIds: string[]; contentIds: string[]; questionLimit?: number | null; mode?: string },
   countOnly: boolean
 ): Promise<number | any[]> {
+  const mode = config.mode || 'practice'; // Default to practice mode
+
   // Build content filter
   const contentWhere: any = {
     userId,
@@ -679,6 +950,7 @@ async function getSessionCards(
     contentWhere.platform = { in: config.platforms };
   }
 
+  // Only apply contentIds filter if array is not empty
   if (config.contentIds && config.contentIds.length > 0) {
     contentWhere.id = { in: config.contentIds };
   }
@@ -694,11 +966,16 @@ async function getSessionCards(
   // Build card filter
   const cardWhere: any = {
     userId,
-    nextReviewAt: { lte: new Date() },
     quiz: {
       content: contentWhere,
     },
   };
+
+  // Only filter by nextReviewAt in 'due' mode (spaced repetition)
+  // In 'practice' mode, return ALL cards regardless of schedule
+  if (mode === 'due') {
+    cardWhere.nextReviewAt = { lte: new Date() };
+  }
 
   if (countOnly) {
     return prisma.card.count({ where: cardWhere });
@@ -706,9 +983,14 @@ async function getSessionCards(
 
   const limit = config.questionLimit ?? 50;
 
+  // In practice mode, randomize order; in due mode, show oldest first
+  const orderBy = mode === 'practice'
+    ? { createdAt: 'asc' as const }  // Show in creation order for practice
+    : { nextReviewAt: 'asc' as const };  // Show most due first for review
+
   return prisma.card.findMany({
     where: cardWhere,
-    orderBy: { nextReviewAt: 'asc' },
+    orderBy,
     take: limit,
     include: {
       quiz: {

@@ -6,6 +6,8 @@ import { runTikTokSync } from './tiktokSync.js';
 import { runTranscriptionWorker } from '../services/transcription.js';
 import { runPodcastTranscriptionWorker } from '../services/podcastTranscription.js';
 import { runTikTokTranscriptionWorker } from '../services/tiktokTranscription.js';
+import { runInstagramSync } from './instagramSync.js';
+import { runInstagramTranscriptionWorker } from '../services/instagramTranscription.js';
 import { runQuizGenerationWorker } from '../services/quizGeneration.js';
 import { runReminderWorker } from './reminderWorker.js';
 import { runAutoTaggingWorker } from '../services/tagging.js';
@@ -65,30 +67,44 @@ export function startScheduler(): void {
     await runJob('tiktok-sync', runTikTokSync);
   });
 
-  // YouTube Transcription Worker - Every 5 minutes
+  // YouTube Transcription Worker - Every 2 minutes (optimized)
   // Processes pending YouTube transcription requests (free via subtitles)
-  cron.schedule('*/5 * * * *', async () => {
+  // Also handles INBOX pre-transcription for faster UX when user clicks "Learn"
+  cron.schedule('*/2 * * * *', async () => {
     console.log('[Scheduler] Running YouTube transcription worker...');
     await runJob('youtube-transcription', runTranscriptionWorker);
   });
 
-  // Podcast Transcription Worker - Every 10 minutes
+  // Podcast Transcription Worker - Every 5 minutes (optimized from 10)
   // Processes pending Spotify podcast transcriptions (paid via Whisper)
-  cron.schedule('*/10 * * * *', async () => {
+  cron.schedule('*/5 * * * *', async () => {
     console.log('[Scheduler] Running podcast transcription worker...');
     await runJob('podcast-transcription', runPodcastTranscriptionWorker);
   });
 
-  // TikTok Transcription Worker - Every 5 minutes
+  // TikTok Transcription Worker - Every 2 minutes (optimized)
   // Processes pending TikTok transcriptions (via yt-dlp + Whisper)
-  cron.schedule('*/5 * * * *', async () => {
+  cron.schedule('*/2 * * * *', async () => {
     console.log('[Scheduler] Running TikTok transcription worker...');
     await runJob('tiktok-transcription', runTikTokTranscriptionWorker);
   });
 
-  // Quiz Generation Worker - Every 5 minutes
+  // Instagram Sync - Every 30 minutes
+  cron.schedule('*/30 * * * *', async () => {
+    console.log('[Scheduler] Running Instagram sync...');
+    await runJob('instagram-sync', runInstagramSync);
+  });
+
+  // Instagram Transcription Worker - Every 2 minutes (optimized)
+  // Processes pending Instagram transcriptions (via yt-dlp + Whisper)
+  cron.schedule('*/2 * * * *', async () => {
+    console.log('[Scheduler] Running Instagram transcription worker...');
+    await runJob('instagram-transcription', runInstagramTranscriptionWorker);
+  });
+
+  // Quiz Generation Worker - Every 2 minutes (optimized)
   // Generates quizzes from transcribed content
-  cron.schedule('*/5 * * * *', async () => {
+  cron.schedule('*/2 * * * *', async () => {
     console.log('[Scheduler] Running quiz generation worker...');
     await runJob('quiz-generation', runQuizGenerationWorker);
   });
@@ -108,14 +124,16 @@ export function startScheduler(): void {
   });
 
   isSchedulerRunning = true;
-  console.log('[Scheduler] All cron jobs scheduled:');
+  console.log('[Scheduler] All cron jobs scheduled (optimized intervals):');
   console.log('  - YouTube Sync: every 15 minutes');
   console.log('  - Spotify Sync: every 30 minutes');
   console.log('  - TikTok Sync: every 30 minutes');
-  console.log('  - YouTube Transcription: every 5 minutes');
-  console.log('  - Podcast Transcription: every 10 minutes');
-  console.log('  - TikTok Transcription: every 5 minutes');
-  console.log('  - Quiz Generation: every 5 minutes');
+  console.log('  - Instagram Sync: every 30 minutes');
+  console.log('  - YouTube Transcription: every 2 minutes (+ INBOX pre-transcription)');
+  console.log('  - Podcast Transcription: every 5 minutes');
+  console.log('  - TikTok Transcription: every 2 minutes');
+  console.log('  - Instagram Transcription: every 2 minutes');
+  console.log('  - Quiz Generation: every 2 minutes');
   console.log('  - Daily Reminders: every 5 minutes');
   console.log('  - Auto-Tagging: every 15 minutes');
 }
@@ -131,6 +149,7 @@ export async function runAllSyncsNow(): Promise<void> {
     runJob('youtube-sync', runYouTubeSync),
     runJob('spotify-sync', runSpotifySync),
     runJob('tiktok-sync', runTikTokSync),
+    runJob('instagram-sync', runInstagramSync),
   ]);
 
   // Phase 2: Transcribe content
@@ -138,6 +157,7 @@ export async function runAllSyncsNow(): Promise<void> {
     runJob('youtube-transcription', runTranscriptionWorker),
     runJob('podcast-transcription', runPodcastTranscriptionWorker),
     runJob('tiktok-transcription', runTikTokTranscriptionWorker),
+    runJob('instagram-transcription', runInstagramTranscriptionWorker),
   ]);
 
   // Phase 3: Generate quizzes
@@ -150,7 +170,7 @@ export async function runAllSyncsNow(): Promise<void> {
  * Run a specific job manually
  */
 export async function triggerJob(
-  jobName: 'youtube' | 'spotify' | 'tiktok' | 'transcription' | 'podcast-transcription' | 'tiktok-transcription' | 'quiz-generation' | 'reminder' | 'auto-tagging'
+  jobName: 'youtube' | 'spotify' | 'tiktok' | 'instagram' | 'transcription' | 'podcast-transcription' | 'tiktok-transcription' | 'instagram-transcription' | 'quiz-generation' | 'reminder' | 'auto-tagging'
 ): Promise<{ success: boolean; message: string }> {
   switch (jobName) {
     case 'youtube':
@@ -165,6 +185,10 @@ export async function triggerJob(
       await runJob('tiktok-sync', runTikTokSync);
       return { success: true, message: 'TikTok sync completed' };
 
+    case 'instagram':
+      await runJob('instagram-sync', runInstagramSync);
+      return { success: true, message: 'Instagram sync completed' };
+
     case 'transcription':
       await runJob('youtube-transcription', runTranscriptionWorker);
       return { success: true, message: 'YouTube transcription worker completed' };
@@ -176,6 +200,10 @@ export async function triggerJob(
     case 'tiktok-transcription':
       await runJob('tiktok-transcription', runTikTokTranscriptionWorker);
       return { success: true, message: 'TikTok transcription worker completed' };
+
+    case 'instagram-transcription':
+      await runJob('instagram-transcription', runInstagramTranscriptionWorker);
+      return { success: true, message: 'Instagram transcription worker completed' };
 
     case 'quiz-generation':
       await runJob('quiz-generation', runQuizGenerationWorker);
@@ -209,10 +237,12 @@ export function getSchedulerStatus(): {
       { name: 'youtube-sync', schedule: '*/15 * * * *' },
       { name: 'spotify-sync', schedule: '*/30 * * * *' },
       { name: 'tiktok-sync', schedule: '*/30 * * * *' },
-      { name: 'youtube-transcription', schedule: '*/5 * * * *' },
-      { name: 'podcast-transcription', schedule: '*/10 * * * *' },
-      { name: 'tiktok-transcription', schedule: '*/5 * * * *' },
-      { name: 'quiz-generation', schedule: '*/5 * * * *' },
+      { name: 'instagram-sync', schedule: '*/30 * * * *' },
+      { name: 'youtube-transcription', schedule: '*/2 * * * *' },
+      { name: 'podcast-transcription', schedule: '*/5 * * * *' },
+      { name: 'tiktok-transcription', schedule: '*/2 * * * *' },
+      { name: 'instagram-transcription', schedule: '*/2 * * * *' },
+      { name: 'quiz-generation', schedule: '*/2 * * * *' },
       { name: 'reminder', schedule: '*/5 * * * *' },
       { name: 'auto-tagging', schedule: '*/15 * * * *' },
     ],

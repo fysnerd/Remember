@@ -20,6 +20,8 @@ interface YouTubePlaylistResponse {
       resourceId: {
         videoId: string;
       };
+      videoOwnerChannelTitle?: string;  // Channel name of the video owner
+      videoOwnerChannelId?: string;
     };
     contentDetails?: {
       videoId: string;
@@ -91,23 +93,6 @@ export async function syncUserYouTube(userId: string, connectionId: string): Pro
         const videoId = item.snippet.resourceId?.videoId || item.contentDetails?.videoId;
         if (!videoId) continue;
 
-        // Check if we already have this video for this user
-        const existing = await prisma.content.findUnique({
-          where: {
-            userId_platform_externalId: {
-              userId,
-              platform: Platform.YOUTUBE,
-              externalId: videoId,
-            },
-          },
-        });
-
-        if (existing) {
-          // If we found an existing video, we've likely synced up to this point
-          // Could continue for full sync or break for incremental
-          continue;
-        }
-
         // Get thumbnail URL (prefer high quality)
         const thumbnailUrl =
           item.snippet.thumbnails.high?.url ||
@@ -115,9 +100,26 @@ export async function syncUserYouTube(userId: string, connectionId: string): Pro
           item.snippet.thumbnails.default?.url ||
           null;
 
-        // Create content entry
-        await prisma.content.create({
-          data: {
+        // Get channel name from video owner
+        const channelName = item.snippet.videoOwnerChannelTitle || null;
+
+        // Upsert content entry (avoid race condition with unique constraint)
+        const result = await prisma.content.upsert({
+          where: {
+            userId_platform_externalId: {
+              userId,
+              platform: Platform.YOUTUBE,
+              externalId: videoId,
+            },
+          },
+          update: {
+            // Update metadata if video already exists
+            title: item.snippet.title,
+            description: item.snippet.description?.substring(0, 1000) || null,
+            thumbnailUrl,
+            channelName,
+          },
+          create: {
             userId,
             platform: Platform.YOUTUBE,
             externalId: videoId,
@@ -125,12 +127,16 @@ export async function syncUserYouTube(userId: string, connectionId: string): Pro
             title: item.snippet.title,
             description: item.snippet.description?.substring(0, 1000) || null,
             thumbnailUrl,
+            channelName,
             capturedAt: new Date(item.snippet.publishedAt),
             status: ContentStatus.INBOX,
           },
         });
 
-        newVideosCount++;
+        // Check if this was a new creation (no updatedAt before)
+        if (result.createdAt.getTime() === result.updatedAt.getTime()) {
+          newVideosCount++;
+        }
       }
 
       nextPageToken = data.nextPageToken;

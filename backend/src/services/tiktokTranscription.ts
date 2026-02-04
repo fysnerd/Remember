@@ -1,13 +1,24 @@
 // TikTok Transcription Service - Download video + Whisper transcription
 // Pattern based on podcastTranscription.ts
+// Uses global TranscriptCache to avoid redundant transcription calls
 import { config } from '../config/env.js';
 import { prisma } from '../config/database.js';
-import { ContentStatus, TranscriptSource, Platform } from '@prisma/client';
+import { ContentStatus, TranscriptSource, TranscriptCacheStatus, Platform } from '@prisma/client';
 import OpenAI from 'openai';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { execFile } from 'child_process';
+import {
+  generateWorkerId,
+  getOrCreateCacheWithLock,
+  markCacheSuccess,
+  markCacheUnavailable,
+  markCacheFailed,
+  linkCacheToContent,
+  copyTranscriptFromCache,
+  cleanupExpiredLocks,
+} from './transcriptCache.js';
 
 // Initialize Groq client (free Whisper) - falls back to OpenAI if Groq not available
 const groqClient = config.groq?.apiKey
@@ -272,9 +283,15 @@ export async function processTikTokTranscript(contentId: string): Promise<boolea
 
 /**
  * Background worker to process pending TikTok transcriptions
+ * Uses global TranscriptCache to avoid redundant Whisper calls
  */
 export async function runTikTokTranscriptionWorker(): Promise<void> {
   console.log('[TikTok Worker] Starting...');
+
+  const workerId = generateWorkerId();
+
+  // Clean up any expired locks
+  await cleanupExpiredLocks();
 
   // Get TikTok content items that need transcription
   const pendingContent = await prisma.content.findMany({
@@ -283,7 +300,7 @@ export async function runTikTokTranscriptionWorker(): Promise<void> {
       platform: Platform.TIKTOK,
       transcript: null,
     },
-    take: 5, // Process 5 at a time (TikTok videos are short)
+    take: 10, // Increased since we deduplicate
     orderBy: { createdAt: 'asc' },
   });
 
@@ -292,25 +309,203 @@ export async function runTikTokTranscriptionWorker(): Promise<void> {
     return;
   }
 
-  console.log(`[TikTok Worker] Processing ${pendingContent.length} TikToks`);
+  // Deduplicate by externalId (multiple users may have liked the same video)
+  const uniqueVideos = new Map<string, typeof pendingContent[0]>();
+  for (const content of pendingContent) {
+    if (!uniqueVideos.has(content.externalId)) {
+      uniqueVideos.set(content.externalId, content);
+    }
+  }
+
+  console.log(`[TikTok Worker] Processing ${pendingContent.length} items → ${uniqueVideos.size} unique videos`);
 
   let success = 0;
+  let cacheHits = 0;
   let failed = 0;
 
-  for (let i = 0; i < pendingContent.length; i++) {
-    const content = pendingContent[i];
-    const result = await processTikTokTranscript(content.id);
-    if (result) {
+  for (const [externalId, content] of uniqueVideos) {
+    const result = await processTikTokWithCache(workerId, content);
+    if (result === 'success') {
       success++;
+    } else if (result === 'cache_hit') {
+      cacheHits++;
     } else {
       failed++;
     }
 
-    // F4 fix: Add delay between API calls to avoid rate limiting
-    if (i < pendingContent.length - 1) {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-    }
+    // Add delay between API calls to avoid rate limiting
+    await new Promise((resolve) => setTimeout(resolve, 2000));
   }
 
-  console.log(`[TikTok Worker] Completed: ${success} success, ${failed} failed`);
+  console.log(`[TikTok Worker] Completed: ${success} transcribed, ${cacheHits} cache hits, ${failed} failed`);
+}
+
+/**
+ * Process a TikTok video using the global cache
+ */
+async function processTikTokWithCache(
+  workerId: string,
+  content: { id: string; platform: Platform; externalId: string; title: string; url: string }
+): Promise<'success' | 'cache_hit' | 'failed'> {
+  // Try to get or create cache entry with lock
+  const result = await getOrCreateCacheWithLock(content.platform, content.externalId, workerId);
+
+  if (!result) {
+    // Cache is locked by another worker, skip for now
+    return 'failed';
+  }
+
+  const { cache, acquired } = result;
+
+  // If cache already has transcript (SUCCESS), just link and copy
+  if (cache.status === TranscriptCacheStatus.SUCCESS && cache.text) {
+    await linkCacheToContent(content.platform, content.externalId, cache.id);
+    await copyTranscriptToAllTikTokContent(content.externalId, cache);
+    console.log(`[TikTok] Cache hit for ${content.externalId}`);
+    return 'cache_hit';
+  }
+
+  // If cache is UNAVAILABLE and not retrying, mark content as unsupported
+  if (cache.status === TranscriptCacheStatus.UNAVAILABLE && !acquired) {
+    await markTikTokContentUnsupported(content.externalId);
+    return 'failed';
+  }
+
+  // We acquired the lock, need to fetch transcript
+  if (!acquired) {
+    return 'failed';
+  }
+
+  const tempDir = os.tmpdir();
+  const videoPath = path.join(tempDir, `tiktok_${content.id}.mp4`);
+  const audioPath = path.join(tempDir, `tiktok_${content.id}.mp3`);
+  let compressedPath: string | null = null;
+
+  try {
+    // Step 1: Download video via yt-dlp
+    console.log(`[TikTok] Downloading: ${content.url}`);
+    await downloadTikTokVideo(content.url, videoPath);
+
+    // Step 2: Extract audio via ffmpeg
+    console.log(`[TikTok] Extracting audio...`);
+    await extractAudio(videoPath, audioPath);
+
+    // Remove video file (no longer needed)
+    cleanupFiles(videoPath);
+
+    // Step 3: Check file size and compress if needed (Groq limit: 25MB)
+    const stats = fs.statSync(audioPath);
+    const maxSize = 25 * 1024 * 1024; // 25MB
+
+    let finalAudioPath = audioPath;
+    if (groqClient && stats.size > maxSize) {
+      console.log(`[TikTok] Audio too large (${Math.round(stats.size / 1024 / 1024)}MB), compressing...`);
+      compressedPath = await compressAudio(audioPath);
+      cleanupFiles(audioPath);
+      finalAudioPath = compressedPath;
+
+      const compressedStats = fs.statSync(compressedPath);
+      console.log(`[TikTok] Compressed to ${Math.round(compressedStats.size / 1024 / 1024 * 100) / 100}MB`);
+
+      if (compressedStats.size > maxSize) {
+        throw new Error(`File still too large after compression (${Math.round(compressedStats.size / 1024 / 1024)}MB > 25MB limit)`);
+      }
+    }
+
+    // Step 4: Transcribe with Whisper
+    console.log(`[TikTok] Transcribing with Whisper...`);
+    const transcript = await transcribeWithWhisper(finalAudioPath);
+
+    // Cleanup audio files
+    cleanupFiles(finalAudioPath);
+    if (compressedPath && compressedPath !== finalAudioPath) cleanupFiles(compressedPath);
+
+    // Step 5: Check if transcript is valid (filters music-only videos)
+    if (transcript.text.length < MIN_TRANSCRIPT_LENGTH) {
+      console.log(`[TikTok] Transcript too short (${transcript.text.length} < ${MIN_TRANSCRIPT_LENGTH} chars) - marking as UNSUPPORTED`);
+      await markCacheUnavailable(cache.id, 'Transcript too short (music-only video)', workerId);
+      await markTikTokContentUnsupported(content.externalId);
+      return 'failed';
+    }
+
+    // Step 6: Save to cache
+    await markCacheSuccess(cache.id, {
+      text: transcript.text,
+      segments: transcript.segments,
+      language: transcript.language,
+      source: TranscriptSource.WHISPER,
+    }, workerId);
+
+    // Step 7: Link and copy to all Content records
+    await linkCacheToContent(content.platform, content.externalId, cache.id);
+    await copyTranscriptToAllTikTokContent(content.externalId, {
+      text: transcript.text,
+      segments: transcript.segments,
+      language: transcript.language,
+      source: TranscriptSource.WHISPER,
+    });
+
+    // Update status for all content with this externalId
+    await prisma.content.updateMany({
+      where: {
+        platform: Platform.TIKTOK,
+        externalId: content.externalId,
+        status: ContentStatus.TRANSCRIBING,
+      },
+      data: { status: ContentStatus.SELECTED },
+    });
+
+    console.log(`[TikTok] ✅ ${content.externalId} - SUCCESS (${transcript.text.length} chars)`);
+    return 'success';
+
+  } catch (error: any) {
+    await markCacheFailed(cache.id, error, workerId);
+    console.error(`[TikTok] ${content.externalId} - ERROR: ${error.message}`);
+    return 'failed';
+  } finally {
+    // Cleanup in finally block to ensure temp files are always removed
+    cleanupFiles(videoPath, audioPath);
+    if (compressedPath) cleanupFiles(compressedPath);
+  }
+}
+
+/**
+ * Copy transcript from cache to all TikTok Content records with this externalId
+ */
+async function copyTranscriptToAllTikTokContent(
+  externalId: string,
+  cache: { text: string | null; segments: any; language: string | null; source: TranscriptSource | null }
+): Promise<void> {
+  if (!cache.text || !cache.source) return;
+
+  const contents = await prisma.content.findMany({
+    where: {
+      platform: Platform.TIKTOK,
+      externalId,
+      transcript: null,
+    },
+    select: { id: true },
+  });
+
+  for (const content of contents) {
+    try {
+      await copyTranscriptFromCache(content.id, cache);
+    } catch (error) {
+      // Ignore duplicate errors
+    }
+  }
+}
+
+/**
+ * Mark all TikTok content with this externalId as unsupported
+ */
+async function markTikTokContentUnsupported(externalId: string): Promise<void> {
+  await prisma.content.updateMany({
+    where: {
+      platform: Platform.TIKTOK,
+      externalId,
+      status: { not: ContentStatus.UNSUPPORTED },
+    },
+    data: { status: ContentStatus.UNSUPPORTED },
+  });
 }

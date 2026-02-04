@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Flame, BookOpen, TrendingUp, Target, Calendar, Clock, Award, Zap } from 'lucide-react';
+import { Flame, BookOpen, TrendingUp, Target, Loader2 } from 'lucide-react';
 import { api } from '../lib/api';
 
 interface ReviewStats {
@@ -25,7 +25,7 @@ interface ContentStats {
 }
 
 export function StatsPage() {
-  const { data: reviewStats } = useQuery<ReviewStats>({
+  const { data: reviewStats, isLoading: isLoadingReview } = useQuery<ReviewStats>({
     queryKey: ['review-stats'],
     queryFn: async () => {
       const res = await api.get<ReviewStats>('/reviews/stats');
@@ -33,7 +33,7 @@ export function StatsPage() {
     },
   });
 
-  const { data: contentStats } = useQuery<ContentStats>({
+  const { data: contentStats, isLoading: isLoadingContent } = useQuery<ContentStats>({
     queryKey: ['content-stats'],
     queryFn: async () => {
       const res = await api.get<ContentStats>('/content/stats');
@@ -41,194 +41,134 @@ export function StatsPage() {
     },
   });
 
-  // Calculate retention (estimate based on streak)
   const retentionRate = reviewStats?.currentStreak
     ? Math.min(95, 70 + reviewStats.currentStreak * 2)
     : 70;
 
-  // Get platform colors
-  const getPlatformColor = (platform: string) => {
-    switch (platform) {
-      case 'YOUTUBE':
-        return 'bg-[#FF0000]';
-      case 'SPOTIFY':
-        return 'bg-[#1DB954]';
-      case 'TIKTOK':
-        return 'bg-[#00f2ea]';
-      case 'INSTAGRAM':
-        return 'bg-[#FD1D1D]';
-      default:
-        return 'bg-void-300';
-    }
-  };
-
   const totalContent = contentStats?.byPlatform.reduce((acc, p) => acc + p.count, 0) || 0;
 
-  return (
-    <div className="min-h-screen p-8">
-      {/* Ambient effects */}
-      <div className="fixed top-20 right-20 w-72 h-72 bg-amber/5 rounded-full blur-3xl pointer-events-none" />
-      <div className="fixed bottom-40 left-80 w-48 h-48 bg-sage/5 rounded-full blur-3xl pointer-events-none" />
+  if (isLoadingReview || isLoadingContent) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+      </div>
+    );
+  }
 
-      <div className="max-w-5xl mx-auto">
+  return (
+    <div className="min-h-screen p-6">
+      <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="mb-10 animate-fade-in">
-          <h1 className="text-3xl font-display text-cream mb-2">Tes progrès</h1>
-          <p className="text-cream-dark">
-            Statistiques de ton apprentissage
-          </p>
+        <div className="mb-6">
+          <h1 className="text-xl font-semibold text-gray-900 mb-1">Tes progrès</h1>
+          <p className="text-sm text-gray-500">Statistiques de ton apprentissage</p>
         </div>
 
         {/* Main Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {[
-            {
-              icon: Flame,
-              value: reviewStats?.currentStreak || 0,
-              label: 'Jours de streak',
-              color: 'from-amber/20 to-amber/5',
-              iconColor: 'text-amber',
-              suffix: ' 🔥',
-              delay: 'stagger-1',
-            },
-            {
-              icon: BookOpen,
-              value: reviewStats?.totalCards || 0,
-              label: 'Cartes apprises',
-              color: 'from-sage/20 to-sage/5',
-              iconColor: 'text-sage',
-              delay: 'stagger-2',
-            },
-            {
-              icon: Target,
-              value: `${retentionRate}%`,
-              label: 'Rétention estimée',
-              color: 'from-info/20 to-info/5',
-              iconColor: 'text-info',
-              delay: 'stagger-3',
-            },
-            {
-              icon: TrendingUp,
-              value: reviewStats?.longestStreak || 0,
-              label: 'Meilleur streak',
-              color: 'from-rust/20 to-rust/5',
-              iconColor: 'text-rust',
-              delay: 'stagger-4',
-            },
-          ].map(({ icon: Icon, value, label, color, iconColor, suffix, delay }) => (
-            <div
-              key={label}
-              className={`stat-card animate-slide-up ${delay}`}
-            >
-              <div className={`stat-icon bg-gradient-to-br ${color}`}>
-                <Icon size={24} className={iconColor} />
-              </div>
-              <div>
-                <p className="text-3xl font-display text-cream">
-                  {value}{suffix}
-                </p>
-                <p className="text-sm text-cream-dark">{label}</p>
-              </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="border border-gray-200 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Flame size={18} className="text-orange-500" />
+              <span className="text-xs text-gray-500">Streak</span>
             </div>
-          ))}
+            <p className="text-2xl font-semibold text-gray-900">{reviewStats?.currentStreak || 0}</p>
+            <p className="text-xs text-gray-500">jours</p>
+          </div>
+
+          <div className="border border-gray-200 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <BookOpen size={18} className="text-green-600" />
+              <span className="text-xs text-gray-500">Cartes</span>
+            </div>
+            <p className="text-2xl font-semibold text-gray-900">{reviewStats?.totalCards || 0}</p>
+            <p className="text-xs text-gray-500">apprises</p>
+          </div>
+
+          <div className="border border-gray-200 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Target size={18} className="text-blue-600" />
+              <span className="text-xs text-gray-500">Rétention</span>
+            </div>
+            <p className="text-2xl font-semibold text-gray-900">{retentionRate}%</p>
+            <p className="text-xs text-gray-500">estimée</p>
+          </div>
+
+          <div className="border border-gray-200 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp size={18} className="text-purple-600" />
+              <span className="text-xs text-gray-500">Record</span>
+            </div>
+            <p className="text-2xl font-semibold text-gray-900">{reviewStats?.longestStreak || 0}</p>
+            <p className="text-xs text-gray-500">jours</p>
+          </div>
         </div>
 
-        {/* Weekly Activity & Due Today */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Activity This Week */}
-          <div className="card animate-slide-up stagger-5">
-            <div className="flex items-center gap-2 mb-6">
-              <Calendar size={20} className="text-amber" />
-              <h3 className="text-lg font-display text-cream">Activité cette semaine</h3>
+        {/* Today & Activity */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+          {/* Today */}
+          <div className="border border-gray-200 rounded-lg p-4">
+            <h3 className="text-sm font-medium text-gray-900 mb-4">Aujourd'hui</h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded">
+                <span className="text-sm text-gray-600">À réviser</span>
+                <span className="text-lg font-semibold text-gray-900">{reviewStats?.reviewDue || 0}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded">
+                <span className="text-sm text-gray-600">Nouvelles cartes</span>
+                <span className="text-lg font-semibold text-gray-900">{reviewStats?.newDue || 0}</span>
+              </div>
             </div>
+          </div>
 
-            <div className="flex items-end justify-between gap-2 h-32 px-2">
+          {/* Activity */}
+          <div className="border border-gray-200 rounded-lg p-4">
+            <h3 className="text-sm font-medium text-gray-900 mb-4">Activité cette semaine</h3>
+            <div className="flex items-end justify-between gap-2 h-20">
               {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((day, idx) => {
-                // Mock activity data - in production, this would come from the API
                 const mockActivity = [3, 5, 8, 12, 4, 7, reviewStats?.reviewsLast7Days ? Math.floor(reviewStats.reviewsLast7Days / 7) : 2];
                 const maxActivity = Math.max(...mockActivity, 1);
                 const height = (mockActivity[idx] / maxActivity) * 100;
 
                 return (
-                  <div key={day} className="flex-1 flex flex-col items-center gap-2">
-                    <div className="w-full bg-void-200 rounded-t-lg relative" style={{ height: '80px' }}>
+                  <div key={day} className="flex-1 flex flex-col items-center gap-1">
+                    <div className="w-full bg-gray-100 rounded-t relative" style={{ height: '50px' }}>
                       <div
-                        className="absolute bottom-0 w-full bg-gradient-to-t from-amber to-amber/60 rounded-t-lg transition-all duration-500"
+                        className="absolute bottom-0 w-full bg-gray-900 rounded-t"
                         style={{ height: `${height}%` }}
                       />
                     </div>
-                    <span className="text-xs text-cream-dark">{day}</span>
+                    <span className="text-[10px] text-gray-500">{day}</span>
                   </div>
                 );
               })}
             </div>
-
-            <div className="mt-4 pt-4 border-t border-void-200 flex justify-between text-sm">
-              <span className="text-cream-dark">Total cette semaine</span>
-              <span className="text-cream font-medium">{reviewStats?.reviewsLast7Days || 0} révisions</span>
-            </div>
-          </div>
-
-          {/* Due Today */}
-          <div className="card animate-slide-up stagger-6">
-            <div className="flex items-center gap-2 mb-6">
-              <Clock size={20} className="text-sage" />
-              <h3 className="text-lg font-display text-cream">Aujourd'hui</h3>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 rounded-xl bg-void-100 border border-void-200">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber/20 flex items-center justify-center">
-                    <Zap size={20} className="text-amber" />
-                  </div>
-                  <div>
-                    <p className="text-cream font-medium">Cartes à réviser</p>
-                    <p className="text-xs text-cream-dark">Révisions dues maintenant</p>
-                  </div>
-                </div>
-                <span className="text-2xl font-display text-amber">{reviewStats?.reviewDue || 0}</span>
-              </div>
-
-              <div className="flex items-center justify-between p-4 rounded-xl bg-void-100 border border-void-200">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-sage/20 flex items-center justify-center">
-                    <BookOpen size={20} className="text-sage" />
-                  </div>
-                  <div>
-                    <p className="text-cream font-medium">Nouvelles cartes</p>
-                    <p className="text-xs text-cream-dark">Prêtes à apprendre</p>
-                  </div>
-                </div>
-                <span className="text-2xl font-display text-sage">{reviewStats?.newDue || 0}</span>
-              </div>
+            <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between text-xs">
+              <span className="text-gray-500">Total</span>
+              <span className="font-medium text-gray-900">{reviewStats?.reviewsLast7Days || 0} révisions</span>
             </div>
           </div>
         </div>
 
         {/* Platform Distribution */}
-        <div className="card animate-slide-up stagger-7">
-          <div className="flex items-center gap-2 mb-6">
-            <Award size={20} className="text-cream-muted" />
-            <h3 className="text-lg font-display text-cream">Répartition par plateforme</h3>
-          </div>
+        <div className="border border-gray-200 rounded-lg p-4">
+          <h3 className="text-sm font-medium text-gray-900 mb-4">Répartition par plateforme</h3>
 
           {contentStats?.byPlatform && contentStats.byPlatform.length > 0 ? (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {contentStats.byPlatform.map((platform) => {
                 const percentage = totalContent > 0
                   ? Math.round((platform.count / totalContent) * 100)
                   : 0;
 
                 return (
-                  <div key={platform.platform} className="space-y-2">
+                  <div key={platform.platform} className="space-y-1">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-cream">{platform.platform}</span>
-                      <span className="text-cream-dark">{platform.count} ({percentage}%)</span>
+                      <span className="text-gray-700">{platform.platform}</span>
+                      <span className="text-gray-500">{platform.count} ({percentage}%)</span>
                     </div>
-                    <div className="h-2 bg-void-200 rounded-full overflow-hidden">
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                       <div
-                        className={`h-full ${getPlatformColor(platform.platform)} transition-all duration-500`}
+                        className="h-full bg-gray-900 rounded-full"
                         style={{ width: `${percentage}%` }}
                       />
                     </div>
@@ -237,45 +177,22 @@ export function StatsPage() {
               })}
             </div>
           ) : (
-            <p className="text-cream-dark text-center py-8">
-              Aucun contenu pour le moment. Connecte tes plateformes dans les paramètres.
+            <p className="text-sm text-gray-500 text-center py-6">
+              Aucun contenu. Connecte tes plateformes dans les paramètres.
             </p>
           )}
 
-          <div className="mt-6 pt-4 border-t border-void-200 grid grid-cols-2 gap-4 text-sm">
+          <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-2 gap-4 text-sm">
             <div>
-              <span className="text-cream-dark">Contenu total</span>
-              <p className="text-xl font-display text-cream">{totalContent}</p>
+              <span className="text-gray-500">Contenu total</span>
+              <p className="text-lg font-semibold text-gray-900">{totalContent}</p>
             </div>
             <div>
-              <span className="text-cream-dark">Meilleur streak</span>
-              <p className="text-xl font-display text-cream">{reviewStats?.longestStreak || 0} jours</p>
+              <span className="text-gray-500">Meilleur streak</span>
+              <p className="text-lg font-semibold text-gray-900">{reviewStats?.longestStreak || 0} jours</p>
             </div>
           </div>
         </div>
-
-        {/* Motivational Section */}
-        {reviewStats?.currentStreak && reviewStats.currentStreak > 0 && (
-          <div className="mt-8 card-glow animate-slide-up text-center">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-amber to-amber-dark flex items-center justify-center">
-              <Flame size={32} className="text-void" />
-            </div>
-            <h3 className="text-2xl font-display text-cream mb-2">
-              {reviewStats.currentStreak >= 30
-                ? 'Incroyable !'
-                : reviewStats.currentStreak >= 7
-                ? 'Continue comme ça !'
-                : 'Bon début !'}
-            </h3>
-            <p className="text-cream-muted">
-              {reviewStats.currentStreak >= 30
-                ? `Tu as ${reviewStats.currentStreak} jours de streak. Tu es sur une lancée incroyable !`
-                : reviewStats.currentStreak >= 7
-                ? `${reviewStats.currentStreak} jours consécutifs. Tu construis une habitude solide.`
-                : `${reviewStats.currentStreak} jour${reviewStats.currentStreak > 1 ? 's' : ''} de streak. Chaque jour compte !`}
-            </p>
-          </div>
-        )}
       </div>
     </div>
   );

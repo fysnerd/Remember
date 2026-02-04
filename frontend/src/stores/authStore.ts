@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { api } from '../lib/api';
+import { queryClient } from '../lib/queryClient';
 
 interface User {
   id: string;
@@ -51,6 +52,7 @@ export const useAuthStore = create<AuthState>()(
         const response = await api.post<AuthResponse>('/auth/login', { email, password });
         const { user, accessToken, refreshToken } = response.data;
 
+        queryClient.clear();
         set({
           user,
           accessToken,
@@ -63,6 +65,7 @@ export const useAuthStore = create<AuthState>()(
         const response = await api.post<AuthResponse>('/auth/signup', { email, password, name });
         const { user, accessToken, refreshToken } = response.data;
 
+        queryClient.clear();
         set({
           user,
           accessToken,
@@ -72,6 +75,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
+        queryClient.clear();
         set({
           user: null,
           accessToken: null,

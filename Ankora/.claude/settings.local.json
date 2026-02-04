@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "WebFetch(domain:www.anthropic.com)",
+      "mcp__expo-docs__search_expo_docs",
+      "mcp__expo-docs__get_expo_doc_content",
+      "Bash(npx expo install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(wc:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npm install:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(dir:*)",
+      "Bash(curl:*)",
+      "Bash(npx prisma migrate dev:*)",
+      "Bash(npx prisma db push:*)",
+      "Bash(npx prisma generate:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

@@ -1,8 +1,9 @@
 // Podcast Transcription Service - RSS feed lookup + Whisper API
 // For Spotify podcasts that aren't "Spotify Exclusive"
+// Uses global TranscriptCache to avoid redundant transcription calls
 import { config } from '../config/env.js';
 import { prisma } from '../config/database.js';
-import { ContentStatus, TranscriptSource, Platform } from '@prisma/client';
+import { ContentStatus, TranscriptSource, TranscriptCacheStatus, Platform } from '@prisma/client';
 import OpenAI from 'openai';
 import Parser from 'rss-parser';
 import axios from 'axios';
@@ -11,6 +12,16 @@ import * as path from 'path';
 import * as os from 'os';
 import { exec } from 'child_process';
 import * as crypto from 'crypto';
+import {
+  generateWorkerId,
+  getOrCreateCacheWithLock,
+  markCacheSuccess,
+  markCacheUnavailable,
+  markCacheFailed,
+  linkCacheToContent,
+  copyTranscriptFromCache,
+  cleanupExpiredLocks,
+} from './transcriptCache.js';
 
 // Initialize Groq client (free Whisper) - falls back to OpenAI if Groq not available
 const groqClient = config.groq?.apiKey
@@ -472,16 +483,53 @@ async function downloadAudio(audioUrl: string): Promise<string> {
 }
 
 /**
+ * Get audio duration using ffprobe
+ */
+async function getAudioDuration(inputPath: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const cmd = `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${inputPath}"`;
+    exec(cmd, { timeout: 30000 }, (error, stdout, stderr) => {
+      if (error) {
+        console.error('[Podcast] ffprobe error:', stderr);
+        reject(new Error(`ffprobe failed: ${error.message}`));
+        return;
+      }
+      const duration = parseFloat(stdout.trim());
+      resolve(isNaN(duration) ? 0 : duration);
+    });
+  });
+}
+
+/**
  * Compress audio file using ffmpeg to reduce file size
+ * Calculates optimal bitrate to stay under 24MB (safe margin for 25MB limit)
  */
 async function compressAudio(inputPath: string): Promise<string> {
   const outputPath = inputPath.replace('.mp3', '_compressed.mp3');
+  const targetSizeBytes = 24 * 1024 * 1024; // 24MB target (safe margin)
+  const minBitrate = 16; // Minimum 16kbps for speech quality
+  const maxBitrate = 48; // Maximum 48kbps
+
+  // Get duration to calculate optimal bitrate
+  let bitrate = 32; // Default
+  try {
+    const duration = await getAudioDuration(inputPath);
+    if (duration > 0) {
+      // Calculate bitrate: size (bits) / duration (seconds) = bitrate (bps)
+      // targetSizeBytes * 8 (bits) / duration (seconds) / 1000 = kbps
+      const optimalBitrate = Math.floor((targetSizeBytes * 8) / duration / 1000);
+      bitrate = Math.max(minBitrate, Math.min(maxBitrate, optimalBitrate));
+      console.log(`[Podcast] Duration: ${Math.round(duration / 60)}min, optimal bitrate: ${bitrate}kbps`);
+    }
+  } catch (error) {
+    console.warn('[Podcast] Could not get duration, using default bitrate');
+  }
 
   return new Promise((resolve, reject) => {
-    // Compress to mono, 16kHz (good enough for speech), 32kbps
-    const cmd = `ffmpeg -y -i "${inputPath}" -ac 1 -ar 16000 -b:a 32k "${outputPath}"`;
+    // Compress to mono, 16kHz (good enough for speech), calculated bitrate
+    const cmd = `ffmpeg -y -i "${inputPath}" -ac 1 -ar 16000 -b:a ${bitrate}k "${outputPath}"`;
 
-    exec(cmd, { timeout: 300000 }, (error, stdout, stderr) => {
+    exec(cmd, { timeout: 600000 }, (error, stdout, stderr) => {
       if (error) {
         console.error('[Podcast] ffmpeg compression error:', stderr);
         reject(new Error(`ffmpeg compression failed: ${error.message}`));
@@ -624,9 +672,15 @@ export async function processPodcastTranscript(contentId: string): Promise<boole
 
 /**
  * Background worker to process pending podcast transcriptions
+ * Uses global TranscriptCache to avoid redundant Whisper calls
  */
 export async function runPodcastTranscriptionWorker(): Promise<void> {
   console.log('[Podcast Worker] Starting...');
+
+  const workerId = generateWorkerId();
+
+  // Clean up any expired locks
+  await cleanupExpiredLocks();
 
   // Get Spotify content items that need transcription
   const pendingContent = await prisma.content.findMany({
@@ -635,7 +689,7 @@ export async function runPodcastTranscriptionWorker(): Promise<void> {
       platform: Platform.SPOTIFY,
       transcript: null,
     },
-    take: 3, // Process 3 at a time (be gentle on APIs)
+    take: 10, // Increased since we deduplicate
     orderBy: { createdAt: 'asc' },
   });
 
@@ -644,19 +698,165 @@ export async function runPodcastTranscriptionWorker(): Promise<void> {
     return;
   }
 
-  console.log(`[Podcast Worker] Processing ${pendingContent.length} podcasts`);
+  // Deduplicate by externalId (multiple users may have the same episode)
+  const uniqueEpisodes = new Map<string, typeof pendingContent[0]>();
+  for (const content of pendingContent) {
+    if (!uniqueEpisodes.has(content.externalId)) {
+      uniqueEpisodes.set(content.externalId, content);
+    }
+  }
+
+  console.log(`[Podcast Worker] Processing ${pendingContent.length} items → ${uniqueEpisodes.size} unique episodes`);
 
   let success = 0;
+  let cacheHits = 0;
   let failed = 0;
 
-  for (const content of pendingContent) {
-    const result = await processPodcastTranscript(content.id);
-    if (result) {
+  for (const [externalId, content] of uniqueEpisodes) {
+    const result = await processPodcastWithCache(workerId, content);
+    if (result === 'success') {
       success++;
+    } else if (result === 'cache_hit') {
+      cacheHits++;
     } else {
       failed++;
     }
   }
 
-  console.log(`[Podcast Worker] Completed: ${success} success, ${failed} failed`);
+  console.log(`[Podcast Worker] Completed: ${success} transcribed, ${cacheHits} cache hits, ${failed} failed`);
+}
+
+/**
+ * Process a podcast episode using the global cache
+ */
+async function processPodcastWithCache(
+  workerId: string,
+  content: { id: string; platform: Platform; externalId: string; showName: string | null; title: string; url: string }
+): Promise<'success' | 'cache_hit' | 'failed'> {
+  // Try to get or create cache entry with lock
+  const result = await getOrCreateCacheWithLock(content.platform, content.externalId, workerId);
+
+  if (!result) {
+    // Cache is locked by another worker, skip for now
+    return 'failed';
+  }
+
+  const { cache, acquired } = result;
+
+  // If cache already has transcript (SUCCESS), just link and copy
+  if (cache.status === TranscriptCacheStatus.SUCCESS && cache.text) {
+    await linkCacheToContent(content.platform, content.externalId, cache.id);
+    await copyTranscriptToAllSpotifyContent(content.externalId, cache);
+    console.log(`[Podcast] Cache hit for ${content.externalId}`);
+    return 'cache_hit';
+  }
+
+  // If cache is UNAVAILABLE and not retrying, mark content as unsupported
+  if (cache.status === TranscriptCacheStatus.UNAVAILABLE && !acquired) {
+    await markSpotifyContentUnsupported(content.externalId);
+    return 'failed';
+  }
+
+  // We acquired the lock, need to fetch transcript
+  if (!acquired) {
+    return 'failed';
+  }
+
+  try {
+    // Step 1: Find RSS feed and audio URL
+    console.log(`[Podcast] Looking up RSS for: ${content.showName} - ${content.title}`);
+    const rssResult = await findPodcastRSS(content.showName || '', content.title);
+
+    if (!rssResult.episodeAudioUrl) {
+      // Mark as unsupported (likely Spotify Exclusive)
+      await markCacheUnavailable(cache.id, rssResult.error || 'No audio found', workerId);
+      await markSpotifyContentUnsupported(content.externalId);
+      console.log(`[Podcast] ${rssResult.error || 'No audio found'} - marking as unsupported`);
+      return 'failed';
+    }
+
+    // Step 2: Download audio
+    console.log(`[Podcast] Downloading audio...`);
+    const audioPath = await downloadAudio(rssResult.episodeAudioUrl);
+
+    // Step 3: Transcribe with Whisper
+    console.log(`[Podcast] Transcribing with Whisper...`);
+    const transcript = await transcribeWithWhisper(audioPath);
+
+    // Step 4: Save to cache
+    await markCacheSuccess(cache.id, {
+      text: transcript.text,
+      segments: transcript.segments,
+      language: transcript.language,
+      source: TranscriptSource.WHISPER,
+    }, workerId);
+
+    // Step 5: Link and copy to all Content records
+    await linkCacheToContent(content.platform, content.externalId, cache.id);
+    await copyTranscriptToAllSpotifyContent(content.externalId, {
+      text: transcript.text,
+      segments: transcript.segments,
+      language: transcript.language,
+      source: TranscriptSource.WHISPER,
+    });
+
+    // Update status for all content with this externalId
+    await prisma.content.updateMany({
+      where: {
+        platform: Platform.SPOTIFY,
+        externalId: content.externalId,
+        status: ContentStatus.TRANSCRIBING,
+      },
+      data: { status: ContentStatus.SELECTED },
+    });
+
+    console.log(`[Podcast] ✅ ${content.externalId} - SUCCESS (${transcript.text.length} chars)`);
+    return 'success';
+
+  } catch (error: any) {
+    await markCacheFailed(cache.id, error, workerId);
+    console.error(`[Podcast] ${content.externalId} - ERROR: ${error.message}`);
+    return 'failed';
+  }
+}
+
+/**
+ * Copy transcript from cache to all Spotify Content records with this externalId
+ */
+async function copyTranscriptToAllSpotifyContent(
+  externalId: string,
+  cache: { text: string | null; segments: any; language: string | null; source: TranscriptSource | null }
+): Promise<void> {
+  if (!cache.text || !cache.source) return;
+
+  const contents = await prisma.content.findMany({
+    where: {
+      platform: Platform.SPOTIFY,
+      externalId,
+      transcript: null,
+    },
+    select: { id: true },
+  });
+
+  for (const content of contents) {
+    try {
+      await copyTranscriptFromCache(content.id, cache);
+    } catch (error) {
+      // Ignore duplicate errors
+    }
+  }
+}
+
+/**
+ * Mark all Spotify content with this externalId as unsupported
+ */
+async function markSpotifyContentUnsupported(externalId: string): Promise<void> {
+  await prisma.content.updateMany({
+    where: {
+      platform: Platform.SPOTIFY,
+      externalId,
+      status: { not: ContentStatus.UNSUPPORTED },
+    },
+    data: { status: ContentStatus.UNSUPPORTED },
+  });
 }

@@ -17,9 +17,29 @@ import { startScheduler } from './workers/scheduler.js';
 const app = express();
 
 // Security middleware
-app.use(helmet());
+app.use(helmet({
+  // Allow inline scripts for desktop auth page
+  contentSecurityPolicy: false,
+}));
+
+// CORS - allow frontend and tunnel URLs
+const allowedOrigins = [
+  config.frontendUrl,
+  'https://misc-saver-additionally-podcasts.trycloudflare.com',
+];
 app.use(cors({
-  origin: config.frontendUrl,
+  origin: (origin, callback) => {
+    // Allow requests with no origin (same-origin, mobile apps, etc.)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.some(allowed => origin.startsWith(allowed.replace(/\/$/, '')))) {
+      return callback(null, true);
+    }
+    // In dev, allow any origin
+    if (config.nodeEnv === 'development') {
+      return callback(null, true);
+    }
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
 }));
 

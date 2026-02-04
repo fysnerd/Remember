@@ -4,8 +4,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ============================================================================
@@ -92,6 +93,9 @@ model ConnectedPlatform {
 
   platform      Platform
 
+  // Content source selection (what to sync)
+  sourceType    ContentSourceType?  // null = use platform default
+
   // OAuth tokens (encrypted)
   accessToken   String
   refreshToken  String?
@@ -112,6 +116,26 @@ enum Platform {
   YOUTUBE
   SPOTIFY
   TIKTOK
+  INSTAGRAM
+}
+
+// Content source type - what content to sync from each platform
+enum ContentSourceType {
+  // YouTube sources
+  YOUTUBE_LIKES       // Liked videos (default)
+  YOUTUBE_WATCH_LATER // Watch Later playlist
+
+  // Spotify sources
+  SPOTIFY_SAVED       // Saved podcast episodes (default)
+  SPOTIFY_RECENT      // Recently played episodes
+
+  // TikTok sources
+  TIKTOK_LIKES        // Liked videos (only option)
+
+  // Instagram sources
+  INSTAGRAM_SAVED     // Saved reels only
+  INSTAGRAM_LIKED     // Liked reels only
+  INSTAGRAM_BOTH      // Both saved and liked (default)
 }
 
 // ============================================================================
@@ -132,18 +156,22 @@ model Content {
   description   String?
   thumbnailUrl  String?
   duration      Int?     // in seconds
+  channelName   String?  // YouTube channel name, Spotify show name, TikTok/Instagram author
 
   // For Spotify podcasts
   showName       String?
   listenProgress Int?      // Listening progress percentage (0-100)
   fullyPlayed    Boolean   @default(false)
 
-  // For TikTok videos
-  authorUsername String?   // TikTok @username
+  // For TikTok/Instagram videos
+  authorUsername String?   // TikTok/Instagram @username
   viewCount      Int?      // Number of views
+  likeCount      Int?      // Number of likes (Instagram/TikTok)
+  commentCount   Int?      // Number of comments (Instagram/TikTok)
 
   // Processing status
   status        ContentStatus @default(PENDING)
+  transcriptionFailed Boolean @default(false) // True if no subtitles available
 
   // Timestamps
   capturedAt    DateTime // When user liked/played it
@@ -154,6 +182,10 @@ model Content {
   transcript    Transcript?
   quizzes       Quiz[]
   tags          Tag[]    @relation("ContentTags")
+
+  // Global transcript cache reference
+  transcriptCacheId String?
+  transcriptCache   TranscriptCache? @relation(fields: [transcriptCacheId], references: [id])
 
   @@unique([userId, platform, externalId])
   @@index([userId])
@@ -190,6 +222,52 @@ model Transcript {
 enum TranscriptSource {
   YOUTUBE_SUBTITLES  // Free via youtube-transcript-api
   WHISPER            // Paid via Whisper API
+}
+
+// ============================================================================
+// Global Transcript Cache (shared across users)
+// ============================================================================
+
+model TranscriptCache {
+  id            String   @id @default(cuid())
+
+  platform      Platform
+  externalId    String   // YouTube video ID, Spotify episode ID, etc.
+
+  // Transcript data
+  text          String?
+  segments      Json?    // Timestamped segments [{ start, duration, text }]
+  language      String?
+  source        TranscriptSource?
+
+  // Status and retry logic
+  status        TranscriptCacheStatus @default(PENDING)
+  failureReason String?
+  attemptCount  Int      @default(0)
+  lastAttemptAt DateTime?
+  nextRetryAt   DateTime?  // Retry after X days if UNAVAILABLE
+
+  // Lock for race condition prevention
+  lockedBy      String?    // Worker ID
+  lockedAt      DateTime?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  contents      Content[]
+
+  @@unique([platform, externalId])
+  @@index([status, nextRetryAt])
+  @@index([lockedBy, lockedAt])
+}
+
+enum TranscriptCacheStatus {
+  PENDING      // Not yet attempted
+  PROCESSING   // In progress (locked by a worker)
+  SUCCESS      // Transcript available
+  UNAVAILABLE  // No subtitles available (retry in 7 days)
+  FAILED       // Transient error (retry with backoff)
 }
 
 // ============================================================================
@@ -299,6 +377,7 @@ model QuizSession {
   platforms     Platform[] // Filter by platform (empty = all)
   tagIds        String[]  // Filter by tag IDs
   contentIds    String[]  // Specific content selection (empty = all matching)
+  mode          String    @default("practice") // 'practice' = all cards, 'due' = only scheduled cards
 
   // Results
   startedAt     DateTime  @default(now())

@@ -93,14 +93,13 @@ export function LearnPage() {
   queryParams.set('page', page.toString());
   queryParams.set('limit', '24');
   queryParams.set('sortBy', 'capturedAt');
-  queryParams.set('sortOrder', 'desc'); // Plus récent en premier
+  queryParams.set('sortOrder', 'desc');
   if (platformFilters.size > 0) {
     queryParams.set('platform', Array.from(platformFilters).join(','));
   }
   if (searchQuery) queryParams.set('search', searchQuery);
   if (selectedTags.length > 0) queryParams.set('tags', selectedTags.join(','));
 
-  // Map view filter to backend category
   if (viewFilter === 'active') {
     queryParams.set('category', 'all');
     queryParams.set('excludeArchived', 'true');
@@ -184,6 +183,38 @@ export function LearnPage() {
     },
   });
 
+  const bulkArchive = useMutation({
+    mutationFn: async (contentIds: string[]) => {
+      return api.post('/content/triage/bulk', { contentIds, action: 'archive' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['content'] });
+      queryClient.invalidateQueries({ queryKey: ['inbox-count'] });
+      setSelectedIds(new Set());
+    },
+  });
+
+  const bulkUnarchive = useMutation({
+    mutationFn: async (contentIds: string[]) => {
+      return api.post('/content/triage/bulk', { contentIds, action: 'learn' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['content'] });
+      queryClient.invalidateQueries({ queryKey: ['inbox-count'] });
+      setSelectedIds(new Set());
+    },
+  });
+
+  const bulkRetry = useMutation({
+    mutationFn: async (contentIds: string[]) => {
+      return api.post('/content/bulk-retry', { contentIds });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['content'] });
+      setSelectedIds(new Set());
+    },
+  });
+
   // Handlers
   const togglePlatform = (platform: PlatformFilter) => {
     const newFilters = new Set(platformFilters);
@@ -236,22 +267,29 @@ export function LearnPage() {
   const handleStartReview = () => {
     if (selectedIds.size === 0) return;
 
-    // Get selected content that has quizzes (READY status)
     const selectedContent = data?.contents.filter(c => selectedIds.has(c.id)) || [];
     const readyContent = selectedContent.filter(c => c._count.quizzes > 0);
     const newContent = selectedContent.filter(c => c.status === 'INBOX');
+    const failedContent = selectedContent.filter(c => c.status === 'FAILED');
 
+    // Générer des quiz pour les nouveaux contenus
     if (newContent.length > 0) {
-      // Trigger transcription for new content
       bulkGenerateQuiz.mutate(newContent.map(c => c.id));
     }
 
+    // Relancer le pipeline pour les contenus en échec
+    if (failedContent.length > 0) {
+      bulkRetry.mutate(failedContent.map(c => c.id));
+    }
+
     if (readyContent.length > 0) {
-      // Navigate to review with selected content IDs
       const contentIds = readyContent.map(c => c.id).join(',');
       navigate(`/review/configure?contentIds=${contentIds}`);
-    } else if (newContent.length > 0) {
-      alert(`${newContent.length} contenu(s) en cours de traitement. Reviens plus tard !`);
+    } else if (newContent.length > 0 || failedContent.length > 0) {
+      const messages: string[] = [];
+      if (newContent.length > 0) messages.push(`${newContent.length} nouveau(x)`);
+      if (failedContent.length > 0) messages.push(`${failedContent.length} relancé(s)`);
+      alert(`${messages.join(' + ')} en cours de traitement. Reviens plus tard !`);
     }
   };
 
@@ -273,73 +311,70 @@ export function LearnPage() {
   };
 
   // Calculate quiz count from selection
-  const selectedContent = data?.contents.filter(c => selectedIds.has(c.id)) || [];
-  const totalQuizzes = selectedContent.reduce((acc, c) => acc + c._count.quizzes, 0);
-  const newContentCount = selectedContent.filter(c => c.status === 'INBOX').length;
+  const selectedContentForBar = data?.contents.filter(c => selectedIds.has(c.id)) || [];
+  const totalQuizzes = selectedContentForBar.reduce((acc, c) => acc + c._count.quizzes, 0);
+  const newContentCount = selectedContentForBar.filter(c => c.status === 'INBOX').length;
+  const failedContentCount = selectedContentForBar.filter(c => c.status === 'FAILED').length;
 
   // Get badge config for content
   const getBadge = (content: Content) => {
     if (content.status === 'INBOX') {
-      return { label: '🆕 Nouveau', class: 'bg-info text-white' };
+      return { label: 'Nouveau', class: 'bg-blue-100 text-blue-700' };
     }
     if (content.status === 'ARCHIVED') {
-      return { label: 'passé', class: 'bg-void-300 text-cream-dark' };
+      return { label: 'Passé', class: 'bg-gray-100 text-gray-500' };
     }
     if (content._count.quizzes > 0) {
-      return { label: `${content._count.quizzes} quiz`, class: 'bg-sage text-void' };
+      return { label: `${content._count.quizzes} quiz`, class: 'bg-green-100 text-green-700' };
     }
     if (content.status === 'TRANSCRIBING' || content.status === 'GENERATING') {
-      return { label: 'En cours...', class: 'bg-amber text-void' };
+      return { label: 'En cours...', class: 'bg-yellow-100 text-yellow-700' };
     }
     if (content.status === 'FAILED') {
-      return { label: 'Échec', class: 'bg-rust text-white' };
+      return { label: 'Échec', class: 'bg-red-100 text-red-700' };
     }
-    return { label: 'En attente', class: 'bg-void-200 text-cream-dark' };
+    return { label: 'En attente', class: 'bg-gray-100 text-gray-500' };
   };
 
-  const platforms: { key: PlatformFilter; label: string; icon: string; color: string }[] = [
-    { key: 'YOUTUBE', label: 'YouTube', icon: 'YT', color: 'bg-[#FF0000]/20 text-[#FF6B6B] border-[#FF0000]/30' },
-    { key: 'SPOTIFY', label: 'Spotify', icon: 'SP', color: 'bg-[#1DB954]/20 text-[#1DB954] border-[#1DB954]/30' },
-    { key: 'TIKTOK', label: 'TikTok', icon: 'TT', color: 'bg-[#00f2ea]/20 text-[#00f2ea] border-[#00f2ea]/30' },
-    { key: 'INSTAGRAM', label: 'Instagram', icon: 'IG', color: 'bg-[#FD1D1D]/20 text-[#FD1D1D] border-[#FD1D1D]/30' },
+  const platforms: { key: PlatformFilter; label: string }[] = [
+    { key: 'YOUTUBE', label: 'YouTube' },
+    { key: 'SPOTIFY', label: 'Spotify' },
+    { key: 'TIKTOK', label: 'TikTok' },
+    { key: 'INSTAGRAM', label: 'Instagram' },
   ];
 
   return (
-    <div className="min-h-screen p-8">
-      {/* Ambient effects */}
-      <div className="fixed top-20 right-20 w-72 h-72 bg-amber/5 rounded-full blur-3xl pointer-events-none" />
-      <div className="fixed bottom-20 left-80 w-48 h-48 bg-sage/5 rounded-full blur-3xl pointer-events-none" />
-
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen p-6">
+      <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="mb-8 animate-fade-in">
-          <div className="flex items-center justify-between mb-6">
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <h1 className="text-3xl font-display text-cream mb-2">
+              <h1 className="text-xl font-semibold text-gray-900 mb-1">
                 Qu'est-ce que tu veux réviser ?
               </h1>
-              <p className="text-cream-dark">
+              <p className="text-sm text-gray-500">
                 Sélectionne les contenus que tu veux apprendre
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <form onSubmit={handleSearch} className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-cream-dark" size={18} />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                 <input
                   type="text"
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
                   placeholder="Rechercher..."
-                  className="input-search w-64 pl-11"
+                  className="input-search w-56"
                 />
                 {searchQuery && (
                   <button
                     type="button"
                     onClick={() => { setSearchInput(''); setSearchQuery(''); setPage(1); }}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-cream-dark hover:text-cream"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                   >
-                    <X size={16} />
+                    <X size={14} />
                   </button>
                 )}
               </form>
@@ -347,31 +382,30 @@ export function LearnPage() {
               <button
                 onClick={() => refreshContent.mutate()}
                 disabled={refreshContent.isPending}
-                className="btn-ghost p-3"
+                className="btn-ghost p-2"
                 title="Synchroniser"
               >
-                <RefreshCw size={20} className={refreshContent.isPending ? 'animate-spin' : ''} />
+                <RefreshCw size={18} className={refreshContent.isPending ? 'animate-spin' : ''} />
               </button>
             </div>
           </div>
 
           {/* Platform Filters */}
-          <div className="mb-4">
-            <p className="text-sm font-medium text-cream-muted mb-3">Plateformes</p>
+          <div className="mb-3">
+            <p className="text-xs font-medium text-gray-500 mb-2">Plateformes</p>
             <div className="flex flex-wrap gap-2">
-              {platforms.map(({ key, label, color }) => (
+              {platforms.map(({ key, label }) => (
                 <button
                   key={key}
                   onClick={() => togglePlatform(key)}
                   className={clsx(
-                    'px-4 py-2 rounded-full text-sm font-medium border transition-all',
+                    'px-3 py-1.5 rounded text-sm border',
                     platformFilters.has(key)
-                      ? color
-                      : 'bg-void-100 text-cream-muted border-void-200 hover:border-void-300'
+                      ? 'bg-gray-900 text-white border-gray-900'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
                   )}
                 >
                   {label}
-                  {platformFilters.has(key) && ' ✓'}
                 </button>
               ))}
             </div>
@@ -379,9 +413,9 @@ export function LearnPage() {
 
           {/* Tag Filters */}
           {allTags && allTags.length > 0 && (
-            <div className="mb-4">
-              <p className="text-sm font-medium text-cream-muted mb-3 flex items-center gap-2">
-                <Tag size={14} /> Thèmes
+            <div className="mb-3">
+              <p className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-1">
+                <Tag size={12} /> Thèmes
               </p>
               <div className="flex flex-wrap gap-2">
                 {allTags.slice(0, 10).map((tag) => (
@@ -389,14 +423,13 @@ export function LearnPage() {
                     key={tag.id}
                     onClick={() => toggleTag(tag.name)}
                     className={clsx(
-                      'px-3 py-1.5 rounded-full text-sm border transition-all',
+                      'px-2 py-1 rounded text-xs border',
                       selectedTags.includes(tag.name)
-                        ? 'bg-amber/20 text-amber border-amber/30'
-                        : 'bg-void-100 text-cream-muted border-void-200 hover:border-void-300'
+                        ? 'bg-gray-900 text-white border-gray-900'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
                     )}
                   >
-                    {tag.name}
-                    <span className="ml-1 opacity-60">({tag._count.contents})</span>
+                    {tag.name} ({tag._count.contents})
                   </button>
                 ))}
               </div>
@@ -404,30 +437,30 @@ export function LearnPage() {
           )}
 
           {/* View Filter */}
-          <div className="flex items-center gap-4">
-            <p className="text-sm font-medium text-cream-muted">Afficher</p>
-            <div className="flex bg-void-100 border border-void-200 rounded-xl overflow-hidden">
+          <div className="flex items-center gap-3">
+            <p className="text-xs font-medium text-gray-500">Afficher</p>
+            <div className="flex border border-gray-200 rounded overflow-hidden">
               <button
                 onClick={() => { setViewFilter('active'); setPage(1); }}
                 className={clsx(
-                  'px-4 py-2 text-sm font-medium transition-colors',
+                  'px-3 py-1.5 text-sm',
                   viewFilter === 'active'
-                    ? 'bg-amber/20 text-amber'
-                    : 'text-cream-muted hover:text-cream'
+                    ? 'bg-gray-900 text-white'
+                    : 'bg-white text-gray-600 hover:bg-gray-50'
                 )}
               >
-                ● Actifs
+                Actifs
               </button>
               <button
                 onClick={() => { setViewFilter('passed'); setPage(1); }}
                 className={clsx(
-                  'px-4 py-2 text-sm font-medium transition-colors',
+                  'px-3 py-1.5 text-sm border-l border-gray-200',
                   viewFilter === 'passed'
-                    ? 'bg-amber/20 text-amber'
-                    : 'text-cream-muted hover:text-cream'
+                    ? 'bg-gray-900 text-white'
+                    : 'bg-white text-gray-600 hover:bg-gray-50'
                 )}
               >
-                ○ Passés
+                Archives
               </button>
             </div>
           </div>
@@ -435,27 +468,25 @@ export function LearnPage() {
 
         {/* Content Grid */}
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 text-amber animate-spin mb-4" />
-            <p className="text-cream-dark">Chargement...</p>
+          <div className="flex flex-col items-center justify-center py-16">
+            <Loader2 className="w-6 h-6 text-gray-400 animate-spin mb-3" />
+            <p className="text-gray-500 text-sm">Chargement...</p>
           </div>
         ) : !data?.contents.length ? (
-          <div className="card text-center py-16">
-            <div className="w-16 h-16 rounded-2xl bg-void-200 flex items-center justify-center mx-auto mb-4">
-              <BookOpen size={32} className="text-cream-dark" />
-            </div>
-            <h3 className="text-xl font-display text-cream mb-2">
-              {viewFilter === 'passed' ? 'Aucun contenu passé' : 'Prêt à apprendre ?'}
+          <div className="border border-gray-200 rounded-lg text-center py-12">
+            <BookOpen size={32} className="mx-auto text-gray-300 mb-3" />
+            <h3 className="text-base font-medium text-gray-900 mb-1">
+              {viewFilter === 'passed' ? 'Aucun contenu archivé' : 'Prêt à apprendre ?'}
             </h3>
-            <p className="text-cream-dark max-w-md mx-auto">
+            <p className="text-sm text-gray-500 max-w-md mx-auto">
               {viewFilter === 'passed'
-                ? 'Tu n\'as pas encore passé de contenu. Utilise le bouton "Passer" sur les contenus que tu ne veux pas apprendre.'
-                : 'Connecte YouTube, Spotify ou TikTok dans les paramètres pour commencer à capturer du contenu.'}
+                ? 'Tu n\'as pas encore archivé de contenu.'
+                : 'Connecte YouTube, Spotify ou TikTok dans les paramètres.'}
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-            {data.contents.map((content, index) => {
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+            {data.contents.map((content) => {
               const badge = getBadge(content);
               const isSelected = selectedIds.has(content.id);
               const isNew = content.status === 'INBOX';
@@ -466,84 +497,75 @@ export function LearnPage() {
                   key={content.id}
                   onClick={() => toggleSelection(content.id)}
                   className={clsx(
-                    'group relative cursor-pointer rounded-xl overflow-hidden border transition-all animate-slide-up',
+                    'group relative cursor-pointer rounded border overflow-hidden',
                     isSelected
-                      ? 'border-amber ring-2 ring-amber/50 bg-amber/5'
-                      : 'border-void-200 hover:border-void-300 bg-void-50',
+                      ? 'border-gray-900 ring-1 ring-gray-900'
+                      : 'border-gray-200 hover:border-gray-300',
                     isPassed && 'opacity-60'
                   )}
-                  style={{ animationDelay: `${index * 0.03}s` }}
                 >
                   {/* Thumbnail */}
-                  <div className="relative aspect-video bg-void-200">
+                  <div className="relative aspect-video bg-gray-100">
                     {content.thumbnailUrl ? (
                       <img
                         src={content.thumbnailUrl}
                         alt={content.title}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        className="w-full h-full object-cover"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        <Play size={24} className="text-cream-dark" />
+                        <Play size={20} className="text-gray-400" />
                       </div>
                     )}
 
                     {/* Badge */}
                     <span className={clsx(
-                      'absolute top-2 left-2 px-2 py-1 rounded-lg text-xs font-semibold',
+                      'absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium',
                       badge.class
                     )}>
                       {badge.label}
                     </span>
 
-                    {/* Platform indicator */}
-                    <span className={clsx(
-                      'absolute top-2 right-2 w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold',
-                      content.platform === 'YOUTUBE' && 'bg-[#FF0000]/90 text-white',
-                      content.platform === 'SPOTIFY' && 'bg-[#1DB954]/90 text-white',
-                      content.platform === 'TIKTOK' && 'bg-gradient-to-br from-[#00f2ea] to-[#ff0050] text-white',
-                      content.platform === 'INSTAGRAM' && 'bg-gradient-to-br from-[#833AB4] via-[#FD1D1D] to-[#F77737] text-white'
-                    )}>
+                    {/* Platform */}
+                    <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 bg-black/70 text-white rounded text-[10px] font-medium">
                       {content.platform === 'YOUTUBE' ? 'YT' : content.platform === 'SPOTIFY' ? 'SP' : content.platform === 'TIKTOK' ? 'TT' : 'IG'}
                     </span>
 
                     {/* Duration */}
                     {content.duration && (
-                      <span className="absolute bottom-2 right-2 px-1.5 py-0.5 bg-void/80 backdrop-blur text-cream text-xs rounded">
+                      <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 bg-black/70 text-white text-[10px] rounded">
                         {formatDuration(content.duration)}
                       </span>
                     )}
 
                     {/* Selection checkbox */}
                     <div className={clsx(
-                      'absolute bottom-2 left-2 transition-opacity',
+                      'absolute bottom-1.5 left-1.5',
                       isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
                     )}>
                       <div className={clsx(
-                        'w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all',
+                        'w-5 h-5 rounded border flex items-center justify-center',
                         isSelected
-                          ? 'bg-amber border-amber text-void'
-                          : 'bg-void/80 border-cream/30'
+                          ? 'bg-gray-900 border-gray-900 text-white'
+                          : 'bg-white/80 border-gray-300'
                       )}>
-                        {isSelected && <CheckCircle2 size={14} />}
+                        {isSelected && <CheckCircle2 size={12} />}
                       </div>
                     </div>
 
-                    {/* Skip button for new content */}
+                    {/* Skip/Reactivate buttons */}
                     {isNew && (
                       <button
                         onClick={(e) => handleSkip(e, content.id)}
-                        className="absolute bottom-2 right-2 px-2 py-1 bg-void/80 backdrop-blur text-cream-dark hover:text-rust text-xs rounded transition-all opacity-0 group-hover:opacity-100"
+                        className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 bg-white/90 text-gray-600 hover:text-red-600 text-[10px] rounded opacity-0 group-hover:opacity-100"
                       >
-                        ✗ Passer
+                        Passer
                       </button>
                     )}
-
-                    {/* Reactivate button for passed content */}
                     {isPassed && (
                       <button
                         onClick={(e) => handleReactivate(e, content.id)}
-                        className="absolute bottom-2 right-2 px-2 py-1 bg-sage/80 backdrop-blur text-void text-xs rounded transition-all opacity-0 group-hover:opacity-100"
+                        className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 bg-white/90 text-gray-600 hover:text-green-600 text-[10px] rounded opacity-0 group-hover:opacity-100"
                       >
                         Réactiver
                       </button>
@@ -551,8 +573,8 @@ export function LearnPage() {
                   </div>
 
                   {/* Body */}
-                  <div className="p-3">
-                    <h3 className="text-sm font-medium text-cream line-clamp-2 group-hover:text-amber transition-colors">
+                  <div className="p-2">
+                    <h3 className="text-xs font-medium text-gray-900 line-clamp-2">
                       {content.title}
                     </h3>
                   </div>
@@ -564,23 +586,23 @@ export function LearnPage() {
 
         {/* Pagination */}
         {data && data.pagination.totalPages > 1 && (
-          <div className="mt-10 flex items-center justify-center gap-4">
+          <div className="mt-8 flex items-center justify-center gap-3">
             <button
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="btn-secondary px-4 py-2 disabled:opacity-30"
+              className="btn-secondary text-sm disabled:opacity-30"
             >
-              ← Précédent
+              Précédent
             </button>
-            <span className="text-cream-muted">
+            <span className="text-sm text-gray-500">
               Page {page} sur {data.pagination.totalPages}
             </span>
             <button
               onClick={() => setPage(p => Math.min(data.pagination.totalPages, p + 1))}
               disabled={page === data.pagination.totalPages}
-              className="btn-secondary px-4 py-2 disabled:opacity-30"
+              className="btn-secondary text-sm disabled:opacity-30"
             >
-              Suivant →
+              Suivant
             </button>
           </div>
         )}
@@ -588,46 +610,51 @@ export function LearnPage() {
 
       {/* Sticky Selection Bar */}
       {selectedIds.size > 0 && (
-        <div className="fixed bottom-0 left-64 right-0 bg-void-50 border-t border-void-200 p-4 animate-slide-up z-50">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <span className="text-cream font-medium">
-                ☑ {selectedIds.size} sélectionné{selectedIds.size > 1 ? 's' : ''}
+        <div className="fixed bottom-0 left-56 right-0 bg-white border-t border-gray-200 p-3 z-50">
+          <div className="max-w-6xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-gray-900">
+                {selectedIds.size} sélectionné{selectedIds.size > 1 ? 's' : ''}
               </span>
-              <span className="text-cream-dark">
-                • {totalQuizzes} quiz prêt{totalQuizzes > 1 ? 's' : ''}
+              <span className="text-sm text-gray-500">
+                • {totalQuizzes} quiz
                 {newContentCount > 0 && ` • ${newContentCount} nouveau${newContentCount > 1 ? 'x' : ''}`}
+                {failedContentCount > 0 && ` • ${failedContentCount} en échec`}
               </span>
             </div>
 
-            <div className="flex items-center gap-3">
-              <button
-                onClick={selectAll}
-                className="btn-ghost text-sm"
-              >
+            <div className="flex items-center gap-2">
+              <button onClick={selectAll} className="btn-ghost text-sm">
                 Tout sélectionner
               </button>
-              <button
-                onClick={clearSelection}
-                className="btn-ghost text-sm text-cream-dark"
-              >
+              <button onClick={clearSelection} className="btn-ghost text-sm text-gray-500">
                 Annuler
               </button>
+              {viewFilter === 'passed' ? (
+                <button
+                  onClick={() => bulkUnarchive.mutate(Array.from(selectedIds))}
+                  disabled={bulkUnarchive.isPending}
+                  className="btn-secondary flex items-center gap-1.5"
+                >
+                  <BookOpen size={14} />
+                  {bulkUnarchive.isPending ? 'Réactivation...' : 'Désarchiver'}
+                </button>
+              ) : (
+                <button
+                  onClick={() => bulkArchive.mutate(Array.from(selectedIds))}
+                  disabled={bulkArchive.isPending}
+                  className="btn-secondary flex items-center gap-1.5"
+                >
+                  <Archive size={14} />
+                  {bulkArchive.isPending ? 'Archivage...' : 'Archiver'}
+                </button>
+              )}
               <button
                 onClick={handleStartReview}
                 disabled={bulkGenerateQuiz.isPending}
-                className="btn-primary flex items-center gap-2"
+                className="btn-primary"
               >
-                {bulkGenerateQuiz.isPending ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    Traitement...
-                  </>
-                ) : (
-                  <>
-                    Réviser →
-                  </>
-                )}
+                {bulkGenerateQuiz.isPending ? 'Traitement...' : 'Réviser'}
               </button>
             </div>
           </div>
@@ -637,7 +664,7 @@ export function LearnPage() {
       {/* Detail Modal */}
       {selectedContentId && (
         <div
-          className="modal-backdrop animate-fade-in"
+          className="modal-backdrop"
           onClick={() => setSelectedContentId(null)}
         >
           <div
@@ -645,28 +672,28 @@ export function LearnPage() {
             onClick={(e) => e.stopPropagation()}
           >
             {isLoadingDetail ? (
-              <div className="flex items-center justify-center py-20">
-                <Loader2 className="w-8 h-8 text-amber animate-spin" />
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
               </div>
             ) : contentDetail ? (
               <>
                 {/* Header */}
-                <div className="p-6 border-b border-void-200">
-                  <div className="flex items-start justify-between gap-4">
+                <div className="p-4 border-b border-gray-200">
+                  <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <h2 className="text-xl font-display text-cream mb-3">
+                      <h2 className="text-lg font-semibold text-gray-900 mb-2">
                         {contentDetail.title}
                       </h2>
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className={clsx(
-                          'px-2 py-1 rounded-lg text-xs font-semibold',
+                          'px-2 py-0.5 rounded text-xs font-medium',
                           getBadge(contentDetail).class
                         )}>
                           {getBadge(contentDetail).label}
                         </span>
                         {contentDetail.duration && (
-                          <span className="text-sm text-cream-dark flex items-center gap-1">
-                            <Clock size={14} />
+                          <span className="text-xs text-gray-500 flex items-center gap-1">
+                            <Clock size={12} />
                             {formatDuration(contentDetail.duration)}
                           </span>
                         )}
@@ -674,17 +701,17 @@ export function LearnPage() {
                     </div>
                     <button
                       onClick={() => setSelectedContentId(null)}
-                      className="p-2 text-cream-dark hover:text-cream rounded-lg hover:bg-void-100 transition-colors"
+                      className="p-1.5 text-gray-400 hover:text-gray-600 rounded hover:bg-gray-100"
                     >
-                      <X size={20} />
+                      <X size={18} />
                     </button>
                   </div>
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 overflow-y-auto p-6">
+                <div className="flex-1 overflow-y-auto p-4">
                   {contentDetail.thumbnailUrl && (
-                    <div className="aspect-video bg-void-200 rounded-xl overflow-hidden mb-6">
+                    <div className="aspect-video bg-gray-100 rounded overflow-hidden mb-4">
                       <img
                         src={contentDetail.thumbnailUrl}
                         alt={contentDetail.title}
@@ -694,42 +721,42 @@ export function LearnPage() {
                   )}
 
                   {/* Stats */}
-                  <div className="grid grid-cols-3 gap-4 mb-6">
-                    <div className="bg-void-100 rounded-xl p-4 text-center border border-void-200">
-                      <p className="text-2xl font-display text-cream">{contentDetail.quizzes.length}</p>
-                      <p className="text-sm text-cream-dark">Quiz</p>
+                  <div className="grid grid-cols-3 gap-3 mb-4">
+                    <div className="border border-gray-200 rounded p-3 text-center">
+                      <p className="text-xl font-semibold text-gray-900">{contentDetail.quizzes.length}</p>
+                      <p className="text-xs text-gray-500">Quiz</p>
                     </div>
-                    <div className="bg-void-100 rounded-xl p-4 text-center border border-void-200">
-                      <p className="text-2xl font-display text-cream">
+                    <div className="border border-gray-200 rounded p-3 text-center">
+                      <p className="text-xl font-semibold text-gray-900">
                         {contentDetail.transcript ? 'Oui' : 'Non'}
                       </p>
-                      <p className="text-sm text-cream-dark">Transcrit</p>
+                      <p className="text-xs text-gray-500">Transcrit</p>
                     </div>
-                    <div className="bg-void-100 rounded-xl p-4 text-center border border-void-200">
-                      <p className="text-sm font-medium text-cream">
+                    <div className="border border-gray-200 rounded p-3 text-center">
+                      <p className="text-sm font-medium text-gray-900">
                         {new Date(contentDetail.capturedAt).toLocaleDateString('fr-FR')}
                       </p>
-                      <p className="text-sm text-cream-dark">Capturé</p>
+                      <p className="text-xs text-gray-500">Capturé</p>
                     </div>
                   </div>
 
                   {/* Quiz Preview */}
                   {contentDetail.quizzes.length > 0 && (
                     <div>
-                      <h4 className="text-sm font-medium text-cream-muted mb-3">
+                      <h4 className="text-xs font-medium text-gray-500 mb-2">
                         Quiz ({contentDetail.quizzes.length})
                       </h4>
                       <div className="space-y-2">
                         {contentDetail.quizzes.slice(0, 3).map((quiz, idx) => (
-                          <div key={quiz.id} className="bg-void-100 border border-void-200 rounded-xl p-4">
-                            <p className="text-sm text-cream">
-                              <span className="text-amber font-medium mr-2">{idx + 1}.</span>
+                          <div key={quiz.id} className="border border-gray-200 rounded p-3">
+                            <p className="text-sm text-gray-900">
+                              <span className="font-medium text-gray-400 mr-2">{idx + 1}.</span>
                               {quiz.question}
                             </p>
                           </div>
                         ))}
                         {contentDetail.quizzes.length > 3 && (
-                          <p className="text-sm text-cream-dark">
+                          <p className="text-xs text-gray-500">
                             +{contentDetail.quizzes.length - 3} autres questions
                           </p>
                         )}
@@ -739,14 +766,14 @@ export function LearnPage() {
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 border-t border-void-200 flex gap-3">
+                <div className="p-4 border-t border-gray-200 flex gap-2">
                   <a
                     href={contentDetail.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn-secondary flex-1 flex items-center justify-center gap-2"
                   >
-                    <ExternalLink size={16} />
+                    <ExternalLink size={14} />
                     Voir l'original
                   </a>
                   {contentDetail.status === 'ARCHIVED' && (
@@ -755,7 +782,7 @@ export function LearnPage() {
                       disabled={reactivateContent.isPending}
                       className="btn-primary flex-1 flex items-center justify-center gap-2"
                     >
-                      <BookOpen size={16} />
+                      <BookOpen size={14} />
                       {reactivateContent.isPending ? 'Réactivation...' : 'Réactiver'}
                     </button>
                   )}
@@ -765,8 +792,18 @@ export function LearnPage() {
                       disabled={skipContent.isPending}
                       className="btn-ghost flex items-center justify-center gap-2"
                     >
-                      <Archive size={16} />
-                      {skipContent.isPending ? 'Passage...' : 'Passer'}
+                      <Archive size={14} />
+                      {skipContent.isPending ? 'Archivage...' : 'Passer'}
+                    </button>
+                  )}
+                  {contentDetail.status !== 'INBOX' && contentDetail.status !== 'ARCHIVED' && (
+                    <button
+                      onClick={() => skipContent.mutate(contentDetail.id)}
+                      disabled={skipContent.isPending}
+                      className="btn-ghost flex items-center justify-center gap-2"
+                    >
+                      <Archive size={14} />
+                      {skipContent.isPending ? 'Archivage...' : 'Archiver'}
                     </button>
                   )}
                 </div>

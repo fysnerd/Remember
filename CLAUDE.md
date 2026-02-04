@@ -1,5 +1,20 @@
 # Remember - Project Context
 
+## ⚠️ PREMIÈRE CHOSE À FAIRE À CHAQUE SESSION
+
+**Le tunnel Cloudflare change à chaque redémarrage du PC.**
+
+Demande à l'utilisateur :
+> "As-tu lancé le tunnel Cloudflare ? Si oui, donne-moi la nouvelle URL (ex: `https://xxx-xxx.trycloudflare.com`)"
+
+Une fois l'URL reçue, mets à jour ces fichiers :
+1. `backend/.env` → `YOUTUBE_CALLBACK_URL` et `SPOTIFY_CALLBACK_URL`
+2. `ios/lib/constants.ts` → `TUNNEL_URL`
+
+Puis rappelle à l'utilisateur de redémarrer le backend.
+
+---
+
 ## Description
 **Remember** est une plateforme d'apprentissage actif qui transforme le contenu consommé sur les réseaux sociaux (YouTube, Spotify) en connaissances durables via des quiz générés par IA et la répétition espacée (algorithme SM-2).
 
@@ -98,7 +113,7 @@ cloudflared tunnel --url http://localhost:3001
 
 ```
 Remember/
-├── backend/
+├── backend/                 # API Express.js
 │   ├── src/
 │   │   ├── config/          # env.ts, database.ts
 │   │   ├── routes/          # auth, oauth, content, review, admin
@@ -108,15 +123,78 @@ Remember/
 │   ├── prisma/
 │   │   └── schema.prisma    # Schéma de la BDD
 │   └── .env                 # Variables d'environnement
-├── frontend/
+├── frontend/                # Web App React
 │   ├── src/
 │   │   ├── pages/           # LoginPage, LibraryPage, SettingsPage, ReviewPage
 │   │   ├── components/      # UI components
 │   │   ├── stores/          # Zustand stores (authStore)
 │   │   └── lib/             # api.ts, utils
 │   └── .env                 # Variables frontend (si nécessaire)
-└── docs/                    # Documentation projet
+├── ios/                     # 📱 iOS App (Expo + React Native)
+│   └── CLAUDE.md            # ⚠️ Instructions spécifiques iOS
+├── docs/                    # Documentation projet
+└── experiments/             # Tests (webview-auth-test, etc.)
 ```
+
+---
+
+## 📱 iOS App
+
+### Où lancer les agents Claude ?
+
+| Tâche | Dossier | Raison |
+|-------|---------|--------|
+| UI/Design iOS | `ios/` | Accès direct aux composants, CLAUDE.md spécifique |
+| Bug fix iOS only | `ios/` | Contexte isolé |
+| Backend + iOS | `Remember/` (racine) | Accès aux deux codebases |
+| PM / Issues Linear | `Remember/` (racine) | Vision globale du projet |
+
+> **Pour les tâches purement iOS:** Ouvre une nouvelle fenêtre Claude Code dans le dossier `ios/`
+>
+> Le fichier `ios/CLAUDE.md` contient toutes les instructions spécifiques :
+> - Méthodologie BMAD complète
+> - Linear MCP obligatoire
+> - Skills installés (Expo, React Native, iOS Design)
+> - Stack technique et structure
+> - Ordre des issues à suivre
+
+### MCP Servers disponibles
+
+| MCP | Usage |
+|-----|-------|
+| `expo-devtools` | **Interaction live avec l'app iOS** - Screenshots, tap, scroll, navigation, logs, état Zustand |
+| `expo-docs` | Docs Expo SDK 54 offline (~3ms) - 958 docs |
+| `linear-server` | Tracking issues |
+| `supabase` | Queries DB |
+| `context7` | Docs générales |
+
+#### expo-devtools - Commandes disponibles
+
+| Commande | Description |
+|----------|-------------|
+| `connection_status` | Vérifie si l'app Expo Go est connectée |
+| `take_snapshot` | Arbre d'accessibilité de l'écran avec UIDs |
+| `take_screenshot` | Capture d'écran de l'app |
+| `tap` | Tap sur un élément (par UID) |
+| `fill` | Remplir un input texte |
+| `scroll` | Scroll (up/down/left/right) |
+| `navigate` | Navigation vers une route Expo Router |
+| `get_logs` | Logs console récents |
+| `get_state` | État des stores Zustand |
+
+**Prérequis:** L'app doit tourner avec le `DevToolsProvider` configuré et connectée au WebSocket `ws://IP:19876`
+
+### Lancer l'app iOS (après setup)
+```bash
+cd ios
+npx expo start
+# Scanner le QR code avec Expo Go sur iPhone
+```
+
+### Linear projet iOS
+- **Projet:** iOS App
+- **Issues:** REM-51 à REM-65
+- **Documentation:** `docs/remember-current-state.md` + `docs/ios-app-architecture.md`
 
 ---
 
@@ -205,10 +283,12 @@ FRONTEND_URL="http://localhost:5173"
 
 ## Documentation complémentaire
 
+- `docs/remember-current-state.md` - **État RÉEL de l'implémentation** (endpoints, modèles, workers)
 - `docs/remember-architecture.md` - Architecture technique détaillée
 - `docs/remember-prd.md` - Product Requirements Document
 - `docs/remember-ux-design.md` - Design UX
 - `docs/remember-product-brief.md` - Brief produit
+- `docs/ios-app-architecture.md` - Architecture iOS App
 
 ---
 

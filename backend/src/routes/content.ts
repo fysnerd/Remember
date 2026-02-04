@@ -9,6 +9,8 @@ import { autoTagContent } from '../services/tagging.js';
 import { syncUserYouTube } from '../workers/youtubeSync.js';
 import { syncUserSpotify } from '../workers/spotifySync.js';
 import { syncTikTokForUser } from '../workers/tiktokSync.js';
+import { syncInstagramForUser } from '../workers/instagramSync.js';
+import { generateText } from '../services/llm.js';
 
 export const contentRouter = Router();
 
@@ -72,6 +74,16 @@ contentRouter.post('/refresh', async (req: Request, res: Response, next: NextFun
               return { platform: 'tiktok', newItems: 0 };
             })
         );
+      } else if (connection.platform === Platform.INSTAGRAM) {
+        syncingPlatforms.push('instagram');
+        syncPromises.push(
+          syncInstagramForUser(userId)
+            .then((newItems) => ({ platform: 'instagram', newItems }))
+            .catch((error) => {
+              console.error(`[Content Refresh] Instagram sync failed:`, error);
+              return { platform: 'instagram', newItems: 0 };
+            })
+        );
       }
     }
 
@@ -116,7 +128,7 @@ contentRouter.get('/', async (req: Request, res: Response, next: NextFunction) =
     };
 
     // Platform filter
-    if (platform && typeof platform === 'string' && ['YOUTUBE', 'SPOTIFY', 'TIKTOK'].includes(platform)) {
+    if (platform && typeof platform === 'string' && ['YOUTUBE', 'SPOTIFY', 'TIKTOK', 'INSTAGRAM'].includes(platform)) {
       where.platform = platform as Platform;
     }
 
@@ -162,6 +174,12 @@ contentRouter.get('/', async (req: Request, res: Response, next: NextFunction) =
           },
         };
       }
+    }
+
+    // Channel filter (creator/author name)
+    const { channel } = req.query;
+    if (channel && typeof channel === 'string' && channel.trim()) {
+      where.channelName = channel.trim();
     }
 
     // Date range filter
@@ -258,6 +276,162 @@ contentRouter.get('/tags', async (req: Request, res: Response, next: NextFunctio
     });
 
     return res.json(tags);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// GET /api/content/channels - Get unique channel names for user's content
+contentRouter.get('/channels', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Get distinct channelNames with count
+    const channels = await prisma.content.groupBy({
+      by: ['channelName'],
+      where: {
+        userId: req.user!.id,
+        channelName: { not: null },
+        status: { not: ContentStatus.INBOX },
+      },
+      _count: { id: true },
+      orderBy: { _count: { id: 'desc' } },
+    });
+
+    // Filter out null and format response
+    const result = channels
+      .filter((c) => c.channelName !== null)
+      .map((c) => ({
+        name: c.channelName!,
+        count: c._count.id,
+      }));
+
+    return res.json(result);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// PATCH /api/content/tags/:name - Rename a tag for user's content
+// Since tags are global, we create a new tag and migrate the user's content
+contentRouter.patch('/tags/:name', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const oldTagName = decodeURIComponent(req.params.name).toLowerCase().trim();
+    const { newName } = req.body;
+
+    if (!newName || typeof newName !== 'string') {
+      return res.status(400).json({ error: 'newName is required and must be a string' });
+    }
+
+    const cleanNewName = newName.toLowerCase().trim();
+
+    if (cleanNewName.length === 0 || cleanNewName.length > 50) {
+      return res.status(400).json({ error: 'Tag name must be between 1 and 50 characters' });
+    }
+
+    if (oldTagName === cleanNewName) {
+      return res.status(400).json({ error: 'New name is the same as current name' });
+    }
+
+    // Find the old tag
+    const oldTag = await prisma.tag.findUnique({
+      where: { name: oldTagName },
+    });
+
+    if (!oldTag) {
+      return res.status(404).json({ error: 'Tag not found' });
+    }
+
+    // Get all user's content with this tag
+    const userContentWithTag = await prisma.content.findMany({
+      where: {
+        userId: req.user!.id,
+        tags: {
+          some: { id: oldTag.id },
+        },
+      },
+      select: { id: true },
+    });
+
+    if (userContentWithTag.length === 0) {
+      return res.status(404).json({ error: 'You have no content with this tag' });
+    }
+
+    // Create or find the new tag
+    const newTag = await prisma.tag.upsert({
+      where: { name: cleanNewName },
+      create: { name: cleanNewName },
+      update: {},
+    });
+
+    // Migrate user's content from old tag to new tag
+    for (const content of userContentWithTag) {
+      await prisma.content.update({
+        where: { id: content.id },
+        data: {
+          tags: {
+            disconnect: { id: oldTag.id },
+            connect: { id: newTag.id },
+          },
+        },
+      });
+    }
+
+    return res.json({
+      message: `Tag renamed from "${oldTagName}" to "${cleanNewName}"`,
+      oldName: oldTagName,
+      newName: cleanNewName,
+      contentUpdated: userContentWithTag.length,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// DELETE /api/content/tags/:name - Remove a tag from all user's content
+contentRouter.delete('/tags/:name', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tagName = decodeURIComponent(req.params.name).toLowerCase().trim();
+
+    // Find the tag
+    const tag = await prisma.tag.findUnique({
+      where: { name: tagName },
+    });
+
+    if (!tag) {
+      return res.status(404).json({ error: 'Tag not found' });
+    }
+
+    // Get all user's content with this tag
+    const userContentWithTag = await prisma.content.findMany({
+      where: {
+        userId: req.user!.id,
+        tags: {
+          some: { id: tag.id },
+        },
+      },
+      select: { id: true },
+    });
+
+    if (userContentWithTag.length === 0) {
+      return res.status(404).json({ error: 'You have no content with this tag' });
+    }
+
+    // Remove tag from all user's content
+    for (const content of userContentWithTag) {
+      await prisma.content.update({
+        where: { id: content.id },
+        data: {
+          tags: {
+            disconnect: { id: tag.id },
+          },
+        },
+      });
+    }
+
+    return res.json({
+      message: `Tag "${tagName}" removed from ${userContentWithTag.length} content(s)`,
+      tagName,
+      contentUpdated: userContentWithTag.length,
+    });
   } catch (error) {
     return next(error);
   }
@@ -367,6 +541,7 @@ contentRouter.get('/inbox/count', async (req: Request, res: Response, next: Next
 });
 
 // POST /api/content/triage/bulk - Bulk triage multiple items
+// Optimized: Triggers immediate quiz generation for items with existing transcripts
 contentRouter.post('/triage/bulk', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { contentIds, action } = req.body;
@@ -379,13 +554,13 @@ contentRouter.post('/triage/bulk', async (req: Request, res: Response, next: Nex
       return res.status(400).json({ error: 'Invalid action. Use "learn", "archive", or "delete".' });
     }
 
-    // Verify ownership of all items
+    // Verify ownership of all items (include transcript for optimization)
     const ownedContent = await prisma.content.findMany({
       where: {
         id: { in: contentIds },
         userId: req.user!.id,
       },
-      select: { id: true },
+      include: { transcript: true, quizzes: true },
     });
 
     const ownedIds = ownedContent.map(c => c.id);
@@ -395,6 +570,7 @@ contentRouter.post('/triage/bulk', async (req: Request, res: Response, next: Nex
     }
 
     let processed = 0;
+    let processingStarted = 0;
 
     if (action === 'delete') {
       const result = await prisma.content.deleteMany({
@@ -412,13 +588,45 @@ contentRouter.post('/triage/bulk', async (req: Request, res: Response, next: Nex
         data: { status: newStatus },
       });
       processed = result.count;
+
+      // OPTIMIZATION: If "learn", trigger immediate processing for items with transcripts
+      if (action === 'learn') {
+        for (const content of ownedContent) {
+          if (content.transcript && content.quizzes.length === 0) {
+            // Has transcript, no quiz yet - generate immediately
+            console.log(`[BulkTriage] Transcript exists for ${content.id}, triggering immediate quiz`);
+            processContentQuiz(content.id).catch((error) => {
+              console.error(`[BulkTriage] Failed to generate quiz for ${content.id}:`, error);
+            });
+            processingStarted++;
+          } else if (!content.transcript) {
+            // No transcript - trigger full pipeline
+            if (content.platform === Platform.YOUTUBE) {
+              processContentTranscript(content.id)
+                .then(async (success) => {
+                  if (success) await processContentQuiz(content.id);
+                })
+                .catch(console.error);
+              processingStarted++;
+            } else if (content.platform === Platform.SPOTIFY) {
+              processPodcastTranscript(content.id)
+                .then(async (success) => {
+                  if (success) await processContentQuiz(content.id);
+                })
+                .catch(console.error);
+              processingStarted++;
+            }
+          }
+        }
+      }
     }
 
     return res.json({
       success: true,
       processed,
+      processingStarted,
       failed: contentIds.length - processed,
-      message: `Successfully ${action === 'delete' ? 'deleted' : action === 'learn' ? 'added to learning' : 'archived'} ${processed} items`,
+      message: `Successfully ${action === 'delete' ? 'deleted' : action === 'learn' ? 'added to learning' : 'archived'} ${processed} items${processingStarted > 0 ? ` (${processingStarted} processing started)` : ''}`,
     });
   } catch (error) {
     return next(error);
@@ -717,6 +925,67 @@ contentRouter.post('/:id/retry', async (req: Request, res: Response, next: NextF
   }
 });
 
+// POST /api/content/bulk-retry - Retry multiple failed contents
+contentRouter.post('/bulk-retry', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { contentIds } = req.body;
+
+    if (!Array.isArray(contentIds) || contentIds.length === 0) {
+      return res.status(400).json({ error: 'contentIds must be a non-empty array' });
+    }
+
+    // Get all failed contents for this user
+    const contents = await prisma.content.findMany({
+      where: {
+        id: { in: contentIds },
+        userId: req.user!.id,
+        status: ContentStatus.FAILED,
+      },
+    });
+
+    if (contents.length === 0) {
+      return res.status(404).json({ error: 'No failed content found to retry' });
+    }
+
+    // Reset status to SELECTED for all failed contents
+    await prisma.content.updateMany({
+      where: {
+        id: { in: contents.map(c => c.id) },
+      },
+      data: { status: ContentStatus.SELECTED },
+    });
+
+    // Process each content based on platform
+    const retried: string[] = [];
+    for (const content of contents) {
+      if (content.platform === Platform.YOUTUBE) {
+        processContentTranscript(content.id).catch((error) => {
+          console.error(`[Content] Failed to retry transcript for ${content.id}:`, error);
+        });
+      } else if (content.platform === Platform.SPOTIFY) {
+        processPodcastTranscript(content.id).catch((error) => {
+          console.error(`[Content] Failed to retry podcast transcript for ${content.id}:`, error);
+        });
+      } else if (content.platform === Platform.TIKTOK) {
+        // TikTok uses same transcription service as YouTube
+        processContentTranscript(content.id).catch((error) => {
+          console.error(`[Content] Failed to retry TikTok transcript for ${content.id}:`, error);
+        });
+      }
+      retried.push(content.id);
+    }
+
+    return res.json({
+      success: true,
+      message: `${retried.length} content(s) queued for retry`,
+      retried,
+      skipped: contentIds.filter(id => !retried.includes(id)),
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 // GET /api/content/:id/status - Get content processing status
 contentRouter.get('/:id/status', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -815,6 +1084,219 @@ contentRouter.post('/:id/auto-tag', async (req: Request, res: Response, next: Ne
   }
 });
 
+// GET /api/content/:id/memo - Get or generate AI memo for content
+contentRouter.get('/:id/memo', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const contentId = req.params.id as string;
+    const content = await prisma.content.findFirst({
+      where: {
+        id: contentId,
+        userId: req.user!.id,
+      },
+      include: { transcript: true, tags: true },
+    });
+
+    if (!content) {
+      return res.status(404).json({ error: 'Content not found' });
+    }
+
+    if (!content.transcript) {
+      return res.status(400).json({ error: 'Content has no transcript - cannot generate memo' });
+    }
+
+    // Check if memo already exists (stored in transcript metadata)
+    const transcriptMeta = content.transcript.segments as any;
+    if (transcriptMeta?.memo) {
+      return res.json({
+        memo: transcriptMeta.memo,
+        generatedAt: transcriptMeta.memoGeneratedAt,
+        cached: true,
+      });
+    }
+
+    // Generate memo from transcript
+    const transcriptText = content.transcript.text.slice(0, 8000); // Limit for LLM context
+    const tags = content.tags.map(t => t.name).join(', ');
+
+    const systemPrompt = `Tu es un assistant d'apprentissage expert. Génère un mémo d'étude concis et actionnable à partir de la transcription fournie.
+Le mémo doit:
+- Résumer les 5-7 concepts clés à retenir
+- Être structuré avec des bullet points
+- Être pratique et mémorisable
+- Faire maximum 200 mots
+- Être entièrement en français`;
+
+    const userPrompt = `Titre: ${content.title}
+${tags ? `Thèmes: ${tags}` : ''}
+Plateforme: ${content.platform}
+
+Transcription:
+${transcriptText}
+
+Génère un mémo d'étude optimisé pour la rétention avec les points clés.`;
+
+    const memo = await generateText(userPrompt, { system: systemPrompt, temperature: 0.7 });
+
+    // Cache the memo in transcript segments
+    await prisma.transcript.update({
+      where: { id: content.transcript.id },
+      data: {
+        segments: {
+          ...(content.transcript.segments as object || {}),
+          memo,
+          memoGeneratedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    return res.json({
+      memo,
+      generatedAt: new Date().toISOString(),
+      cached: false,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// POST /api/content/:id/memo/regenerate - Force regenerate memo
+contentRouter.post('/:id/memo/regenerate', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const contentId = req.params.id as string;
+    const content = await prisma.content.findFirst({
+      where: {
+        id: contentId,
+        userId: req.user!.id,
+      },
+      include: { transcript: true, tags: true },
+    });
+
+    if (!content) {
+      return res.status(404).json({ error: 'Content not found' });
+    }
+
+    if (!content.transcript) {
+      return res.status(400).json({ error: 'Content has no transcript - cannot generate memo' });
+    }
+
+    // Generate new memo
+    const transcriptText = content.transcript.text.slice(0, 8000);
+    const tags = content.tags.map(t => t.name).join(', ');
+
+    const systemPrompt = `Tu es un assistant d'apprentissage expert. Génère un mémo d'étude concis et actionnable à partir de la transcription fournie.
+Le mémo doit:
+- Résumer les 5-7 concepts clés à retenir
+- Être structuré avec des bullet points
+- Être pratique et mémorisable
+- Faire maximum 200 mots
+- Être entièrement en français`;
+
+    const userPrompt = `Titre: ${content.title}
+${tags ? `Thèmes: ${tags}` : ''}
+Plateforme: ${content.platform}
+
+Transcription:
+${transcriptText}
+
+Génère un mémo d'étude optimisé pour la rétention avec les points clés.`;
+
+    const memo = await generateText(userPrompt, { system: systemPrompt, temperature: 0.7 });
+
+    // Update cached memo
+    await prisma.transcript.update({
+      where: { id: content.transcript.id },
+      data: {
+        segments: {
+          ...(content.transcript.segments as object || {}),
+          memo,
+          memoGeneratedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    return res.json({
+      memo,
+      generatedAt: new Date().toISOString(),
+      regenerated: true,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// GET /api/content/topic/:name/memo - Get or generate memo for a topic (aggregated from all contents)
+contentRouter.get('/topic/:name/memo', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const topicName = decodeURIComponent(req.params.name);
+    const userId = req.user!.id;
+
+    // Get all contents with this tag
+    const contents = await prisma.content.findMany({
+      where: {
+        userId,
+        status: 'READY',
+        tags: {
+          some: { name: topicName },
+        },
+      },
+      include: {
+        transcript: true,
+        tags: true,
+      },
+    });
+
+    if (contents.length === 0) {
+      return res.status(404).json({ error: 'No content found for this topic' });
+    }
+
+    // Collect memos from all contents
+    const contentMemos: string[] = [];
+    for (const content of contents) {
+      const transcriptMeta = content.transcript?.segments as any;
+      if (transcriptMeta?.memo) {
+        contentMemos.push(`**${content.title}**\n${transcriptMeta.memo}`);
+      }
+    }
+
+    if (contentMemos.length === 0) {
+      // Generate memos for contents that don't have one yet
+      return res.status(400).json({
+        error: 'No memos available yet. Please view individual content memos first.',
+        hint: 'Memos are generated when you view a content\'s memo page.'
+      });
+    }
+
+    // Create aggregated topic memo
+    const systemPrompt = `Tu es un assistant d'apprentissage expert. À partir des mémos individuels fournis, crée un mémo de synthèse pour le thème "${topicName}".
+Le mémo doit:
+- Synthétiser les points clés communs et complémentaires
+- Organiser les concepts de manière logique
+- Être structuré en sections avec des bullet points
+- Mettre en évidence les connexions entre les différents contenus
+- Faire maximum 300 mots
+- Être entièrement en français`;
+
+    const userPrompt = `Thème: ${topicName}
+Nombre de contenus: ${contentMemos.length}
+
+Mémos individuels:
+${contentMemos.join('\n\n---\n\n')}
+
+Génère un mémo de synthèse pour ce thème.`;
+
+    const memo = await generateText(userPrompt, { system: systemPrompt, temperature: 0.7 });
+
+    return res.json({
+      memo,
+      topicName,
+      contentCount: contents.length,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 // PUT /api/content/:id/tags - Update content tags manually
 contentRouter.put('/:id/tags', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -878,6 +1360,7 @@ contentRouter.put('/:id/tags', async (req: Request, res: Response, next: NextFun
 });
 
 // PATCH /api/content/:id/triage - Triage a single content item
+// Optimized: If transcript already exists (pre-transcription), triggers quiz generation immediately
 contentRouter.patch('/:id/triage', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
@@ -887,12 +1370,13 @@ contentRouter.patch('/:id/triage', async (req: Request, res: Response, next: Nex
       return res.status(400).json({ error: 'Invalid action. Use "learn" or "archive".' });
     }
 
-    // Verify ownership
+    // Verify ownership and get transcript status
     const content = await prisma.content.findFirst({
       where: {
         id,
         userId: req.user!.id,
       },
+      include: { transcript: true, quizzes: true },
     });
 
     if (!content) {
@@ -906,10 +1390,50 @@ contentRouter.patch('/:id/triage', async (req: Request, res: Response, next: Nex
       data: { status: newStatus },
     });
 
+    // OPTIMIZATION: If user clicks "Learn" and transcript already exists (pre-transcription),
+    // trigger quiz generation immediately instead of waiting for cron
+    let processingStarted = false;
+    if (action === 'learn' && content.transcript && content.quizzes.length === 0) {
+      console.log(`[Triage] Transcript already exists for ${id}, triggering immediate quiz generation`);
+      processContentQuiz(id).catch((error) => {
+        console.error(`[Triage] Failed to generate quiz for ${id}:`, error);
+      });
+      processingStarted = true;
+    } else if (action === 'learn' && !content.transcript) {
+      // No transcript yet - trigger transcription + quiz pipeline
+      if (content.platform === Platform.YOUTUBE) {
+        processContentTranscript(id)
+          .then(async (success) => {
+            if (success) {
+              await processContentQuiz(id);
+            }
+          })
+          .catch((error) => {
+            console.error(`[Triage] Failed to process ${id}:`, error);
+          });
+        processingStarted = true;
+      } else if (content.platform === Platform.SPOTIFY) {
+        processPodcastTranscript(id)
+          .then(async (success) => {
+            if (success) {
+              await processContentQuiz(id);
+            }
+          })
+          .catch((error) => {
+            console.error(`[Triage] Failed to process podcast ${id}:`, error);
+          });
+        processingStarted = true;
+      }
+    }
+
     return res.json({
       success: true,
       newStatus: updated.status,
-      message: action === 'learn' ? 'Content added to learning queue' : 'Content archived',
+      processingStarted,
+      hasTranscript: !!content.transcript,
+      message: action === 'learn'
+        ? (processingStarted ? 'Content added to learning - quiz generation started!' : 'Content added to learning queue')
+        : 'Content archived',
     });
   } catch (error) {
     return next(error);

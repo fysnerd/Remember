@@ -136,6 +136,7 @@ export async function syncUserSpotify(userId: string, connectionId: string): Pro
           }
         } else {
           // Create new content entry
+          const showName = episode.show?.name || null;
           await prisma.content.create({
             data: {
               userId,
@@ -146,7 +147,8 @@ export async function syncUserSpotify(userId: string, connectionId: string): Pro
               description: sanitizedDescription,
               thumbnailUrl,
               duration: Math.floor(episode.duration_ms / 1000),
-              showName: episode.show?.name,
+              showName,
+              channelName: showName,  // Unified field for frontend
               listenProgress,
               fullyPlayed,
               capturedAt: new Date(item.added_at),
