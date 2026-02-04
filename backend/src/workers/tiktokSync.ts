@@ -2,6 +2,9 @@
 // Uses Playwright with stored session cookies to access private likes
 import { prisma } from '../config/database.js';
 import { Platform, ContentStatus } from '@prisma/client';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 
 interface TikTokCookies {
   sessionid: string;
@@ -73,6 +76,7 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
   }
 
   let newVideosCount = 0;
+  let foundExisting = false; // Flag to stop when we find existing content (incremental sync)
 
   try {
     // Dynamic import of playwright to avoid issues if not installed
@@ -88,11 +92,12 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
 
     const likedVideos: TikTokVideo[] = [];
 
-    // Launch headless browser
+    // Launch headless browser with larger viewport
     const browser = await chromium.launch({ headless: true });
     const context = await browser.newContext({
-      viewport: { width: 1280, height: 900 },
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      viewport: { width: 1920, height: 1080 },
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      locale: 'en-US',
     });
 
     // Inject cookies
@@ -102,22 +107,34 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
 
     // Intercept API responses to capture liked videos
     page.on('response', async (response) => {
-      if (response.url().includes('favorite/item_list')) {
+      const url = response.url();
+
+      // Log all TikTok API calls for debugging
+      if (url.includes('tiktok.com/api/') || url.includes('/v1/')) {
+        console.log(`[TikTok Sync] API call: ${url.split('?')[0]} (status: ${response.status()})`);
+      }
+
+      // Capture liked videos - ONLY from favorite/item_list endpoint (not post/item_list)
+      if (url.includes('favorite/item_list') || url.includes('api/favorite/')) {
+        console.log(`[TikTok Sync] ★ Intercepted LIKED videos API: ${url.substring(0, 100)}`);
         try {
           const data = await response.json();
+          console.log(`[TikTok Sync] Response keys: ${Object.keys(data).join(', ')}`);
           if (data.itemList && Array.isArray(data.itemList)) {
+            console.log(`[TikTok Sync] ★ Found ${data.itemList.length} LIKED videos in response`);
             likedVideos.push(...data.itemList);
           }
-        } catch {
-          // Ignore JSON parse errors
+        } catch (e) {
+          console.log(`[TikTok Sync] Failed to parse response: ${e}`);
         }
       }
     });
 
-    // Navigate to profile
+    // Navigate to profile and wait for full load
     console.log(`[TikTok Sync] Navigating to profile for user ${userId}...`);
-    await page.goto('https://www.tiktok.com/profile', { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(3000);
+    await page.goto('https://www.tiktok.com/profile', { waitUntil: 'networkidle' });
+    console.log(`[TikTok Sync] Page loaded, waiting for dynamic content...`);
+    await page.waitForTimeout(5000);
 
     // Close cookie popup if present
     try {
@@ -130,28 +147,193 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
       // Ignore if popup not found
     }
 
-    // Click on liked tab
-    const likedTab = await page.$('[data-e2e="liked-tab"]') ||
-                     await page.$('p:has-text("A aimé")') ||
-                     await page.$('span:has-text("Liked")');
+    // Wait for tabs to appear (they load dynamically)
+    console.log(`[TikTok Sync] Waiting for Liked tab to appear...`);
+    try {
+      await page.waitForSelector('text=Liked', { timeout: 10000 });
+      console.log(`[TikTok Sync] ✓ Found "Liked" text on page`);
+    } catch {
+      console.log(`[TikTok Sync] "Liked" text not found, trying "A aimé"...`);
+      try {
+        await page.waitForSelector('text=A aimé', { timeout: 5000 });
+        console.log(`[TikTok Sync] ✓ Found "A aimé" text on page`);
+      } catch {
+        console.log(`[TikTok Sync] Neither "Liked" nor "A aimé" found - tabs may not be rendered`);
+      }
+    }
 
-    if (likedTab) {
-      await likedTab.click();
+    // Check current URL after navigation
+    const currentUrl = page.url();
+    console.log(`[TikTok Sync] Current URL: ${currentUrl}`);
+
+    // Take screenshot for debug
+    const debugDir = path.join(os.tmpdir(), 'tiktok-debug');
+    if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir, { recursive: true });
+    const screenshotPath = path.join(debugDir, `profile-${Date.now()}.png`);
+    await page.screenshot({ path: screenshotPath });
+    console.log(`[TikTok Sync] Debug screenshot saved: ${screenshotPath}`);
+
+    // Extract username from current URL for direct navigation
+    const usernameMatch = currentUrl.match(/@([^/?]+)/);
+    const username = usernameMatch ? usernameMatch[1] : null;
+    console.log(`[TikTok Sync] Detected username: ${username || 'NOT FOUND'}`);
+
+    // List all available tabs using JavaScript
+    const tabsInfo = await page.evaluate(() => {
+      const results: string[] = [];
+      // Look for common tab patterns
+      document.querySelectorAll('[role="tab"], [data-e2e*="tab"], [class*="Tab"]').forEach(el => {
+        results.push(`${el.tagName}: ${el.textContent?.trim().substring(0, 30)} | data-e2e=${el.getAttribute('data-e2e')}`);
+      });
+      return results;
+    });
+    console.log(`[TikTok Sync] Available tabs found: ${tabsInfo.length}`);
+    tabsInfo.forEach(t => console.log(`[TikTok Sync]   - ${t}`));
+
+    // Try clicking on "Liked" tab using Playwright's powerful selectors
+    console.log(`[TikTok Sync] Attempting to click on Liked tab...`);
+
+    let clickedLikedTab = false;
+
+    // Method 1: Click by exact text "Liked" (case-insensitive)
+    try {
+      const likedByText = page.getByText('Liked', { exact: true });
+      if (await likedByText.count() > 0) {
+        await likedByText.first().click();
+        console.log(`[TikTok Sync] ✓ Clicked via getByText('Liked')`);
+        clickedLikedTab = true;
+      }
+    } catch (e) {
+      console.log(`[TikTok Sync] getByText('Liked') failed: ${e}`);
+    }
+
+    // Method 2: Try French "A aimé"
+    if (!clickedLikedTab) {
+      try {
+        const aiméByText = page.getByText('A aimé', { exact: true });
+        if (await aiméByText.count() > 0) {
+          await aiméByText.first().click();
+          console.log(`[TikTok Sync] ✓ Clicked via getByText('A aimé')`);
+          clickedLikedTab = true;
+        }
+      } catch (e) {
+        console.log(`[TikTok Sync] getByText('A aimé') failed`);
+      }
+    }
+
+    // Method 3: Click by role tab
+    if (!clickedLikedTab) {
+      try {
+        const tabs = page.getByRole('tab');
+        const count = await tabs.count();
+        console.log(`[TikTok Sync] Found ${count} tabs by role`);
+        for (let i = 0; i < count; i++) {
+          const tabText = await tabs.nth(i).textContent();
+          console.log(`[TikTok Sync]   Tab ${i}: "${tabText}"`);
+          if (tabText?.toLowerCase().includes('liked') || tabText?.toLowerCase().includes('aimé')) {
+            await tabs.nth(i).click();
+            console.log(`[TikTok Sync] ✓ Clicked tab ${i} with text "${tabText}"`);
+            clickedLikedTab = true;
+            break;
+          }
+        }
+      } catch (e) {
+        console.log(`[TikTok Sync] Role-based tab search failed: ${e}`);
+      }
+    }
+
+    // Method 4: Use CSS selector with data-e2e
+    if (!clickedLikedTab) {
+      try {
+        const likedTab = await page.$('[data-e2e="liked-tab"], [data-e2e*="liked"]');
+        if (likedTab) {
+          await likedTab.click();
+          console.log(`[TikTok Sync] ✓ Clicked via data-e2e selector`);
+          clickedLikedTab = true;
+        }
+      } catch (e) {
+        console.log(`[TikTok Sync] data-e2e selector failed`);
+      }
+    }
+
+    // Method 5: XPath for any span containing "Liked"
+    if (!clickedLikedTab) {
+      try {
+        const likedSpan = await page.$('xpath=//span[contains(text(), "Liked")]');
+        if (likedSpan) {
+          await likedSpan.click();
+          console.log(`[TikTok Sync] ✓ Clicked via XPath span`);
+          clickedLikedTab = true;
+        }
+      } catch (e) {
+        console.log(`[TikTok Sync] XPath selector failed`);
+      }
+    }
+
+    if (clickedLikedTab) {
+      console.log(`[TikTok Sync] Waiting for Liked content to load...`);
       await page.waitForTimeout(4000);
 
-      // Scroll to load more videos (up to 20 scrolls for ~300 videos)
-      const maxScrolls = 20;
-      for (let i = 0; i < maxScrolls; i++) {
-        const prevCount = likedVideos.length;
-        await page.mouse.wheel(0, 800);
-        await page.waitForTimeout(1500);
+      // Take screenshot to confirm we're on Liked tab
+      const likesScreenshot = path.join(debugDir, `liked-tab-${Date.now()}.png`);
+      await page.screenshot({ path: likesScreenshot });
+      console.log(`[TikTok Sync] Liked tab screenshot: ${likesScreenshot}`);
+    } else {
+      console.error(`[TikTok Sync] ✗ FAILED to click Liked tab with all methods!`);
+      const errorScreenshot = path.join(debugDir, `failed-click-${Date.now()}.png`);
+      await page.screenshot({ path: errorScreenshot, fullPage: true });
+      console.log(`[TikTok Sync] Error screenshot: ${errorScreenshot}`);
+    }
 
-        // Stop if no new videos loaded after 3 scrolls
-        if (i > 3 && likedVideos.length === prevCount) {
-          console.log(`[TikTok Sync] No more videos to load after ${i} scrolls`);
+    // Scroll to load videos regardless of how we got here
+    console.log(`[TikTok Sync] Scrolling to load videos...`);
+    const maxScrolls = 15;
+    for (let i = 0; i < maxScrolls && !foundExisting; i++) {
+      const prevCount = likedVideos.length;
+      await page.mouse.wheel(0, 800);
+      await page.waitForTimeout(1500);
+
+      // Check if any of the newly captured videos already exist in DB
+      for (const video of likedVideos) {
+        const existing = await prisma.content.findUnique({
+          where: {
+            userId_platform_externalId: {
+              userId,
+              platform: Platform.TIKTOK,
+              externalId: video.id,
+            },
+          },
+          select: { id: true },
+        });
+        if (existing) {
+          console.log(`[TikTok Sync] ✓ Found existing video ${video.id} - stopping (incremental sync complete)`);
+          foundExisting = true;
           break;
         }
       }
+
+      if (foundExisting) break;
+
+      if (likedVideos.length > 0) {
+        console.log(`[TikTok Sync] Scroll ${i + 1}: captured ${likedVideos.length} LIKED videos`);
+      }
+
+      // Stop if no new videos loaded after 3 scrolls
+      if (i > 3 && likedVideos.length === prevCount) {
+        console.log(`[TikTok Sync] No more videos to load after ${i} scrolls`);
+        break;
+      }
+    }
+
+    // If still no liked videos, check if likes might be private
+    if (likedVideos.length === 0) {
+      console.error(`[TikTok Sync] WARNING: No liked videos found. Possible causes:`);
+      console.error(`[TikTok Sync]   1. Likes are set to PRIVATE in TikTok settings`);
+      console.error(`[TikTok Sync]   2. Session cookies expired`);
+      console.error(`[TikTok Sync]   3. TikTok UI changed`);
+      const errorScreenshot = path.join(debugDir, `no-likes-${Date.now()}.png`);
+      await page.screenshot({ path: errorScreenshot, fullPage: true });
+      console.log(`[TikTok Sync] Error screenshot saved: ${errorScreenshot}`);
     }
 
     await browser.close();
@@ -166,7 +348,7 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
       return true;
     });
 
-    // Process each video
+    // Process each video - STOP when we find one that already exists (incremental sync)
     for (const video of uniqueVideos) {
       // Check if we already have this video for this user
       const existing = await prisma.content.findUnique({
@@ -177,10 +359,13 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
             externalId: video.id,
           },
         },
+        select: { id: true },
       });
 
       if (existing) {
-        continue;
+        // STOP - we've reached previously synced content
+        console.log(`[TikTok Sync] ✓ Found existing video ${video.id} during save - stopping`);
+        break;
       }
 
       // Create content entry

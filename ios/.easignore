@@ -1,0 +1,16 @@
+# Ignore symlinked skill directories
+../.agents/
+../.agent/
+../.claude/skills/
+../.codex/
+../.continue/
+../skills/
+../_bmad/
+../bmad-output/
+../experiments/
+../mcp/
+../scripts/
+
+# Other non-essential directories
+../docs/
+../.git/

@@ -34,6 +34,46 @@ adminRouter.post('/sync/spotify', async (_req: Request, res: Response, next: Nex
   }
 });
 
+// POST /api/admin/sync/tiktok - Trigger TikTok sync manually
+adminRouter.post('/sync/tiktok', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await triggerJob('tiktok');
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/sync/instagram - Trigger Instagram sync manually
+adminRouter.post('/sync/instagram', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await triggerJob('instagram');
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/sync/tiktok-transcription - Trigger TikTok transcription worker manually
+adminRouter.post('/sync/tiktok-transcription', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await triggerJob('tiktok-transcription');
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/sync/instagram-transcription - Trigger Instagram transcription worker manually
+adminRouter.post('/sync/instagram-transcription', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await triggerJob('instagram-transcription');
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
 // POST /api/admin/sync/transcription - Trigger YouTube transcription worker manually
 adminRouter.post('/sync/transcription', async (_req: Request, res: Response, next: NextFunction) => {
   try {
@@ -84,11 +124,13 @@ adminRouter.post('/sync/auto-tagging', async (_req: Request, res: Response, next
   }
 });
 
-// POST /api/admin/sync/all - Trigger all sync jobs
+// POST /api/admin/sync/all - Trigger all sync jobs (runs in background)
 adminRouter.post('/sync/all', async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    await runAllSyncsNow();
-    res.json({ success: true, message: 'All sync jobs completed' });
+    // Start sync in background, don't await
+    runAllSyncsNow().catch(err => console.error('[Admin] Background sync error:', err));
+    // Return immediately
+    res.json({ success: true, message: 'All sync jobs started in background' });
   } catch (error) {
     next(error);
   }

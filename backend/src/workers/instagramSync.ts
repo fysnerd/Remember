@@ -1,8 +1,11 @@
-// Instagram Sync Worker - Fetches liked/saved reels using browser automation
-// Uses Playwright with stored session cookies to access private likes/saves
-// Pattern based on tiktokSync.ts
+// Instagram Sync Worker - Fetches LIKED reels only using browser automation
+// Uses Playwright with stored session cookies to access private likes
+// STOPS when it finds content already in DB (incremental sync)
 import { prisma } from '../config/database.js';
-import { Platform, ContentStatus, ContentSourceType } from '@prisma/client';
+import { Platform, ContentStatus } from '@prisma/client';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 
 interface InstagramCookies {
   sessionid: string;
@@ -17,26 +20,36 @@ interface InstagramCookies {
 
 interface InstagramReel {
   id: string;
-  code: string; // Shortcode for URL
-  caption?: {
-    text?: string;
-  };
-  user: {
-    username: string;
-    full_name?: string;
-  };
+  code: string;
+  caption?: { text?: string };
+  user: { username: string; full_name?: string };
   like_count?: number;
   comment_count?: number;
   video_duration?: number;
-  image_versions2?: {
-    candidates?: Array<{ url: string }>;
-  };
+  image_versions2?: { candidates?: Array<{ url: string }> };
   taken_at?: number;
-  media_type?: number; // 2 = video/reel
+  media_type?: number;
 }
 
 /**
- * Fetch liked/saved reels from Instagram for a specific user using browser automation
+ * Check if content already exists in DB for this user
+ */
+async function contentExists(userId: string, externalId: string): Promise<boolean> {
+  const existing = await prisma.content.findUnique({
+    where: {
+      userId_platform_externalId: {
+        userId,
+        platform: Platform.INSTAGRAM,
+        externalId,
+      },
+    },
+    select: { id: true },
+  });
+  return existing !== null;
+}
+
+/**
+ * Fetch LIKED reels from Instagram for a specific user
  */
 async function syncUserInstagram(userId: string, connectionId: string): Promise<number> {
   const connection = await prisma.connectedPlatform.findUnique({
@@ -48,11 +61,10 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
     return 0;
   }
 
-  // Parse stored cookies
   let cookies: InstagramCookies;
   try {
     cookies = JSON.parse(connection.accessToken) as InstagramCookies;
-  } catch (error) {
+  } catch {
     console.error(`[Instagram Sync] Invalid cookies for user ${userId}`);
     await prisma.connectedPlatform.update({
       where: { id: connectionId },
@@ -71,20 +83,11 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
   }
 
   let newReelsCount = 0;
-
-  // Determine what to sync based on sourceType
-  // Default: sync both saved and liked (INSTAGRAM_BOTH or null)
-  const sourceType = connection.sourceType;
-  const syncSaved = !sourceType || sourceType === ContentSourceType.INSTAGRAM_SAVED || sourceType === ContentSourceType.INSTAGRAM_BOTH;
-  const syncLiked = !sourceType || sourceType === ContentSourceType.INSTAGRAM_LIKED || sourceType === ContentSourceType.INSTAGRAM_BOTH;
-
-  console.log(`[Instagram Sync] Source type: ${sourceType || 'default (both)'}, syncSaved: ${syncSaved}, syncLiked: ${syncLiked}`);
+  let foundExisting = false; // Flag to stop when we find existing content
 
   try {
-    // Dynamic import of playwright to avoid issues if not installed
     const { chromium } = await import('playwright');
 
-    // Convert cookies to Playwright format
     const playwrightCookies = Object.entries(cookies)
       .filter(([_, value]) => value !== undefined)
       .map(([name, value]) => ({
@@ -94,108 +97,114 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
         path: '/',
       }));
 
-    const savedReels: InstagramReel[] = [];
     const likedReels: InstagramReel[] = [];
 
-    // Launch headless browser
-    const browser = await chromium.launch({ headless: true });
+    // Launch browser with anti-detection options
+    const browser = await chromium.launch({
+      headless: true,
+      args: [
+        '--disable-blink-features=AutomationControlled',
+        '--disable-features=IsolateOrigins,site-per-process',
+        '--no-sandbox',
+      ]
+    });
+    // Use iPhone user agent - Instagram is less aggressive with mobile
     const context = await browser.newContext({
-      viewport: { width: 1280, height: 900 },
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      viewport: { width: 390, height: 844 },
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+      locale: 'fr-FR',
+      timezoneId: 'Europe/Paris',
+      deviceScaleFactor: 3,
+      isMobile: true,
+      hasTouch: true,
+      javaScriptEnabled: true,
     });
 
-    // Inject cookies
-    await context.addCookies(playwrightCookies);
+    // Remove webdriver flag to avoid detection
+    await context.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+      // @ts-ignore
+      window.chrome = { runtime: {} };
+    });
 
+    await context.addCookies(playwrightCookies);
     const page = await context.newPage();
 
-    // Intercept API responses to capture reels
+    // Debug directory
+    const debugDir = path.join(os.tmpdir(), 'instagram-debug');
+    if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir, { recursive: true });
+
+    // Intercept API responses for liked reels
     page.on('response', async (response) => {
+      if (foundExisting) return; // Stop intercepting once we found existing content
+
       const url = response.url();
       try {
-        // Saved posts/reels API (REST)
-        if (url.includes('/api/v1/feed/saved/') || url.includes('saved_posts')) {
-          const data = await response.json();
-          if (data.items && Array.isArray(data.items)) {
-            // Instagram API returns items with nested 'media' object
-            // Extract media and filter only video/reel content (media_type === 2)
-            const reels: InstagramReel[] = [];
-            for (const item of data.items) {
-              // Handle nested structure: item.media contains the actual media data
-              const media = item.media || item;
-              if (media.media_type === 2 || media.product_type === 'clips') {
-                reels.push(media);
-              }
-            }
-            savedReels.push(...reels);
-            console.log(`[Instagram Sync] Intercepted ${reels.length} saved reels (from ${data.items.length} items)`);
-          }
-        }
-
-        // Liked posts API (REST - legacy)
+        // Liked posts API (REST)
         if (url.includes('/api/v1/feed/liked/') || url.includes('liked_posts')) {
           const data = await response.json();
           if (data.items && Array.isArray(data.items)) {
-            const reels: InstagramReel[] = [];
             for (const item of data.items) {
               const media = item.media || item;
               if (media.media_type === 2 || media.product_type === 'clips') {
-                reels.push(media);
+                likedReels.push(media);
               }
             }
-            likedReels.push(...reels);
-            console.log(`[Instagram Sync] Intercepted ${reels.length} liked reels (from ${data.items.length} items)`);
+            console.log(`[Instagram Sync] ★ Intercepted ${likedReels.length} liked reels via REST API`);
           }
         }
 
-        // GraphQL API (modern Instagram) - likes activity page
+        // GraphQL API for likes
         if (url.includes('/graphql') || url.includes('/api/graphql')) {
           const data = await response.json();
-
-          // Handle xdt_api__v1__users__self__feed__saved__connection (saved posts via GraphQL)
-          const savedConnection = data?.data?.xdt_api__v1__users__self__feed__saved__connection;
-          if (savedConnection?.edges) {
-            const reels: InstagramReel[] = [];
-            for (const edge of savedConnection.edges) {
-              const media = edge?.node?.media || edge?.node;
-              if (media && (media.media_type === 2 || media.product_type === 'clips')) {
-                reels.push(media);
-              }
-            }
-            if (reels.length > 0) {
-              savedReels.push(...reels);
-              console.log(`[Instagram Sync] Intercepted ${reels.length} saved reels via GraphQL`);
-            }
-          }
-
-          // Handle liked media via GraphQL (various possible keys)
           const likedConnection = data?.data?.xdt_api__v1__feed__liked__connection ||
                                    data?.data?.xdt_api__v1__users__self__liked_media__connection;
           if (likedConnection?.edges) {
-            const reels: InstagramReel[] = [];
             for (const edge of likedConnection.edges) {
               const media = edge?.node?.media || edge?.node;
               if (media && (media.media_type === 2 || media.product_type === 'clips')) {
-                reels.push(media);
+                likedReels.push(media);
               }
             }
-            if (reels.length > 0) {
-              likedReels.push(...reels);
-              console.log(`[Instagram Sync] Intercepted ${reels.length} liked reels via GraphQL`);
+            if (likedReels.length > 0) {
+              console.log(`[Instagram Sync] ★ Intercepted ${likedReels.length} liked reels via GraphQL`);
             }
           }
         }
       } catch {
-        // Ignore JSON parse errors for non-JSON responses
+        // Ignore JSON parse errors
       }
     });
 
-    // Navigate to Instagram home first to verify session
+    // Navigate to Instagram with human-like delay
     console.log(`[Instagram Sync] Navigating to Instagram for user ${userId}...`);
-    await page.goto('https://www.instagram.com/', { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(1000 + Math.random() * 2000); // Random delay before navigating
+    await page.goto('https://www.instagram.com/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForTimeout(3000 + Math.random() * 2000); // Wait for dynamic content
 
-    // If redirected to login, cookies are expired
+    // Close any Instagram popups (save login info, notifications, etc.)
+    const popupSelectors = [
+      'button:has-text("Plus tard")',
+      'button:has-text("Not Now")',
+      'button:has-text("Pas maintenant")',
+      '[aria-label="Close"]',
+      '[aria-label="Fermer"]',
+      'div[role="dialog"] button:last-child', // Usually the dismiss button
+    ];
+    for (const selector of popupSelectors) {
+      try {
+        const popup = page.locator(selector).first();
+        if (await popup.isVisible({ timeout: 2000 })) {
+          await popup.click();
+          console.log(`[Instagram Sync] Closed popup with selector: ${selector}`);
+          await page.waitForTimeout(1000);
+        }
+      } catch {
+        // Popup not found, continue
+      }
+    }
+
+    // Check if logged in
     if (page.url().includes('/accounts/login')) {
       console.error(`[Instagram Sync] Cookies expired for user ${userId}`);
       await browser.close();
@@ -206,281 +215,217 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       return 0;
     }
 
-    // Extract username from profile link in navigation (more specific selector)
-    let username = '';
+    // Navigate to liked posts page
+    console.log(`[Instagram Sync] Going to liked posts page...`);
+    await page.goto('https://www.instagram.com/your_activity/interactions/likes/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForTimeout(3000);
 
-    // Method 1: Try to get username from ds_user_id cookie and page context
-    if (cookies.ds_user_id) {
-      // Look for the profile link that matches the user's ID
+    // Close any popups again (they can appear after navigation)
+    for (const selector of popupSelectors) {
       try {
-        // Instagram's nav has a profile link - find it by looking for avatar or profile section
-        const profileLink = await page.$('a[href^="/"][role="link"] svg[aria-label*="Profile"], a[href^="/"][role="link"] img[alt*="profile"]');
-        if (profileLink) {
-          const parentLink = await profileLink.evaluateHandle(el => el.closest('a'));
-          const href = await parentLink.evaluate(el => el.getAttribute('href'));
-          if (href && href.match(/^\/[a-zA-Z0-9._]+\/$/)) {
-            username = href.replace(/\//g, '');
-          }
+        const popup = page.locator(selector).first();
+        if (await popup.isVisible({ timeout: 1000 })) {
+          await popup.click();
+          console.log(`[Instagram Sync] Closed popup on likes page: ${selector}`);
+          await page.waitForTimeout(1000);
         }
       } catch {
-        // Continue to fallback methods
+        // Popup not found, continue
+      }
+    }
+    await page.waitForTimeout(2000);
+
+    // Screenshot for debug
+    const screenshot = path.join(debugDir, `likes-page-${Date.now()}.png`);
+    await page.screenshot({ path: screenshot });
+    console.log(`[Instagram Sync] Screenshot: ${screenshot}`);
+
+    if (!page.url().includes('/your_activity/interactions/likes')) {
+      console.warn(`[Instagram Sync] Could not access likes page`);
+      await browser.close();
+      return 0;
+    }
+
+    // DOM-based extraction: click on grid items and check URLs
+    const maxLikesToCheck = 50;
+    let likesChecked = 0;
+    let consecutiveErrors = 0;
+    const maxConsecutiveErrors = 5;
+
+    console.log(`[Instagram Sync] Starting DOM extraction of liked reels...`);
+
+    // Debug: Log page structure
+    const pageContent = await page.content();
+    console.log(`[Instagram Sync] Page HTML length: ${pageContent.length}`);
+
+    // Try multiple selectors for Instagram's grid
+    const selectors = [
+      'main div[role="button"]',
+      'main button:has(img)',
+      'article div[role="button"]',
+      'div[style*="flex"] > div > div > a',
+      'a[href*="/reel/"]',
+      'a[href*="/p/"]',
+      'div._aagw',  // Instagram's grid item class
+      'div._aabd',  // Another common class
+    ];
+
+    let gridItems: any = null;
+    let usedSelector = '';
+
+    for (const selector of selectors) {
+      const items = page.locator(selector);
+      const count = await items.count();
+      console.log(`[Instagram Sync] Selector "${selector}": ${count} items`);
+      if (count > 0 && !gridItems) {
+        gridItems = items;
+        usedSelector = selector;
       }
     }
 
-    // Method 2: Fallback - look for the profile link in the bottom nav (mobile) or side nav
-    if (!username) {
+    if (!gridItems || await gridItems.count() === 0) {
+      console.error(`[Instagram Sync] No grid items found with any selector!`);
+      const errorScreenshot = path.join(debugDir, `no-items-${Date.now()}.png`);
+      await page.screenshot({ path: errorScreenshot, fullPage: true });
+      console.log(`[Instagram Sync] Error screenshot: ${errorScreenshot}`);
+      await browser.close();
+      return 0;
+    }
+
+    console.log(`[Instagram Sync] Using selector: "${usedSelector}" (${await gridItems.count()} items)`);
+
+    while (likesChecked < maxLikesToCheck && consecutiveErrors < maxConsecutiveErrors && !foundExisting) {
       try {
-        // Try finding profile link by aria-label or specific nav structure
-        const navLinks = await page.$$('nav a[href^="/"]');
-        for (const link of navLinks) {
-          const href = await link.getAttribute('href');
-          if (href && href.match(/^\/[a-zA-Z0-9._]+\/$/) && !href.includes('/explore') && !href.includes('/reels')) {
-            username = href.replace(/\//g, '');
+        // Refresh the locator count
+        const count = await gridItems.count();
+
+        if (count === 0) {
+          console.log(`[Instagram Sync] No more liked items to check`);
+          break;
+        }
+
+        // Click on the first available item (after scrolling, new items appear at top)
+        const itemIndex = Math.min(likesChecked, count - 1);
+        console.log(`[Instagram Sync] Clicking item ${itemIndex}/${count}...`);
+        await gridItems.nth(itemIndex).click();
+        await page.waitForTimeout(2000);
+
+        // Check URL to see if it's a reel
+        const currentUrl = page.url();
+        const reelMatch = currentUrl.match(/\/reel\/([A-Za-z0-9_-]+)/);
+
+        if (reelMatch) {
+          const shortcode = reelMatch[1];
+
+          // CHECK IF ALREADY EXISTS - if yes, STOP (we've reached previous sync point)
+          const exists = await contentExists(userId, shortcode);
+          if (exists) {
+            console.log(`[Instagram Sync] ✓ Found existing reel ${shortcode} - stopping (incremental sync complete)`);
+            foundExisting = true;
             break;
           }
-        }
-      } catch {
-        // Continue without username
-      }
-    }
 
-    // Method 3: Last resort - navigate to profile settings page which shows username
-    if (!username) {
-      try {
-        await page.goto('https://www.instagram.com/accounts/edit/', { waitUntil: 'domcontentloaded' });
+          likedReels.push({
+            id: shortcode,
+            code: shortcode,
+            user: { username: 'unknown' },
+          } as InstagramReel);
+          console.log(`[Instagram Sync] Found NEW liked reel: ${shortcode}`);
+        }
+
+        likesChecked++;
+        consecutiveErrors = 0;
+
+        // Navigate back to likes page
+        await page.goto('https://www.instagram.com/your_activity/interactions/likes/', {
+          waitUntil: 'domcontentloaded',
+          timeout: 60000
+        });
         await page.waitForTimeout(2000);
-        const usernameInput = await page.$('input[name="username"]');
-        if (usernameInput) {
-          username = await usernameInput.inputValue();
-        }
-      } catch {
-        console.error(`[Instagram Sync] Could not determine username for user ${userId}`);
-      }
-    }
 
-    // If we have a username and should sync saved posts, navigate to saved posts
-    if (syncSaved && username) {
-      console.log(`[Instagram Sync] Found username: ${username}, syncing saved posts...`);
-      await page.goto(`https://www.instagram.com/${username}/saved/all-posts/`, { waitUntil: 'domcontentloaded' });
-      await page.waitForTimeout(4000);
+        // Re-acquire the grid items locator after navigation
+        gridItems = page.locator(usedSelector);
 
-      // Scroll to load more reels (up to 15 scrolls)
-      const maxScrolls = 15;
-      for (let i = 0; i < maxScrolls; i++) {
-        const prevCount = savedReels.length;
-        await page.mouse.wheel(0, 800);
-        await page.waitForTimeout(1500);
+        // Scroll to load more items
+        await page.mouse.wheel(0, 200);
+        await page.waitForTimeout(1000);
 
-        // Stop if no new reels loaded after 3 scrolls
-        if (i > 3 && savedReels.length === prevCount) {
-          console.log(`[Instagram Sync] No more saved reels to load after ${i} scrolls`);
+      } catch (error) {
+        console.warn(`[Instagram Sync] Error extracting liked item:`, error);
+        consecutiveErrors++;
+        console.log(`[Instagram Sync] Consecutive errors: ${consecutiveErrors}/${maxConsecutiveErrors}`);
+
+        try {
+          await page.goto('https://www.instagram.com/your_activity/interactions/likes/', { waitUntil: 'domcontentloaded' });
+          await page.waitForTimeout(2000);
+        } catch {
           break;
         }
       }
-    } else if (syncSaved && !username) {
-      console.warn(`[Instagram Sync] Could not find username, skipping saved posts sync for user ${userId}`);
-    } else {
-      console.log(`[Instagram Sync] Skipping saved posts sync (sourceType: ${sourceType})`);
-    }
-
-    // Also get liked posts from Your Activity page using DOM-based extraction
-    // Instagram's likes page uses GraphQL that doesn't expose data via interceptable API calls
-    // So we click on each grid item and extract the URL to identify reels
-    if (syncLiked) {
-      console.log(`[Instagram Sync] Checking liked posts via DOM extraction...`);
-      await page.goto('https://www.instagram.com/your_activity/interactions/likes/', { waitUntil: 'domcontentloaded' });
-      await page.waitForTimeout(4000);
-
-      // Check if we're on the likes page (not redirected)
-      if (!page.url().includes('/your_activity/interactions/likes')) {
-        console.warn(`[Instagram Sync] Could not access likes page, skipping likes sync`);
-      } else {
-      // DOM-based extraction: click on grid items and check URLs
-      const maxLikesToCheck = 30; // Limit to avoid long sync times
-      let likesChecked = 0;
-      let consecutiveErrors = 0;
-      const maxConsecutiveErrors = 3;
-
-      while (likesChecked < maxLikesToCheck && consecutiveErrors < maxConsecutiveErrors) {
-        try {
-          // Instagram's likes grid uses divs with role="button" containing images
-          // Try multiple selectors to find clickable grid items
-          let gridItem = null;
-
-          // Method 1: Try locator with text "Publication" (aria-label)
-          const publicationButtons = page.locator('button:has-text("Publication")');
-          const count1 = await publicationButtons.count();
-          if (count1 > 0) {
-            gridItem = publicationButtons.nth(likesChecked % count1); // Rotate through items
-          }
-
-          // Method 2: Try role-based selector for grid items
-          if (!gridItem || await gridItem.count() === 0) {
-            const gridButtons = page.locator('main div[role="button"]');
-            const count2 = await gridButtons.count();
-            if (count2 > 0) {
-              gridItem = gridButtons.nth(likesChecked % count2);
-            }
-          }
-
-          // Method 3: Try img elements inside clickable containers
-          if (!gridItem || await gridItem.count() === 0) {
-            const imgButtonsCount = await page.locator('main button:has(img)').count();
-            if (imgButtonsCount > 0) {
-              gridItem = page.locator('main button:has(img)').nth(likesChecked % imgButtonsCount);
-            }
-          }
-
-          const itemCount = gridItem ? await gridItem.count() : 0;
-          if (!gridItem || itemCount === 0) {
-            console.log(`[Instagram Sync] No more liked items to check`);
-            break;
-          }
-
-          // Click the grid item
-          await gridItem.click();
-          await page.waitForTimeout(2000);
-
-          // Check URL to see if it's a reel or post
-          const currentUrl = page.url();
-          const reelMatch = currentUrl.match(/\/reel\/([A-Za-z0-9_-]+)/);
-          const postMatch = currentUrl.match(/\/p\/([A-Za-z0-9_-]+)/);
-
-          if (reelMatch) {
-            const shortcode = reelMatch[1];
-            // Add as a minimal reel entry (we only have shortcode from DOM extraction)
-            likedReels.push({
-              id: shortcode,
-              code: shortcode,
-              user: { username: 'unknown' },
-            } as InstagramReel);
-            console.log(`[Instagram Sync] Found liked reel: ${shortcode}`);
-          } else if (postMatch) {
-            // It's a post, not a reel - skip
-            console.log(`[Instagram Sync] Skipping liked post (not a reel): ${postMatch[1]}`);
-          }
-
-          likesChecked++;
-          consecutiveErrors = 0;
-
-          // Navigate back to likes page - use explicit navigation instead of goBack()
-          // because Instagram may not restore the page state correctly with goBack()
-          await page.goto('https://www.instagram.com/your_activity/interactions/likes/', {
-            waitUntil: 'domcontentloaded',
-            timeout: 60000 // 60 second timeout
-          });
-          await page.waitForTimeout(3000);
-
-          // Scroll down to skip items we've already checked (rough approximation)
-          // Each row has ~3 items, scroll 150px per checked item
-          await page.mouse.wheel(0, Math.floor(likesChecked / 3) * 150);
-          await page.waitForTimeout(1000);
-
-        } catch (error) {
-          console.warn(`[Instagram Sync] Error extracting liked item:`, error);
-          consecutiveErrors++;
-
-          // Try to recover by navigating back to likes page
-          try {
-            await page.goto('https://www.instagram.com/your_activity/interactions/likes/', { waitUntil: 'domcontentloaded' });
-            await page.waitForTimeout(3000);
-          } catch {
-            // If recovery fails, break out of loop
-            break;
-          }
-        }
-      }
-
-      console.log(`[Instagram Sync] Checked ${likesChecked} liked items, found ${likedReels.length} reels`);
-      }
-    } else {
-      console.log(`[Instagram Sync] Skipping liked posts sync (sourceType: ${sourceType})`);
     }
 
     await browser.close();
 
-    // Combine and deduplicate reels
-    const allReels = [...savedReels, ...likedReels];
-    console.log(`[Instagram Sync] User ${userId}: found ${allReels.length} total reels`);
+    console.log(`[Instagram Sync] Extraction complete:`);
+    console.log(`[Instagram Sync]   - Items checked: ${likesChecked}`);
+    console.log(`[Instagram Sync]   - Reels found: ${likedReels.length}`);
+    console.log(`[Instagram Sync]   - Stopped early (found existing): ${foundExisting}`);
 
-    // Deduplicate reels by ID
+    // Deduplicate
     const seenIds = new Set<string>();
-    const uniqueReels = allReels.filter((reel) => {
+    const uniqueReels = likedReels.filter((reel) => {
       const id = reel.id || reel.code;
       if (!id || seenIds.has(id)) return false;
       seenIds.add(id);
       return true;
     });
 
-    // Process each reel using upsert to avoid race conditions (F3 fix)
+    // Save to DB
     for (const reel of uniqueReels) {
       const externalId = reel.id || reel.code;
-
-      // Build URL using shortcode
       const shortcode = reel.code || externalId;
       const url = `https://www.instagram.com/reel/${shortcode}/`;
-
-      // Use upsert to avoid TOCTOU race condition
-      // On conflict, only update metadata (likeCount, commentCount) - don't change user's content status
       const authorUsername = reel.user?.username || null;
-      const result = await prisma.content.upsert({
-        where: {
-          userId_platform_externalId: {
-            userId,
-            platform: Platform.INSTAGRAM,
-            externalId,
-          },
-        },
-        update: {
-          // Only update engagement metrics on re-sync
-          likeCount: reel.like_count || undefined,
-          commentCount: reel.comment_count || undefined,
-        },
-        create: {
+
+      // Double-check doesn't exist (might have been added by API interception)
+      const exists = await contentExists(userId, externalId);
+      if (exists) continue;
+
+      await prisma.content.create({
+        data: {
           userId,
           platform: Platform.INSTAGRAM,
           externalId,
           url,
-          title: reel.caption?.text?.substring(0, 255) || `Instagram Reel by @${authorUsername || 'unknown'}`,
+          title: reel.caption?.text?.substring(0, 255) || `Instagram Reel`,
           description: reel.caption?.text || null,
           thumbnailUrl: reel.image_versions2?.candidates?.[0]?.url || null,
           duration: reel.video_duration || null,
           authorUsername,
-          channelName: authorUsername ? `@${authorUsername}` : null,  // Unified field for frontend
-          viewCount: null, // Instagram doesn't expose view counts publicly
+          channelName: authorUsername ? `@${authorUsername}` : null,
           likeCount: reel.like_count || null,
           commentCount: reel.comment_count || null,
           capturedAt: reel.taken_at ? new Date(reel.taken_at * 1000) : new Date(),
           status: ContentStatus.INBOX,
         },
       });
-
-      // Count only newly created content (check if createdAt equals updatedAt within a small window)
-      const isNew = Math.abs(result.createdAt.getTime() - result.updatedAt.getTime()) < 1000;
-      if (isNew) {
-        newReelsCount++;
-      }
+      newReelsCount++;
     }
 
     // Update last sync time
     await prisma.connectedPlatform.update({
       where: { id: connectionId },
-      data: {
-        lastSyncAt: new Date(),
-        lastSyncError: null,
-      },
+      data: { lastSyncAt: new Date(), lastSyncError: null },
     });
 
-    console.log(`[Instagram Sync] User ${userId}: synced ${newReelsCount} new reels`);
+    console.log(`[Instagram Sync] User ${userId}: synced ${newReelsCount} NEW reels`);
     return newReelsCount;
 
   } catch (error) {
     console.error(`[Instagram Sync] Error for user ${userId}:`, error);
     await prisma.connectedPlatform.update({
       where: { id: connectionId },
-      data: {
-        lastSyncError: error instanceof Error ? error.message : 'Unknown error',
-      },
+      data: { lastSyncError: error instanceof Error ? error.message : 'Unknown error' },
     });
     return 0;
   }
@@ -493,7 +438,6 @@ export async function runInstagramSync(): Promise<void> {
   console.log('[Instagram Sync] Starting sync job...');
   const startTime = Date.now();
 
-  // Get all active Instagram connections
   const connections = await prisma.connectedPlatform.findMany({
     where: { platform: Platform.INSTAGRAM },
     include: { user: true },
@@ -514,8 +458,6 @@ export async function runInstagramSync(): Promise<void> {
       console.error(`[Instagram Sync] Failed for user ${connection.userId}:`, error);
       errorCount++;
     }
-
-    // Longer delay between users (Instagram is very sensitive to automation)
     await new Promise(resolve => setTimeout(resolve, 3000));
   }
 
@@ -530,10 +472,7 @@ export async function runInstagramSync(): Promise<void> {
 export async function syncInstagramForUser(userId: string): Promise<number> {
   const connection = await prisma.connectedPlatform.findUnique({
     where: {
-      userId_platform: {
-        userId,
-        platform: Platform.INSTAGRAM,
-      },
+      userId_platform: { userId, platform: Platform.INSTAGRAM },
     },
   });
 
