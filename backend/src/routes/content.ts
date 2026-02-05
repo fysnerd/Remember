@@ -12,6 +12,12 @@ import { syncTikTokForUser } from '../workers/tiktokSync.js';
 import { syncInstagramForUser } from '../workers/instagramSync.js';
 import { generateText } from '../services/llm.js';
 
+// Helper to safely extract string param (handles string | string[] | undefined)
+function asString(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value[0] || '';
+  return value || '';
+}
+
 export const contentRouter = Router();
 
 // All content routes require authentication
@@ -314,7 +320,7 @@ contentRouter.get('/channels', async (req: Request, res: Response, next: NextFun
 // Since tags are global, we create a new tag and migrate the user's content
 contentRouter.patch('/tags/:name', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const oldTagName = decodeURIComponent(req.params.name).toLowerCase().trim();
+    const oldTagName = decodeURIComponent(asString(req.params.name)).toLowerCase().trim();
     const { newName } = req.body;
 
     if (!newName || typeof newName !== 'string') {
@@ -389,7 +395,7 @@ contentRouter.patch('/tags/:name', async (req: Request, res: Response, next: Nex
 // DELETE /api/content/tags/:name - Remove a tag from all user's content
 contentRouter.delete('/tags/:name', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const tagName = decodeURIComponent(req.params.name).toLowerCase().trim();
+    const tagName = decodeURIComponent(asString(req.params.name)).toLowerCase().trim();
 
     // Find the tag
     const tag = await prisma.tag.findUnique({
@@ -1227,7 +1233,7 @@ Génère un mémo d'étude optimisé pour la rétention avec les points clés.`;
 // GET /api/content/topic/:name/memo - Get or generate memo for a topic (aggregated from all contents)
 contentRouter.get('/topic/:name/memo', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const topicName = decodeURIComponent(req.params.name);
+    const topicName = decodeURIComponent(asString(req.params.name));
     const userId = req.user!.id;
 
     // Get all contents with this tag
@@ -1363,7 +1369,7 @@ contentRouter.put('/:id/tags', async (req: Request, res: Response, next: NextFun
 // Optimized: If transcript already exists (pre-transcription), triggers quiz generation immediately
 contentRouter.patch('/:id/triage', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = asString(req.params.id);
     const { action } = req.body;
 
     if (!['learn', 'archive'].includes(action)) {
@@ -1443,7 +1449,7 @@ contentRouter.patch('/:id/triage', async (req: Request, res: Response, next: Nex
 // DELETE /api/content/:id - Delete a single content item
 contentRouter.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = asString(req.params.id);
 
     // Verify ownership
     const content = await prisma.content.findFirst({

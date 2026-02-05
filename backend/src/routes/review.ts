@@ -5,6 +5,12 @@ import { authenticateToken } from '../middleware/auth.js';
 import { Rating, Platform } from '@prisma/client';
 import { generateText } from '../services/llm.js';
 
+// Helper to safely extract string param (handles string | string[] | undefined)
+function asString(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value[0] || '';
+  return value || '';
+}
+
 export const reviewRouter = Router();
 
 // All review routes require authentication
@@ -659,9 +665,10 @@ reviewRouter.get('/session/preview', async (req: Request, res: Response, next: N
 // GET /api/reviews/session/:id - Get session details
 reviewRouter.get('/session/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const sessionId = asString(req.params.id);
     const session = await prisma.quizSession.findFirst({
       where: {
-        id: req.params.id,
+        id: sessionId,
         userId: req.user!.id,
       },
       include: {
@@ -691,10 +698,11 @@ reviewRouter.get('/session/:id', async (req: Request, res: Response, next: NextF
 reviewRouter.get('/session/:id/cards', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.id;
+    const sessionId = asString(req.params.id);
 
     const session = await prisma.quizSession.findFirst({
       where: {
-        id: req.params.id,
+        id: sessionId,
         userId,
       },
     });
@@ -721,9 +729,10 @@ reviewRouter.get('/session/:id/cards', async (req: Request, res: Response, next:
 // POST /api/reviews/session/:id/complete - Mark session as complete
 reviewRouter.post('/session/:id/complete', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const sessionId = asString(req.params.id);
     const session = await prisma.quizSession.findFirst({
       where: {
-        id: req.params.id,
+        id: sessionId,
         userId: req.user!.id,
       },
     });
@@ -773,9 +782,10 @@ reviewRouter.post('/session/:id/complete', async (req: Request, res: Response, n
 // POST /api/reviews/session/:id/memo - Generate AI memo for session
 reviewRouter.post('/session/:id/memo', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const sessionId = asString(req.params.id);
     const session = await prisma.quizSession.findFirst({
       where: {
-        id: req.params.id,
+        id: sessionId,
         userId: req.user!.id,
       },
     });
@@ -867,9 +877,10 @@ Génère un bref mémo (max 150 mots) en français avec les points clés à rete
 // GET /api/reviews/session/:id/mistakes - Get questions answered incorrectly
 reviewRouter.get('/session/:id/mistakes', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const sessionId = asString(req.params.id);
     const session = await prisma.quizSession.findFirst({
       where: {
-        id: req.params.id,
+        id: sessionId,
         userId: req.user!.id,
       },
     });

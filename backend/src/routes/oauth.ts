@@ -9,6 +9,20 @@ import { startInstagramAuth, cancelInstagramAuth } from '../services/instagramAu
 import { syncUserYouTube } from '../workers/youtubeSync.js';
 import { syncUserSpotify } from '../workers/spotifySync.js';
 
+// Helper to get required config value or throw
+function requireConfig<T>(value: T | undefined, name: string): T {
+  if (value === undefined) {
+    throw new AppError(500, `Missing required config: ${name}`);
+  }
+  return value;
+}
+
+// Helper to safely extract string param (handles string | string[] | undefined)
+function asString(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value[0] || '';
+  return value || '';
+}
+
 // Token response interface for OAuth providers
 interface OAuthTokenResponse {
   access_token: string;
@@ -39,8 +53,8 @@ oauthRouter.get('/youtube/connect', authenticateToken, (req: Request, res: Respo
   })).toString('base64');
 
   const params = new URLSearchParams({
-    client_id: config.youtube.clientId,
-    redirect_uri: config.youtube.callbackUrl,
+    client_id: requireConfig(config.youtube.clientId, 'YOUTUBE_CLIENT_ID'),
+    redirect_uri: requireConfig(config.youtube.callbackUrl, 'YOUTUBE_CALLBACK_URL'),
     response_type: 'code',
     scope: 'https://www.googleapis.com/auth/youtube.readonly',
     access_type: 'offline',
@@ -100,11 +114,11 @@ oauthRouter.get('/youtube/callback', async (req: Request, res: Response, next: N
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        client_id: config.youtube.clientId,
-        client_secret: config.youtube.clientSecret,
+        client_id: requireConfig(config.youtube.clientId, 'YOUTUBE_CLIENT_ID'),
+        client_secret: requireConfig(config.youtube.clientSecret, 'YOUTUBE_CLIENT_SECRET'),
         code: code as string,
         grant_type: 'authorization_code',
-        redirect_uri: config.youtube.callbackUrl,
+        redirect_uri: requireConfig(config.youtube.callbackUrl, 'YOUTUBE_CALLBACK_URL'),
       }),
     });
 
@@ -191,8 +205,8 @@ oauthRouter.get('/spotify/connect', authenticateToken, (req: Request, res: Respo
   })).toString('base64');
 
   const params = new URLSearchParams({
-    client_id: config.spotify.clientId,
-    redirect_uri: config.spotify.callbackUrl,
+    client_id: requireConfig(config.spotify.clientId, 'SPOTIFY_CLIENT_ID'),
+    redirect_uri: requireConfig(config.spotify.callbackUrl, 'SPOTIFY_CALLBACK_URL'),
     response_type: 'code',
     scope: 'user-read-recently-played user-read-playback-position user-library-read',
     state,
@@ -243,16 +257,20 @@ oauthRouter.get('/spotify/callback', async (req: Request, res: Response, next: N
     }
 
     // Exchange code for tokens
+    const spotifyClientId = requireConfig(config.spotify.clientId, 'SPOTIFY_CLIENT_ID');
+    const spotifyClientSecret = requireConfig(config.spotify.clientSecret, 'SPOTIFY_CLIENT_SECRET');
+    const spotifyCallbackUrl = requireConfig(config.spotify.callbackUrl, 'SPOTIFY_CALLBACK_URL');
+
     const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': `Basic ${Buffer.from(`${config.spotify.clientId}:${config.spotify.clientSecret}`).toString('base64')}`,
+        'Authorization': `Basic ${Buffer.from(`${spotifyClientId}:${spotifyClientSecret}`).toString('base64')}`,
       },
       body: new URLSearchParams({
         code: code as string,
         grant_type: 'authorization_code',
-        redirect_uri: config.spotify.callbackUrl,
+        redirect_uri: spotifyCallbackUrl,
       }),
     });
 
@@ -407,9 +425,9 @@ oauthRouter.post('/tiktok/connect', authenticateToken, async (req: Request, res:
       },
     });
 
-    res.json({ message: 'TikTok connected successfully' });
+    return res.json({ message: 'TikTok connected successfully' });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -506,7 +524,7 @@ function validateInstagramCookies(body: unknown): { valid: boolean; cookies?: In
       if ((raw[key] as string).length > 500) {
         return { valid: false, error: `${key} value too long` };
       }
-      (cookies as Record<string, string>)[key] = raw[key] as string;
+      (cookies as unknown as Record<string, string>)[key] = raw[key] as string;
     }
   }
 
@@ -587,9 +605,9 @@ oauthRouter.post('/instagram/connect', authenticateToken, async (req: Request, r
       },
     });
 
-    res.json({ message: 'Instagram connected successfully' });
+    return res.json({ message: 'Instagram connected successfully' });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -597,9 +615,9 @@ oauthRouter.post('/instagram/connect', authenticateToken, async (req: Request, r
 oauthRouter.post('/instagram/cancel', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
   try {
     await cancelInstagramAuth(req.user!.id);
-    res.json({ message: 'Auth cancelled' });
+    return res.json({ message: 'Auth cancelled' });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -772,7 +790,8 @@ oauthRouter.post('/desktop/start', authenticateToken, async (req: Request, res: 
     });
 
     // Return the desktop auth URL (accessible via tunnel)
-    const baseUrl = config.youtube.callbackUrl.replace('/api/oauth/youtube/callback', '');
+    const callbackUrl = requireConfig(config.youtube.callbackUrl, 'YOUTUBE_CALLBACK_URL');
+    const baseUrl = callbackUrl.replace('/api/oauth/youtube/callback', '');
     const desktopUrl = `${baseUrl}/api/oauth/desktop/page/${token}`;
 
     res.json({
@@ -788,26 +807,26 @@ oauthRouter.post('/desktop/start', authenticateToken, async (req: Request, res: 
 // GET /api/oauth/desktop/status/:token - iOS polls this to check auth status
 oauthRouter.get('/desktop/status/:token', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { token } = req.params;
+    const token = asString(req.params.token);
     const session = pendingDesktopAuth.get(token);
 
     if (!session) {
       return res.json({ status: 'expired' });
     }
 
-    res.json({
+    return res.json({
       status: session.status,
       platform: session.platform,
       error: session.error,
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
 // GET /api/oauth/desktop/page/:token - Desktop browser opens this page
 oauthRouter.get('/desktop/page/:token', async (req: Request, res: Response) => {
-  const { token } = req.params;
+  const token = asString(req.params.token);
   const session = pendingDesktopAuth.get(token);
 
   if (!session) {
@@ -944,12 +963,13 @@ oauthRouter.get('/desktop/page/:token', async (req: Request, res: Response) => {
     </body>
     </html>
   `);
+  return;
 });
 
 // POST /api/oauth/desktop/execute/:token - Actually run Playwright auth
 oauthRouter.post('/desktop/execute/:token', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { token } = req.params;
+    const token = asString(req.params.token);
     console.log(`[Desktop Auth] Execute request for token: ${token.substring(0, 20)}...`);
 
     const session = pendingDesktopAuth.get(token);
@@ -1007,19 +1027,20 @@ oauthRouter.post('/desktop/execute/:token', async (req: Request, res: Response, 
       session.status = 'completed';
       pendingDesktopAuth.delete(token);
 
-      res.json({ success: true });
+      return res.json({ success: true });
     } else {
       session.status = 'failed';
       session.error = result.error || 'Authentication failed';
 
-      res.json({ success: false, error: session.error });
+      return res.json({ success: false, error: session.error });
     }
   } catch (error) {
-    const session = pendingDesktopAuth.get(req.params.token);
+    const token = asString(req.params.token);
+    const session = pendingDesktopAuth.get(token);
     if (session) {
       session.status = 'failed';
       session.error = error instanceof Error ? error.message : 'Unknown error';
     }
-    next(error);
+    return next(error);
   }
 });

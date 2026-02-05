@@ -323,7 +323,7 @@ export async function runTikTokTranscriptionWorker(): Promise<void> {
   let cacheHits = 0;
   let failed = 0;
 
-  for (const [externalId, content] of uniqueVideos) {
+  for (const [_externalId, content] of uniqueVideos) {
     const result = await processTikTokWithCache(workerId, content);
     if (result === 'success') {
       success++;

@@ -321,7 +321,7 @@ export async function runInstagramTranscriptionWorker(): Promise<void> {
   let cacheHits = 0;
   let failed = 0;
 
-  for (const [externalId, content] of uniqueReels) {
+  for (const [_externalId, content] of uniqueReels) {
     const result = await processInstagramWithCache(workerId, content);
     if (result === 'success') {
       success++;

@@ -4,6 +4,14 @@ import { config } from '../config/env.js';
 import { Platform } from '@prisma/client';
 import type { ConnectedPlatform } from '@prisma/client';
 
+// Helper to get required config value or throw
+function requireConfig<T>(value: T | undefined, name: string): T {
+  if (value === undefined) {
+    throw new Error(`Missing required config: ${name}`);
+  }
+  return value;
+}
+
 // Token response interface for OAuth providers
 interface OAuthTokenResponse {
   access_token: string;
@@ -24,8 +32,8 @@ export async function refreshYouTubeToken(connection: ConnectedPlatform): Promis
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_id: config.youtube.clientId,
-      client_secret: config.youtube.clientSecret,
+      client_id: requireConfig(config.youtube.clientId, 'YOUTUBE_CLIENT_ID'),
+      client_secret: requireConfig(config.youtube.clientSecret, 'YOUTUBE_CLIENT_SECRET'),
       refresh_token: connection.refreshToken,
       grant_type: 'refresh_token',
     }),
@@ -59,11 +67,14 @@ export async function refreshSpotifyToken(connection: ConnectedPlatform): Promis
     throw new Error('No refresh token available for Spotify');
   }
 
+  const spotifyClientId = requireConfig(config.spotify.clientId, 'SPOTIFY_CLIENT_ID');
+  const spotifyClientSecret = requireConfig(config.spotify.clientSecret, 'SPOTIFY_CLIENT_SECRET');
+
   const response = await fetch('https://accounts.spotify.com/api/token', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'Authorization': `Basic ${Buffer.from(`${config.spotify.clientId}:${config.spotify.clientSecret}`).toString('base64')}`,
+      'Authorization': `Basic ${Buffer.from(`${spotifyClientId}:${spotifyClientSecret}`).toString('base64')}`,
     },
     body: new URLSearchParams({
       grant_type: 'refresh_token',

@@ -22,6 +22,22 @@ interface ChatCompletionResult {
   };
 }
 
+// API response types for type-safe JSON parsing
+interface OpenAIResponse {
+  choices: { message: { content: string } }[];
+  usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+}
+
+interface MistralResponse {
+  choices: { message: { content: string } }[];
+  usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+}
+
+interface AnthropicResponse {
+  content: { text: string }[];
+  usage?: { input_tokens: number; output_tokens: number };
+}
+
 /**
  * Unified LLM client that supports multiple providers
  */
@@ -92,13 +108,13 @@ class LLMClient {
       throw new Error(`OpenAI API error: ${error}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as OpenAIResponse;
     return {
       content: data.choices[0].message.content,
       usage: {
-        promptTokens: data.usage?.prompt_tokens,
-        completionTokens: data.usage?.completion_tokens,
-        totalTokens: data.usage?.total_tokens,
+        promptTokens: data.usage?.prompt_tokens ?? 0,
+        completionTokens: data.usage?.completion_tokens ?? 0,
+        totalTokens: data.usage?.total_tokens ?? 0,
       },
     };
   }
@@ -124,13 +140,13 @@ class LLMClient {
       throw new Error(`Mistral API error: ${error}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as MistralResponse;
     return {
       content: data.choices[0].message.content,
       usage: {
-        promptTokens: data.usage?.prompt_tokens,
-        completionTokens: data.usage?.completion_tokens,
-        totalTokens: data.usage?.total_tokens,
+        promptTokens: data.usage?.prompt_tokens ?? 0,
+        completionTokens: data.usage?.completion_tokens ?? 0,
+        totalTokens: data.usage?.total_tokens ?? 0,
       },
     };
   }
@@ -171,13 +187,13 @@ class LLMClient {
       throw new Error(`Anthropic API error: ${error}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as AnthropicResponse;
     return {
       content: data.content[0].text,
       usage: {
-        promptTokens: data.usage?.input_tokens,
-        completionTokens: data.usage?.output_tokens,
-        totalTokens: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
+        promptTokens: data.usage?.input_tokens ?? 0,
+        completionTokens: data.usage?.output_tokens ?? 0,
+        totalTokens: (data.usage?.input_tokens ?? 0) + (data.usage?.output_tokens ?? 0),
       },
     };
   }

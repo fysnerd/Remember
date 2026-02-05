@@ -529,7 +529,7 @@ async function compressAudio(inputPath: string): Promise<string> {
     // Compress to mono, 16kHz (good enough for speech), calculated bitrate
     const cmd = `ffmpeg -y -i "${inputPath}" -ac 1 -ar 16000 -b:a ${bitrate}k "${outputPath}"`;
 
-    exec(cmd, { timeout: 600000 }, (error, stdout, stderr) => {
+    exec(cmd, { timeout: 600000 }, (error, _stdout, stderr) => {
       if (error) {
         console.error('[Podcast] ffmpeg compression error:', stderr);
         reject(new Error(`ffmpeg compression failed: ${error.message}`));
@@ -712,7 +712,7 @@ export async function runPodcastTranscriptionWorker(): Promise<void> {
   let cacheHits = 0;
   let failed = 0;
 
-  for (const [externalId, content] of uniqueEpisodes) {
+  for (const [_externalId, content] of uniqueEpisodes) {
     const result = await processPodcastWithCache(workerId, content);
     if (result === 'success') {
       success++;
