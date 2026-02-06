@@ -9,6 +9,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { execFile } from 'child_process';
+import pLimit from 'p-limit';
+import { groqLimiter } from '../utils/rateLimiter.js';
 import {
   generateWorkerId,
   getOrCreateCacheWithLock,
@@ -230,9 +232,9 @@ export async function processInstagramTranscript(contentId: string): Promise<boo
       }
     }
 
-    // Step 4: Transcribe with Whisper
+    // Step 4: Transcribe with Whisper (rate limited)
     console.log(`[Instagram] Transcribing with Whisper...`);
-    const result = await transcribeWithWhisper(finalAudioPath);
+    const result = await groqLimiter(() => transcribeWithWhisper(finalAudioPath));
 
     // Step 5: Check if transcript is valid (filters music-only reels)
     if (result.text.length < MIN_TRANSCRIPT_LENGTH) {
@@ -321,18 +323,22 @@ export async function runInstagramTranscriptionWorker(): Promise<void> {
   let cacheHits = 0;
   let failed = 0;
 
-  for (const [_externalId, content] of uniqueReels) {
-    const result = await processInstagramWithCache(workerId, content);
-    if (result === 'success') {
-      success++;
-    } else if (result === 'cache_hit') {
-      cacheHits++;
+  const limit = pLimit(3); // Download + Whisper, limit concurrency
+
+  const results = await Promise.allSettled(
+    Array.from(uniqueReels.values()).map(content =>
+      limit(() => processInstagramWithCache(workerId, content))
+    )
+  );
+
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      if (result.value === 'success') success++;
+      else if (result.value === 'cache_hit') cacheHits++;
+      else failed++;
     } else {
       failed++;
     }
-
-    // Add delay between API calls to avoid rate limiting
-    await new Promise((resolve) => setTimeout(resolve, 2000));
   }
 
   console.log(`[Instagram Worker] Completed: ${success} transcribed, ${cacheHits} cache hits, ${failed} failed`);
@@ -410,9 +416,9 @@ async function processInstagramWithCache(
       }
     }
 
-    // Step 4: Transcribe with Whisper
+    // Step 4: Transcribe with Whisper (rate limited)
     console.log(`[Instagram] Transcribing with Whisper...`);
-    const transcript = await transcribeWithWhisper(finalAudioPath);
+    const transcript = await groqLimiter(() => transcribeWithWhisper(finalAudioPath));
 
     // Cleanup audio files
     cleanupFiles(finalAudioPath);

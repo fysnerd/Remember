@@ -3,6 +3,7 @@
 import { prisma } from '../config/database.js';
 import { Platform, ContentStatus } from '@prisma/client';
 import { getValidToken } from '../services/tokenRefresh.js';
+import { spotifyLimiter } from '../utils/rateLimiter.js';
 
 const SPOTIFY_API_BASE = 'https://api.spotify.com/v1';
 const MIN_PROGRESS_PERCENT = 80; // Only sync episodes listened >80%
@@ -115,8 +116,16 @@ export async function syncUserSpotify(userId: string, connectionId: string): Pro
           continue;
         }
 
-        // Check if we already have this episode
-        const existing = await prisma.content.findUnique({
+        // Sanitize description to avoid DB errors with special chars
+        const sanitizedDescription = episode.description
+          ?.replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
+          ?.substring(0, 1000) || null;
+
+        const thumbnailUrl = episode.images?.[0]?.url || episode.show?.images?.[0]?.url || null;
+        const showName = episode.show?.name || null;
+
+        // Upsert: create if new, update progress if existing
+        const result = await prisma.content.upsert({
           where: {
             userId_platform_externalId: {
               userId,
@@ -124,46 +133,32 @@ export async function syncUserSpotify(userId: string, connectionId: string): Pro
               externalId: episode.id,
             },
           },
+          update: {
+            listenProgress,
+            fullyPlayed,
+          },
+          create: {
+            userId,
+            platform: Platform.SPOTIFY,
+            externalId: episode.id,
+            url: episode.external_urls?.spotify || `https://open.spotify.com/episode/${episode.id}`,
+            title: episode.name,
+            description: sanitizedDescription,
+            thumbnailUrl,
+            duration: Math.floor(episode.duration_ms / 1000),
+            showName,
+            channelName: showName,
+            listenProgress,
+            fullyPlayed,
+            capturedAt: new Date(item.added_at),
+            status: ContentStatus.INBOX,
+          },
         });
 
-        // Sanitize description to avoid DB errors with special chars
-        const sanitizedDescription = episode.description
-          ?.replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
-          ?.substring(0, 1000) || null;
-
-        const thumbnailUrl = episode.images?.[0]?.url || episode.show?.images?.[0]?.url || null;
-
-        if (existing) {
-          // Update progress if changed
-          if (existing.listenProgress !== listenProgress || existing.fullyPlayed !== fullyPlayed) {
-            await prisma.content.update({
-              where: { id: existing.id },
-              data: { listenProgress, fullyPlayed },
-            });
-            updatedEpisodesCount++;
-          }
-        } else {
-          // Create new content entry
-          const showName = episode.show?.name || null;
-          await prisma.content.create({
-            data: {
-              userId,
-              platform: Platform.SPOTIFY,
-              externalId: episode.id,
-              url: episode.external_urls?.spotify || `https://open.spotify.com/episode/${episode.id}`,
-              title: episode.name,
-              description: sanitizedDescription,
-              thumbnailUrl,
-              duration: Math.floor(episode.duration_ms / 1000),
-              showName,
-              channelName: showName,  // Unified field for frontend
-              listenProgress,
-              fullyPlayed,
-              capturedAt: new Date(item.added_at),
-              status: ContentStatus.INBOX,
-            },
-          });
+        if (result.createdAt.getTime() === result.updatedAt.getTime()) {
           newEpisodesCount++;
+        } else {
+          updatedEpisodesCount++;
         }
 
         syncedCount++;
@@ -221,18 +216,19 @@ export async function runSpotifySync(): Promise<void> {
   let successCount = 0;
   let errorCount = 0;
 
-  for (const connection of connections) {
-    try {
-      const newEpisodes = await syncUserSpotify(connection.userId, connection.id);
-      totalNewEpisodes += newEpisodes;
+  const results = await Promise.allSettled(
+    connections.map(connection =>
+      spotifyLimiter(() => syncUserSpotify(connection.userId, connection.id))
+    )
+  );
+
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      totalNewEpisodes += result.value;
       successCount++;
-    } catch (error) {
-      console.error(`[Spotify Sync] Failed for user ${connection.userId}:`, error);
+    } else {
       errorCount++;
     }
-
-    // Small delay between users
-    await new Promise(resolve => setTimeout(resolve, 500));
   }
 
   const duration = Date.now() - startTime;

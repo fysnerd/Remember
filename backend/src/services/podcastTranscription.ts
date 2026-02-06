@@ -12,6 +12,8 @@ import * as path from 'path';
 import * as os from 'os';
 import { exec } from 'child_process';
 import * as crypto from 'crypto';
+import { groqLimiter } from '../utils/rateLimiter.js';
+import pLimit from 'p-limit';
 import {
   generateWorkerId,
   getOrCreateCacheWithLock,
@@ -636,9 +638,9 @@ export async function processPodcastTranscript(contentId: string): Promise<boole
     console.log(`[Podcast] Downloading audio...`);
     const audioPath = await downloadAudio(rssResult.episodeAudioUrl);
 
-    // Step 3: Transcribe with Whisper
+    // Step 3: Transcribe with Whisper (rate limited)
     console.log(`[Podcast] Transcribing with Whisper...`);
-    const result = await transcribeWithWhisper(audioPath);
+    const result = await groqLimiter(() => transcribeWithWhisper(audioPath));
 
     // Step 4: Save transcript
     await prisma.transcript.create({
@@ -712,12 +714,19 @@ export async function runPodcastTranscriptionWorker(): Promise<void> {
   let cacheHits = 0;
   let failed = 0;
 
-  for (const [_externalId, content] of uniqueEpisodes) {
-    const result = await processPodcastWithCache(workerId, content);
-    if (result === 'success') {
-      success++;
-    } else if (result === 'cache_hit') {
-      cacheHits++;
+  const limit = pLimit(3); // Podcast downloads + Whisper = heavy, limit to 3
+
+  const results = await Promise.allSettled(
+    Array.from(uniqueEpisodes.values()).map(content =>
+      limit(() => processPodcastWithCache(workerId, content))
+    )
+  );
+
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      if (result.value === 'success') success++;
+      else if (result.value === 'cache_hit') cacheHits++;
+      else failed++;
     } else {
       failed++;
     }
@@ -779,9 +788,9 @@ async function processPodcastWithCache(
     console.log(`[Podcast] Downloading audio...`);
     const audioPath = await downloadAudio(rssResult.episodeAudioUrl);
 
-    // Step 3: Transcribe with Whisper
+    // Step 3: Transcribe with Whisper (rate limited)
     console.log(`[Podcast] Transcribing with Whisper...`);
-    const transcript = await transcribeWithWhisper(audioPath);
+    const transcript = await groqLimiter(() => transcribeWithWhisper(audioPath));
 
     // Step 4: Save to cache
     await markCacheSuccess(cache.id, {

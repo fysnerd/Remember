@@ -8,6 +8,7 @@ import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import pLimit from 'p-limit';
 import {
   generateWorkerId,
   getOrCreateCacheWithLock,
@@ -341,16 +342,20 @@ export async function batchProcessTranscripts(contentIds: string[]): Promise<{
   let success = 0;
   let failed = 0;
 
-  for (const contentId of contentIds) {
-    const result = await processContentTranscript(contentId);
-    if (result) {
+  const limit = pLimit(5); // yt-dlp is free/fast, can run 5 concurrent
+
+  const results = await Promise.allSettled(
+    contentIds.map(contentId =>
+      limit(() => processContentTranscript(contentId))
+    )
+  );
+
+  for (const result of results) {
+    if (result.status === 'fulfilled' && result.value) {
       success++;
     } else {
       failed++;
     }
-
-    // Small delay to avoid rate limiting
-    await new Promise(resolve => setTimeout(resolve, 500));
   }
 
   return { success, failed };
@@ -421,17 +426,22 @@ export async function runTranscriptionWorker(): Promise<void> {
   let cacheHits = 0;
   let failed = 0;
 
-  for (const [_externalId, content] of uniqueVideos) {
-    const result = await processWithCache(workerId, content);
-    if (result === 'success') {
-      success++;
-    } else if (result === 'cache_hit') {
-      cacheHits++;
+  const limit = pLimit(5); // yt-dlp is free/fast
+
+  const results = await Promise.allSettled(
+    Array.from(uniqueVideos.values()).map(content =>
+      limit(() => processWithCache(workerId, content))
+    )
+  );
+
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      if (result.value === 'success') success++;
+      else if (result.value === 'cache_hit') cacheHits++;
+      else failed++;
     } else {
       failed++;
     }
-    // Small delay to avoid rate limiting
-    await new Promise(resolve => setTimeout(resolve, 500));
   }
 
   console.log(`[Transcription Worker] Completed: ${success} transcribed, ${cacheHits} cache hits, ${failed} failed`);

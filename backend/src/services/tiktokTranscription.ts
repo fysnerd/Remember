@@ -9,6 +9,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { execFile } from 'child_process';
+import pLimit from 'p-limit';
+import { groqLimiter } from '../utils/rateLimiter.js';
 import {
   generateWorkerId,
   getOrCreateCacheWithLock,
@@ -230,9 +232,9 @@ export async function processTikTokTranscript(contentId: string): Promise<boolea
       }
     }
 
-    // Step 4: Transcribe with Whisper
+    // Step 4: Transcribe with Whisper (rate limited)
     console.log(`[TikTok] Transcribing with Whisper...`);
-    const result = await transcribeWithWhisper(finalAudioPath);
+    const result = await groqLimiter(() => transcribeWithWhisper(finalAudioPath));
 
     // Note: Local transcribeWithWhisper doesn't auto-cleanup, handled in finally block
 
@@ -323,18 +325,22 @@ export async function runTikTokTranscriptionWorker(): Promise<void> {
   let cacheHits = 0;
   let failed = 0;
 
-  for (const [_externalId, content] of uniqueVideos) {
-    const result = await processTikTokWithCache(workerId, content);
-    if (result === 'success') {
-      success++;
-    } else if (result === 'cache_hit') {
-      cacheHits++;
+  const limit = pLimit(3); // Download + Whisper, limit concurrency
+
+  const results = await Promise.allSettled(
+    Array.from(uniqueVideos.values()).map(content =>
+      limit(() => processTikTokWithCache(workerId, content))
+    )
+  );
+
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      if (result.value === 'success') success++;
+      else if (result.value === 'cache_hit') cacheHits++;
+      else failed++;
     } else {
       failed++;
     }
-
-    // Add delay between API calls to avoid rate limiting
-    await new Promise((resolve) => setTimeout(resolve, 2000));
   }
 
   console.log(`[TikTok Worker] Completed: ${success} transcribed, ${cacheHits} cache hits, ${failed} failed`);
@@ -412,9 +418,9 @@ async function processTikTokWithCache(
       }
     }
 
-    // Step 4: Transcribe with Whisper
+    // Step 4: Transcribe with Whisper (rate limited)
     console.log(`[TikTok] Transcribing with Whisper...`);
-    const transcript = await transcribeWithWhisper(finalAudioPath);
+    const transcript = await groqLimiter(() => transcribeWithWhisper(finalAudioPath));
 
     // Cleanup audio files
     cleanupFiles(finalAudioPath);

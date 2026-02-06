@@ -3,6 +3,7 @@
 import { prisma } from '../config/database.js';
 import { Platform, ContentStatus } from '@prisma/client';
 import { getValidToken } from '../services/tokenRefresh.js';
+import { youtubeLimiter } from '../utils/rateLimiter.js';
 
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
 
@@ -191,18 +192,19 @@ export async function runYouTubeSync(): Promise<void> {
   let successCount = 0;
   let errorCount = 0;
 
-  for (const connection of connections) {
-    try {
-      const newVideos = await syncUserYouTube(connection.userId, connection.id);
-      totalNewVideos += newVideos;
+  const results = await Promise.allSettled(
+    connections.map(connection =>
+      youtubeLimiter(() => syncUserYouTube(connection.userId, connection.id))
+    )
+  );
+
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      totalNewVideos += result.value;
       successCount++;
-    } catch (error) {
-      console.error(`[YouTube Sync] Failed for user ${connection.userId}:`, error);
+    } else {
       errorCount++;
     }
-
-    // Small delay between users to avoid rate limiting
-    await new Promise(resolve => setTimeout(resolve, 500));
   }
 
   const duration = Date.now() - startTime;

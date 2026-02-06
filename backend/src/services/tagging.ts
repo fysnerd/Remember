@@ -1,6 +1,8 @@
 // Auto-Tagging Service (S014)
 import { prisma } from '../config/database.js';
 import { getLLMClient } from './llm.js';
+import pLimit from 'p-limit';
+import { llmLimiter } from '../utils/rateLimiter.js';
 
 /**
  * Generate tags for content based on transcript
@@ -18,7 +20,7 @@ export async function generateTags(
       ? transcript.substring(0, maxLength) + '...'
       : transcript;
 
-    const response = await llm.chatCompletion({
+    const response = await llmLimiter(() => llm.chatCompletion({
       messages: [
         {
           role: 'system',
@@ -47,7 +49,7 @@ Generate 3-5 relevant tags for this content.`,
       temperature: 0.3,
       maxTokens: 200,
       jsonMode: true,
-    });
+    }));
 
     const content = response.content?.trim();
     if (!content) {
@@ -156,13 +158,16 @@ export async function runAutoTaggingWorker(): Promise<void> {
 
     console.log(`[Tagging Worker] Found ${contentToTag.length} items to tag`);
 
-    for (const content of contentToTag) {
-      await autoTagContent(content.id);
-      // Small delay to avoid rate limits
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
+    const limit = pLimit(5); // 5 concurrent tagging jobs
 
-    console.log('[Tagging Worker] Completed');
+    const results = await Promise.allSettled(
+      contentToTag.map(content =>
+        limit(() => autoTagContent(content.id))
+      )
+    );
+
+    const tagged = results.filter(r => r.status === 'fulfilled' && (r.value as string[]).length > 0).length;
+    console.log(`[Tagging Worker] Completed: ${tagged}/${contentToTag.length} tagged`);
   } catch (error) {
     console.error('[Tagging Worker] Error:', error);
   }

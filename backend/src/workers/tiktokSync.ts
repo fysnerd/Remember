@@ -5,6 +5,7 @@ import { Platform, ContentStatus } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { tiktokLimiter } from '../utils/rateLimiter.js';
 
 interface TikTokCookies {
   sessionid: string;
@@ -94,6 +95,7 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
 
     // Launch headless browser with larger viewport
     const browser = await chromium.launch({ headless: true });
+    try {
     const context = await browser.newContext({
       viewport: { width: 1920, height: 1080 },
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
@@ -337,8 +339,6 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
       console.log(`[TikTok Sync] Error screenshot saved: ${errorScreenshot}`);
     }
 
-    await browser.close();
-
     console.log(`[TikTok Sync] User ${userId}: found ${likedVideos.length} liked videos`);
 
     // Deduplicate videos
@@ -404,6 +404,10 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
     console.log(`[TikTok Sync] User ${userId}: synced ${newVideosCount} new videos`);
     return newVideosCount;
 
+    } finally {
+      await browser.close();
+    }
+
   } catch (error) {
     console.error(`[TikTok Sync] Error for user ${userId}:`, error);
     await prisma.connectedPlatform.update({
@@ -435,18 +439,29 @@ export async function runTikTokSync(): Promise<void> {
   let successCount = 0;
   let errorCount = 0;
 
-  for (const connection of connections) {
-    try {
-      const newVideos = await syncUserTikTok(connection.userId, connection.id);
-      totalNewVideos += newVideos;
+  const TIMEOUT_MS = 60000; // 60s timeout per user
+
+  const results = await Promise.allSettled(
+    connections.map(connection =>
+      tiktokLimiter(() =>
+        Promise.race([
+          syncUserTikTok(connection.userId, connection.id),
+          new Promise<number>((_, reject) =>
+            setTimeout(() => reject(new Error(`TikTok sync timeout for user ${connection.userId}`)), TIMEOUT_MS)
+          ),
+        ])
+      )
+    )
+  );
+
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      totalNewVideos += result.value;
       successCount++;
-    } catch (error) {
-      console.error(`[TikTok Sync] Failed for user ${connection.userId}:`, error);
+    } else {
+      console.error(`[TikTok Sync] Failed:`, result.reason);
       errorCount++;
     }
-
-    // Longer delay between users (TikTok is more sensitive to automation)
-    await new Promise(resolve => setTimeout(resolve, 2000));
   }
 
   const duration = Date.now() - startTime;

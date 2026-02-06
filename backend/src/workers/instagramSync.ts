@@ -3,6 +3,7 @@
 // STOPS when it finds content already in DB (incremental sync)
 import { prisma } from '../config/database.js';
 import { Platform, ContentStatus } from '@prisma/client';
+import { instagramLimiter } from '../utils/rateLimiter.js';
 
 interface InstagramCookies {
   sessionid: string;
@@ -28,23 +29,6 @@ interface InstagramMediaItem {
   taken_at?: number;
   media_type?: number;
   product_type?: string;
-}
-
-/**
- * Check if content already exists in DB for this user
- */
-async function contentExists(userId: string, externalId: string): Promise<boolean> {
-  const existing = await prisma.content.findUnique({
-    where: {
-      userId_platform_externalId: {
-        userId,
-        platform: Platform.INSTAGRAM,
-        externalId,
-      },
-    },
-    select: { id: true },
-  });
-  return existing !== null;
 }
 
 /**
@@ -176,21 +160,35 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       return true;
     });
 
-    // Save to DB (stop when we find existing content = incremental sync)
+    // Batch check existing content in a single query
+    const externalIds = uniqueItems
+      .map(item => item.pk?.toString() || item.id?.toString() || item.code)
+      .filter((id): id is string => !!id);
+
+    const existingContent = await prisma.content.findMany({
+      where: {
+        userId,
+        platform: Platform.INSTAGRAM,
+        externalId: { in: externalIds },
+      },
+      select: { externalId: true },
+    });
+    const existingIds = new Set(existingContent.map(c => c.externalId));
+
+    // Save new items to DB (stop when we find existing = incremental sync)
     for (const item of uniqueItems) {
       const externalId = item.pk?.toString() || item.id?.toString() || item.code;
       if (!externalId) continue;
 
-      const shortcode = item.code || externalId;
-      const url = `https://www.instagram.com/p/${shortcode}/`;
-      const authorUsername = item.user?.username || null;
-
-      // Check if already exists - if yes, stop (incremental sync)
-      const exists = await contentExists(userId, externalId);
-      if (exists) {
+      if (existingIds.has(externalId)) {
+        const shortcode = item.code || externalId;
         console.log(`[Instagram Sync] Found existing reel ${shortcode} - stopping (incremental sync complete)`);
         break;
       }
+
+      const shortcode = item.code || externalId;
+      const url = `https://www.instagram.com/p/${shortcode}/`;
+      const authorUsername = item.user?.username || null;
 
       await prisma.content.create({
         data: {
@@ -260,17 +258,19 @@ export async function runInstagramSync(): Promise<void> {
   let successCount = 0;
   let errorCount = 0;
 
-  for (const connection of connections) {
-    try {
-      const newReels = await syncUserInstagram(connection.userId, connection.id);
-      totalNewReels += newReels;
+  const results = await Promise.allSettled(
+    connections.map(connection =>
+      instagramLimiter(() => syncUserInstagram(connection.userId, connection.id))
+    )
+  );
+
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      totalNewReels += result.value;
       successCount++;
-    } catch (error) {
-      console.error(`[Instagram Sync] Failed for user ${connection.userId}:`, error);
+    } else {
       errorCount++;
     }
-    // Small delay between users to avoid rate limiting
-    await new Promise(resolve => setTimeout(resolve, 2000));
   }
 
   const duration = Date.now() - startTime;

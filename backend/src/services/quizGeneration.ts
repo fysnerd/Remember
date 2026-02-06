@@ -2,6 +2,8 @@
 import { prisma } from '../config/database.js';
 import { ContentStatus, QuizType } from '@prisma/client';
 import { getLLMClient, generateText } from './llm.js';
+import pLimit from 'p-limit';
+import { llmLimiter } from '../utils/rateLimiter.js';
 
 interface GeneratedQuestion {
   question: string;
@@ -93,7 +95,7 @@ Respond with JSON only:
   "mainTopics": ["topic1", "topic2", "topic3"]
 }`;
 
-  const assessmentResponse = await llm.chatCompletion({
+  const assessmentResponse = await llmLimiter(() => llm.chatCompletion({
     messages: [
       {
         role: 'system',
@@ -106,7 +108,7 @@ Respond with JSON only:
     ],
     temperature: 0.3,
     jsonMode: true,
-  });
+  }));
 
   const assessment = JSON.parse(assessmentResponse.content || '{ "isEducational": true, "mainTopics": [] }');
 
@@ -161,7 +163,7 @@ Réponds uniquement avec du JSON:
 }`;
 
     try {
-      const questionResponse = await llm.chatCompletion({
+      const questionResponse = await llmLimiter(() => llm.chatCompletion({
         messages: [
           {
             role: 'system',
@@ -174,7 +176,7 @@ Réponds uniquement avec du JSON:
         ],
         temperature: 0.7,
         jsonMode: true,
-      });
+      }));
 
       const result = JSON.parse(questionResponse.content || '{"questions": []}');
 
@@ -399,16 +401,20 @@ export async function runQuizGenerationWorker(): Promise<void> {
   let success = 0;
   let failed = 0;
 
-  for (const content of pendingContent) {
-    const result = await processContentQuiz(content.id);
-    if (result) {
+  const limit = pLimit(3); // Each quiz needs ~3 LLM calls (assessment + questions + memo)
+
+  const results = await Promise.allSettled(
+    pendingContent.map(content =>
+      limit(() => processContentQuiz(content.id))
+    )
+  );
+
+  for (const result of results) {
+    if (result.status === 'fulfilled' && result.value) {
       success++;
     } else {
       failed++;
     }
-
-    // Small delay between API calls
-    await new Promise(resolve => setTimeout(resolve, 1000));
   }
 
   console.log(`[Quiz Worker] Completed: ${success} success, ${failed} failed`);

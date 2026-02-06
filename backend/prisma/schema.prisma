@@ -110,6 +110,7 @@ model ConnectedPlatform {
 
   @@unique([userId, platform])
   @@index([userId])
+  @@index([platform])
 }
 
 enum Platform {
@@ -190,6 +191,7 @@ model Content {
   @@unique([userId, platform, externalId])
   @@index([userId])
   @@index([status])
+  @@index([platform, status])
 }
 
 enum ContentStatus {
