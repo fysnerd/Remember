@@ -26,7 +26,17 @@
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "channel": "production"
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "cobreadgang@gmail.com",
+        "ascAppId": "6758732600",
+        "appleTeamId": "HSR27437U4"
+      }
     }
   }
 }
