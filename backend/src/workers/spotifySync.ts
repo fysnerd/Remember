@@ -1,15 +1,15 @@
-// Spotify Sync Worker - Fetches LISTENED podcast episodes
-// Only syncs episodes that are fully played or >80% listened
+// Spotify Sync Worker - Fetches listened podcast episodes
+// Sources: recently-played (any episode listened) + saved episodes (bookmarked)
 import { prisma } from '../config/database.js';
 import { Platform, ContentStatus } from '@prisma/client';
 import { getValidToken } from '../services/tokenRefresh.js';
 import { spotifyLimiter } from '../utils/rateLimiter.js';
 
 const SPOTIFY_API_BASE = 'https://api.spotify.com/v1';
-const MIN_PROGRESS_PERCENT = 80; // Only sync episodes listened >80%
 
 interface SpotifyEpisode {
   id: string;
+  type?: string;
   name: string;
   description: string;
   images: Array<{ url: string; width: number; height: number }>;
@@ -30,6 +30,14 @@ interface SpotifyEpisode {
   };
 }
 
+interface SpotifyRecentlyPlayedResponse {
+  items: Array<{
+    track: SpotifyEpisode & { type: string };
+    played_at: string;
+  }>;
+  next: string | null;
+}
+
 interface SpotifySavedEpisodesResponse {
   items: Array<{
     added_at: string;
@@ -39,12 +47,26 @@ interface SpotifySavedEpisodesResponse {
   total: number;
 }
 
+interface EpisodeData {
+  id: string;
+  name: string;
+  description: string | null;
+  thumbnailUrl: string | null;
+  showName: string | null;
+  url: string;
+  duration: number;
+  capturedAt: Date;
+  listenProgress: number;
+  fullyPlayed: boolean;
+}
+
 /**
- * Sync user's LISTENED Spotify episodes
- * Only fetches saved episodes that have been fully played or >80% listened
- * Exported for use in OAuth callbacks and manual refresh
+ * Sync user's Spotify episodes from two sources:
+ * 1. Recently played - catches any episode listened to (even if not saved)
+ * 2. Saved episodes - provides detailed progress info for bookmarked episodes
  */
-export async function syncUserSpotify(userId: string, connectionId: string): Promise<number> {
+export async function syncUserSpotify(userId: string, connectionId: string, userEmail?: string): Promise<number> {
+  const label = userEmail || userId;
   const connection = await prisma.connectedPlatform.findUnique({
     where: { id: connectionId },
   });
@@ -58,7 +80,7 @@ export async function syncUserSpotify(userId: string, connectionId: string): Pro
   try {
     accessToken = await getValidToken(connection);
   } catch (error) {
-    console.error(`[Spotify Sync] Failed to get valid token for user ${userId}:`, error);
+    console.error(`[Spotify Sync] Failed to get valid token for ${label}:`, error);
     await prisma.connectedPlatform.update({
       where: { id: connectionId },
       data: { lastSyncError: 'Failed to refresh token' },
@@ -66,132 +88,167 @@ export async function syncUserSpotify(userId: string, connectionId: string): Pro
     return 0;
   }
 
+  const episodes = new Map<string, EpisodeData>();
   let newEpisodesCount = 0;
   let updatedEpisodesCount = 0;
 
-  const MAX_SYNCED = 15;
-  const MAX_PAGES = 10; // Safety limit to avoid infinite pagination
-
   try {
-    // Paginate until we collect 15 episodes listened >80%
-    let nextUrl: string | null = `${SPOTIFY_API_BASE}/me/episodes?limit=50`;
-    let syncedCount = 0;
-    let pagesChecked = 0;
-
-    while (nextUrl && syncedCount < MAX_SYNCED && pagesChecked < MAX_PAGES) {
-      pagesChecked++;
-      const response = await fetch(nextUrl, {
+    // Source 1: Recently played - catches episodes listened but not saved
+    try {
+      const recentResponse = await fetch(`${SPOTIFY_API_BASE}/me/player/recently-played?limit=50`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 
-      if (!response.ok) {
-        throw new Error(`Spotify API error: ${response.status}`);
-      }
+      if (recentResponse.ok) {
+        const recentData = await recentResponse.json() as SpotifyRecentlyPlayedResponse;
+        for (const item of recentData.items) {
+          const track = item.track;
+          if (!track || track.type !== 'episode') continue;
 
-      const data = await response.json() as SpotifySavedEpisodesResponse;
+          const episode = track as SpotifyEpisode;
+          if (!episode.id || !episode.name) continue;
 
-      for (const item of data.items) {
-        if (syncedCount >= MAX_SYNCED) break;
+          const sanitizedDescription = episode.description
+            ?.replace(/[\x00-\x1F\x7F]/g, '')
+            ?.substring(0, 1000) || null;
 
-        const episode = item.episode;
-        if (!episode) continue;
+          let listenProgress = 100;
+          let fullyPlayed = true;
 
-        // Calculate progress
-        const resumePoint = episode.resume_point;
-        let listenProgress = 0;
-        let fullyPlayed = false;
-
-        if (resumePoint) {
-          fullyPlayed = resumePoint.fully_played;
-          if (episode.duration_ms > 0) {
-            listenProgress = Math.round((resumePoint.resume_position_ms / episode.duration_ms) * 100);
+          if (episode.resume_point) {
+            fullyPlayed = episode.resume_point.fully_played;
+            if (episode.duration_ms > 0) {
+              listenProgress = Math.round((episode.resume_point.resume_position_ms / episode.duration_ms) * 100);
+            }
+            if (fullyPlayed) listenProgress = 100;
           }
-          if (fullyPlayed) {
-            listenProgress = 100;
-          }
-        }
 
-        // Only sync if listened enough
-        if (!fullyPlayed && listenProgress < MIN_PROGRESS_PERCENT) {
-          continue;
-        }
-
-        // Sanitize description to avoid DB errors with special chars
-        const sanitizedDescription = episode.description
-          ?.replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
-          ?.substring(0, 1000) || null;
-
-        const thumbnailUrl = episode.images?.[0]?.url || episode.show?.images?.[0]?.url || null;
-        const showName = episode.show?.name || null;
-
-        // Upsert: create if new, update progress if existing
-        const result = await prisma.content.upsert({
-          where: {
-            userId_platform_externalId: {
-              userId,
-              platform: Platform.SPOTIFY,
-              externalId: episode.id,
-            },
-          },
-          update: {
+          episodes.set(episode.id, {
+            id: episode.id,
+            name: episode.name,
+            description: sanitizedDescription,
+            thumbnailUrl: episode.images?.[0]?.url || episode.show?.images?.[0]?.url || null,
+            showName: episode.show?.name || null,
+            url: episode.external_urls?.spotify || `https://open.spotify.com/episode/${episode.id}`,
+            duration: Math.floor((episode.duration_ms || 0) / 1000),
+            capturedAt: new Date(item.played_at),
             listenProgress,
             fullyPlayed,
-          },
-          create: {
+          });
+        }
+        console.log(`[Spotify Sync] ${label}: found ${episodes.size} episodes from recently-played`);
+      } else {
+        console.warn(`[Spotify Sync] ${label}: recently-played returned ${recentResponse.status}, continuing with saved episodes`);
+      }
+    } catch (recentError) {
+      console.warn(`[Spotify Sync] ${label}: recently-played fetch failed, continuing with saved episodes`);
+    }
+
+    // Source 2: Saved episodes - detailed progress info for bookmarked episodes
+    try {
+      const savedResponse = await fetch(`${SPOTIFY_API_BASE}/me/episodes?limit=50`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (savedResponse.ok) {
+        const savedData = await savedResponse.json() as SpotifySavedEpisodesResponse;
+
+        for (const item of savedData.items) {
+          const episode = item.episode;
+          if (!episode) continue;
+
+          const resumePoint = episode.resume_point;
+          let listenProgress = 0;
+          let fullyPlayed = false;
+
+          if (resumePoint) {
+            fullyPlayed = resumePoint.fully_played;
+            if (episode.duration_ms > 0) {
+              listenProgress = Math.round((resumePoint.resume_position_ms / episode.duration_ms) * 100);
+            }
+            if (fullyPlayed) listenProgress = 100;
+          }
+
+          // Only include saved episodes if listened >80%
+          if (!fullyPlayed && listenProgress < 80) continue;
+
+          const sanitizedDescription = episode.description
+            ?.replace(/[\x00-\x1F\x7F]/g, '')
+            ?.substring(0, 1000) || null;
+
+          // Saved episodes override recently-played data (more accurate progress)
+          episodes.set(episode.id, {
+            id: episode.id,
+            name: episode.name,
+            description: sanitizedDescription,
+            thumbnailUrl: episode.images?.[0]?.url || episode.show?.images?.[0]?.url || null,
+            showName: episode.show?.name || null,
+            url: episode.external_urls?.spotify || `https://open.spotify.com/episode/${episode.id}`,
+            duration: Math.floor(episode.duration_ms / 1000),
+            capturedAt: new Date(item.added_at),
+            listenProgress,
+            fullyPlayed,
+          });
+        }
+      } else {
+        console.warn(`[Spotify Sync] ${label}: saved episodes returned ${savedResponse.status}`);
+      }
+    } catch (savedError) {
+      console.warn(`[Spotify Sync] ${label}: saved episodes fetch failed`);
+    }
+
+    // Upsert all collected episodes (deduplicated by ID)
+    for (const ep of episodes.values()) {
+      const result = await prisma.content.upsert({
+        where: {
+          userId_platform_externalId: {
             userId,
             platform: Platform.SPOTIFY,
-            externalId: episode.id,
-            url: episode.external_urls?.spotify || `https://open.spotify.com/episode/${episode.id}`,
-            title: episode.name,
-            description: sanitizedDescription,
-            thumbnailUrl,
-            duration: Math.floor(episode.duration_ms / 1000),
-            showName,
-            channelName: showName,
-            listenProgress,
-            fullyPlayed,
-            capturedAt: new Date(item.added_at),
-            status: ContentStatus.INBOX,
+            externalId: ep.id,
           },
-        });
+        },
+        update: {
+          listenProgress: ep.listenProgress,
+          fullyPlayed: ep.fullyPlayed,
+        },
+        create: {
+          userId,
+          platform: Platform.SPOTIFY,
+          externalId: ep.id,
+          url: ep.url,
+          title: ep.name,
+          description: ep.description,
+          thumbnailUrl: ep.thumbnailUrl,
+          duration: ep.duration,
+          showName: ep.showName,
+          channelName: ep.showName,
+          listenProgress: ep.listenProgress,
+          fullyPlayed: ep.fullyPlayed,
+          capturedAt: ep.capturedAt,
+          status: ContentStatus.INBOX,
+        },
+      });
 
-        if (result.createdAt.getTime() === result.updatedAt.getTime()) {
-          newEpisodesCount++;
-        } else {
-          updatedEpisodesCount++;
-        }
-
-        syncedCount++;
-      }
-
-      // Continue to next page if we still need more
-      nextUrl = syncedCount < MAX_SYNCED ? data.next : null;
-
-      // Small delay to avoid rate limiting
-      if (nextUrl) {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      if (result.createdAt.getTime() === result.updatedAt.getTime()) {
+        newEpisodesCount++;
+      } else {
+        updatedEpisodesCount++;
       }
     }
 
-    // Update last sync time
     await prisma.connectedPlatform.update({
       where: { id: connectionId },
-      data: {
-        lastSyncAt: new Date(),
-        lastSyncError: null,
-      },
+      data: { lastSyncAt: new Date(), lastSyncError: null },
     });
 
-    console.log(`[Spotify Sync] User ${userId}: ${newEpisodesCount} new, ${updatedEpisodesCount} updated`);
+    console.log(`[Spotify Sync] ${label}: ${newEpisodesCount} new, ${updatedEpisodesCount} updated (${episodes.size} total)`);
     return newEpisodesCount;
 
   } catch (error) {
-    console.error(`[Spotify Sync] Error for user ${userId}:`, error);
+    console.error(`[Spotify Sync] Error for ${label}:`, error);
     await prisma.connectedPlatform.update({
       where: { id: connectionId },
-      data: {
-        lastSyncError: error instanceof Error ? error.message : 'Unknown error',
-      },
+      data: { lastSyncError: error instanceof Error ? error.message : 'Unknown error' },
     });
     return 0;
   }
@@ -204,7 +261,6 @@ export async function runSpotifySync(): Promise<void> {
   console.log('[Spotify Sync] Starting sync job...');
   const startTime = Date.now();
 
-  // Get all active Spotify connections
   const connections = await prisma.connectedPlatform.findMany({
     where: { platform: Platform.SPOTIFY },
     include: { user: true },
@@ -218,7 +274,7 @@ export async function runSpotifySync(): Promise<void> {
 
   const results = await Promise.allSettled(
     connections.map(connection =>
-      spotifyLimiter(() => syncUserSpotify(connection.userId, connection.id))
+      spotifyLimiter(() => syncUserSpotify(connection.userId, connection.id, connection.user.email))
     )
   );
 
