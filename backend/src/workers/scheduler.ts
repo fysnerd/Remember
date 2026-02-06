@@ -89,7 +89,7 @@ export function startScheduler(): void {
     await runJob('tiktok-transcription', runTikTokTranscriptionWorker);
   });
 
-  // Instagram Sync - Every 30 minutes
+  // Instagram Sync - Every 30 minutes (via private API, no Playwright)
   cron.schedule('*/30 * * * *', async () => {
     console.log('[Scheduler] Running Instagram sync...');
     await runJob('instagram-sync', runInstagramSync);
@@ -128,7 +128,7 @@ export function startScheduler(): void {
   console.log('  - YouTube Sync: every 15 minutes');
   console.log('  - Spotify Sync: every 30 minutes');
   console.log('  - TikTok Sync: every 30 minutes');
-  console.log('  - Instagram Sync: every 30 minutes');
+  console.log('  - Instagram Sync: every 30 minutes (API, no Playwright)');
   console.log('  - YouTube Transcription: every 2 minutes (+ INBOX pre-transcription)');
   console.log('  - Podcast Transcription: every 5 minutes');
   console.log('  - TikTok Transcription: every 2 minutes');

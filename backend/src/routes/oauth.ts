@@ -664,14 +664,11 @@ oauthRouter.delete('/instagram/disconnect', authenticateToken, async (req: Reque
 // POST /api/oauth/instagram/sync - Trigger manual Instagram sync
 oauthRouter.post('/instagram/sync', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // Import sync function dynamically
-    const { syncInstagramForUser } = await import('../workers/instagramSync.js');
-
     const newReelsCount = await syncInstagramForUser(req.user!.id);
 
     res.json({
       message: 'Instagram sync completed',
-      newReels: newReelsCount
+      newReels: newReelsCount,
     });
   } catch (error) {
     next(error);

@@ -1,11 +1,8 @@
-// Instagram Sync Worker - Fetches LIKED reels only using browser automation
-// Uses Playwright with stored session cookies to access private likes
+// Instagram Sync Worker - Fetches LIKED reels using Instagram private API
+// Uses stored session cookies with fetch() (no Playwright needed)
 // STOPS when it finds content already in DB (incremental sync)
 import { prisma } from '../config/database.js';
 import { Platform, ContentStatus } from '@prisma/client';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
 
 interface InstagramCookies {
   sessionid: string;
@@ -18,17 +15,19 @@ interface InstagramCookies {
   datr?: string;
 }
 
-interface InstagramReel {
-  id: string;
-  code: string;
+interface InstagramMediaItem {
+  pk?: number;
+  id?: string;
+  code?: string;
   caption?: { text?: string };
-  user: { username: string; full_name?: string };
+  user?: { username?: string; full_name?: string };
   like_count?: number;
   comment_count?: number;
   video_duration?: number;
-  image_versions2?: { candidates?: Array<{ url: string }> };
+  image_versions2?: { candidates?: Array<{ url: string; width?: number; height?: number }> };
   taken_at?: number;
   media_type?: number;
+  product_type?: string;
 }
 
 /**
@@ -46,6 +45,67 @@ async function contentExists(userId: string, externalId: string): Promise<boolea
     select: { id: true },
   });
   return existing !== null;
+}
+
+/**
+ * Build cookie header string from cookies object
+ */
+function buildCookieHeader(cookies: InstagramCookies): string {
+  return Object.entries(cookies)
+    .filter(([_, v]) => v !== undefined)
+    .map(([k, v]) => `${k}=${v}`)
+    .join('; ');
+}
+
+/**
+ * Build headers for Instagram private API requests
+ */
+function buildHeaders(cookies: InstagramCookies): Record<string, string> {
+  return {
+    'Cookie': buildCookieHeader(cookies),
+    'X-IG-App-ID': '936619743392459',
+    'X-CSRFToken': cookies.csrftoken || '',
+    'X-IG-WWW-Claim': '0',
+    'X-Requested-With': 'XMLHttpRequest',
+    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+    'Accept': '*/*',
+    'Accept-Language': 'fr-FR,fr;q=0.9',
+    'Referer': 'https://www.instagram.com/',
+    'Origin': 'https://www.instagram.com',
+  };
+}
+
+/**
+ * Fetch liked posts from Instagram private API
+ */
+async function fetchLikedPosts(cookies: InstagramCookies, maxId?: string): Promise<{
+  items: InstagramMediaItem[];
+  nextMaxId?: string;
+  status: string;
+}> {
+  const url = maxId
+    ? `https://i.instagram.com/api/v1/feed/liked/?max_id=${maxId}`
+    : 'https://i.instagram.com/api/v1/feed/liked/';
+
+  const response = await fetch(url, {
+    headers: buildHeaders(cookies),
+  });
+
+  if (response.status === 401 || response.status === 403) {
+    throw new Error('SESSION_EXPIRED');
+  }
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`Instagram API error ${response.status}: ${text.substring(0, 200)}`);
+  }
+
+  const data = await response.json() as any;
+  return {
+    items: data.items || [],
+    nextMaxId: data.next_max_id,
+    status: data.status || 'unknown',
+  };
 }
 
 /**
@@ -83,326 +143,50 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
   }
 
   let newReelsCount = 0;
-  let foundExisting = false; // Flag to stop when we find existing content
 
   try {
-    const { chromium } = await import('playwright');
+    console.log(`[Instagram Sync] Fetching liked posts via API for user ${userId}...`);
 
-    const playwrightCookies = Object.entries(cookies)
-      .filter(([_, value]) => value !== undefined)
-      .map(([name, value]) => ({
-        name,
-        value: value as string,
-        domain: '.instagram.com',
-        path: '/',
-      }));
+    const result = await fetchLikedPosts(cookies);
 
-    const likedReels: InstagramReel[] = [];
-
-    // Launch browser with anti-detection options
-    const browser = await chromium.launch({
-      headless: true,
-      args: [
-        '--disable-blink-features=AutomationControlled',
-        '--disable-features=IsolateOrigins,site-per-process',
-        '--no-sandbox',
-      ]
-    });
-    // Use iPhone user agent - Instagram is less aggressive with mobile
-    const context = await browser.newContext({
-      viewport: { width: 390, height: 844 },
-      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-      locale: 'fr-FR',
-      timezoneId: 'Europe/Paris',
-      deviceScaleFactor: 3,
-      isMobile: true,
-      hasTouch: true,
-      javaScriptEnabled: true,
-    });
-
-    // Remove webdriver flag to avoid detection
-    await context.addInitScript(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-      // @ts-ignore
-      window.chrome = { runtime: {} };
-    });
-
-    await context.addCookies(playwrightCookies);
-    const page = await context.newPage();
-
-    // Debug directory
-    const debugDir = path.join(os.tmpdir(), 'instagram-debug');
-    if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir, { recursive: true });
-
-    // Intercept API responses for liked reels
-    page.on('response', async (response) => {
-      if (foundExisting) return; // Stop intercepting once we found existing content
-
-      const url = response.url();
-      try {
-        // Liked posts API (REST)
-        if (url.includes('/api/v1/feed/liked/') || url.includes('liked_posts')) {
-          const data = await response.json();
-          if (data.items && Array.isArray(data.items)) {
-            for (const item of data.items) {
-              const media = item.media || item;
-              if (media.media_type === 2 || media.product_type === 'clips') {
-                likedReels.push(media);
-              }
-            }
-            console.log(`[Instagram Sync] ★ Intercepted ${likedReels.length} liked reels via REST API`);
-          }
-        }
-
-        // GraphQL API for likes
-        if (url.includes('/graphql') || url.includes('/api/graphql')) {
-          const data = await response.json();
-          const likedConnection = data?.data?.xdt_api__v1__feed__liked__connection ||
-                                   data?.data?.xdt_api__v1__users__self__liked_media__connection;
-          if (likedConnection?.edges) {
-            for (const edge of likedConnection.edges) {
-              const media = edge?.node?.media || edge?.node;
-              if (media && (media.media_type === 2 || media.product_type === 'clips')) {
-                likedReels.push(media);
-              }
-            }
-            if (likedReels.length > 0) {
-              console.log(`[Instagram Sync] ★ Intercepted ${likedReels.length} liked reels via GraphQL`);
-            }
-          }
-        }
-      } catch {
-        // Ignore JSON parse errors
-      }
-    });
-
-    // Navigate to Instagram with human-like delay
-    console.log(`[Instagram Sync] Navigating to Instagram for user ${userId}...`);
-    await page.waitForTimeout(1000 + Math.random() * 2000); // Random delay before navigating
-    await page.goto('https://www.instagram.com/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.waitForTimeout(3000 + Math.random() * 2000); // Wait for dynamic content
-
-    // Close any Instagram popups (save login info, notifications, etc.)
-    const popupSelectors = [
-      'button:has-text("Plus tard")',
-      'button:has-text("Not Now")',
-      'button:has-text("Pas maintenant")',
-      '[aria-label="Close"]',
-      '[aria-label="Fermer"]',
-      'div[role="dialog"] button:last-child', // Usually the dismiss button
-    ];
-    for (const selector of popupSelectors) {
-      try {
-        const popup = page.locator(selector).first();
-        if (await popup.isVisible({ timeout: 2000 })) {
-          await popup.click();
-          console.log(`[Instagram Sync] Closed popup with selector: ${selector}`);
-          await page.waitForTimeout(1000);
-        }
-      } catch {
-        // Popup not found, continue
-      }
-    }
-
-    // Check if logged in
-    if (page.url().includes('/accounts/login')) {
-      console.error(`[Instagram Sync] Cookies expired for user ${userId}`);
-      await browser.close();
+    if (!result.items || result.items.length === 0) {
+      console.log(`[Instagram Sync] No liked posts returned for user ${userId}`);
       await prisma.connectedPlatform.update({
         where: { id: connectionId },
-        data: { lastSyncError: 'Session expired. Please reconnect.' },
+        data: { lastSyncAt: new Date(), lastSyncError: null },
       });
       return 0;
     }
 
-    // Navigate to liked posts page
-    console.log(`[Instagram Sync] Going to liked posts page...`);
-    await page.goto('https://www.instagram.com/your_activity/interactions/likes/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.waitForTimeout(3000);
+    console.log(`[Instagram Sync] Got ${result.items.length} items from API`);
 
-    // Close any popups again (they can appear after navigation)
-    for (const selector of popupSelectors) {
-      try {
-        const popup = page.locator(selector).first();
-        if (await popup.isVisible({ timeout: 1000 })) {
-          await popup.click();
-          console.log(`[Instagram Sync] Closed popup on likes page: ${selector}`);
-          await page.waitForTimeout(1000);
-        }
-      } catch {
-        // Popup not found, continue
-      }
-    }
-    await page.waitForTimeout(2000);
-
-    // Screenshot for debug
-    const screenshot = path.join(debugDir, `likes-page-${Date.now()}.png`);
-    await page.screenshot({ path: screenshot });
-    console.log(`[Instagram Sync] Screenshot: ${screenshot}`);
-
-    if (!page.url().includes('/your_activity/interactions/likes')) {
-      console.warn(`[Instagram Sync] Could not access likes page`);
-      await browser.close();
-      return 0;
-    }
-
-    // DOM-based extraction: click on grid items and check URLs
-    const maxLikesToCheck = 15;
-    let likesChecked = 0;
-    let consecutiveErrors = 0;
-    const maxConsecutiveErrors = 5;
-
-    console.log(`[Instagram Sync] Starting DOM extraction of liked reels...`);
-
-    // Debug: Log page structure
-    const pageContent = await page.content();
-    console.log(`[Instagram Sync] Page HTML length: ${pageContent.length}`);
-
-    // Try multiple selectors for Instagram's grid
-    const selectors = [
-      'main div[role="button"]',
-      'main button:has(img)',
-      'article div[role="button"]',
-      'div[style*="flex"] > div > div > a',
-      'a[href*="/reel/"]',
-      'a[href*="/p/"]',
-      'div._aagw',  // Instagram's grid item class
-      'div._aabd',  // Another common class
-    ];
-
-    let gridItems: any = null;
-    let usedSelector = '';
-
-    for (const selector of selectors) {
-      const items = page.locator(selector);
-      const count = await items.count();
-      console.log(`[Instagram Sync] Selector "${selector}": ${count} items`);
-      if (count > 0 && !gridItems) {
-        gridItems = items;
-        usedSelector = selector;
-      }
-    }
-
-    if (!gridItems || await gridItems.count() === 0) {
-      console.error(`[Instagram Sync] No grid items found with any selector!`);
-      const errorScreenshot = path.join(debugDir, `no-items-${Date.now()}.png`);
-      await page.screenshot({ path: errorScreenshot, fullPage: true });
-      console.log(`[Instagram Sync] Error screenshot: ${errorScreenshot}`);
-      await browser.close();
-      return 0;
-    }
-
-    console.log(`[Instagram Sync] Using selector: "${usedSelector}" (${await gridItems.count()} items)`);
-
-    while (likesChecked < maxLikesToCheck && consecutiveErrors < maxConsecutiveErrors && !foundExisting) {
-      try {
-        // Refresh the locator count
-        const count = await gridItems.count();
-
-        if (count === 0) {
-          console.log(`[Instagram Sync] No more liked items to check`);
-          break;
-        }
-
-        // Click on the first available item (after scrolling, new items appear at top)
-        const itemIndex = Math.min(likesChecked, count - 1);
-        console.log(`[Instagram Sync] Clicking item ${itemIndex}/${count}...`);
-        await gridItems.nth(itemIndex).click();
-        await page.waitForTimeout(2000);
-
-        // Check URL to see if it's a reel or post (/reel/XXX or /p/XXX)
-        const currentUrl = page.url();
-        const reelMatch = currentUrl.match(/\/(?:reel|p)\/([A-Za-z0-9_-]+)/);
-
-        if (reelMatch) {
-          const shortcode = reelMatch[1];
-
-          // CHECK IF ALREADY EXISTS - if yes, STOP (we've reached previous sync point)
-          const exists = await contentExists(userId, shortcode);
-          if (exists) {
-            console.log(`[Instagram Sync] ✓ Found existing reel ${shortcode} - stopping (incremental sync complete)`);
-            foundExisting = true;
-            break;
-          }
-
-          // Extract metadata from the post page (og:tags + visible header)
-          const metadata = await page.evaluate(() => {
-            const ogImage = document.querySelector('meta[property="og:image"]')?.getAttribute('content') || null;
-            const ogDesc = document.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
-            const caption = ogDesc.replace(/^.*?:\s*"?/, '').replace(/"?\s*$/, '');
-            // Username from og:description pattern: "XXX likes, XXX comments - USERNAME le DATE:"
-            const usernameMatch = ogDesc.match(/comments\s*-\s*([a-zA-Z0-9_.]+)\s+(?:le|on)\s+/);
-            const username = usernameMatch?.[1] || null;
-            return { ogImage, caption, username };
-          });
-
-          likedReels.push({
-            id: shortcode,
-            code: shortcode,
-            caption: metadata.caption ? { text: metadata.caption } : undefined,
-            user: { username: metadata.username || 'unknown' },
-            image_versions2: metadata.ogImage ? { candidates: [{ url: metadata.ogImage }] } : undefined,
-          } as InstagramReel);
-          console.log(`[Instagram Sync] Found NEW liked reel: ${shortcode} by @${metadata.username || 'unknown'}`);
-        }
-
-        likesChecked++;
-        consecutiveErrors = 0;
-
-        // Navigate back to likes page
-        await page.goto('https://www.instagram.com/your_activity/interactions/likes/', {
-          waitUntil: 'domcontentloaded',
-          timeout: 60000
-        });
-        await page.waitForTimeout(2000);
-
-        // Re-acquire the grid items locator after navigation
-        gridItems = page.locator(usedSelector);
-
-        // Scroll to load more items
-        await page.mouse.wheel(0, 200);
-        await page.waitForTimeout(1000);
-
-      } catch (error) {
-        console.warn(`[Instagram Sync] Error extracting liked item:`, error);
-        consecutiveErrors++;
-        console.log(`[Instagram Sync] Consecutive errors: ${consecutiveErrors}/${maxConsecutiveErrors}`);
-
-        try {
-          await page.goto('https://www.instagram.com/your_activity/interactions/likes/', { waitUntil: 'domcontentloaded' });
-          await page.waitForTimeout(2000);
-        } catch {
-          break;
-        }
-      }
-    }
-
-    await browser.close();
-
-    console.log(`[Instagram Sync] Extraction complete:`);
-    console.log(`[Instagram Sync]   - Items checked: ${likesChecked}`);
-    console.log(`[Instagram Sync]   - Reels found: ${likedReels.length}`);
-    console.log(`[Instagram Sync]   - Stopped early (found existing): ${foundExisting}`);
+    // Limit to 15 most recent
+    const items = result.items.slice(0, 15);
 
     // Deduplicate
     const seenIds = new Set<string>();
-    const uniqueReels = likedReels.filter((reel) => {
-      const id = reel.id || reel.code;
+    const uniqueItems = items.filter((item) => {
+      const id = item.pk?.toString() || item.id?.toString() || item.code;
       if (!id || seenIds.has(id)) return false;
       seenIds.add(id);
       return true;
     });
 
-    // Save to DB
-    for (const reel of uniqueReels) {
-      const externalId = reel.id || reel.code;
-      const shortcode = reel.code || externalId;
-      const url = `https://www.instagram.com/p/${shortcode}/`;
-      const authorUsername = reel.user?.username || null;
+    // Save to DB (stop when we find existing content = incremental sync)
+    for (const item of uniqueItems) {
+      const externalId = item.pk?.toString() || item.id?.toString() || item.code;
+      if (!externalId) continue;
 
-      // Double-check doesn't exist (might have been added by API interception)
+      const shortcode = item.code || externalId;
+      const url = `https://www.instagram.com/p/${shortcode}/`;
+      const authorUsername = item.user?.username || null;
+
+      // Check if already exists - if yes, stop (incremental sync)
       const exists = await contentExists(userId, externalId);
-      if (exists) continue;
+      if (exists) {
+        console.log(`[Instagram Sync] Found existing reel ${shortcode} - stopping (incremental sync complete)`);
+        break;
+      }
 
       await prisma.content.create({
         data: {
@@ -410,15 +194,15 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
           platform: Platform.INSTAGRAM,
           externalId,
           url,
-          title: reel.caption?.text?.substring(0, 255) || `Instagram Reel`,
-          description: reel.caption?.text || null,
-          thumbnailUrl: reel.image_versions2?.candidates?.[0]?.url || null,
-          duration: reel.video_duration || null,
+          title: item.caption?.text?.substring(0, 255) || 'Instagram Reel',
+          description: item.caption?.text || null,
+          thumbnailUrl: item.image_versions2?.candidates?.[0]?.url || null,
+          duration: item.video_duration || null,
           authorUsername,
           channelName: authorUsername ? `@${authorUsername}` : null,
-          likeCount: reel.like_count || null,
-          commentCount: reel.comment_count || null,
-          capturedAt: reel.taken_at ? new Date(reel.taken_at * 1000) : new Date(),
+          likeCount: item.like_count || null,
+          commentCount: item.comment_count || null,
+          capturedAt: item.taken_at ? new Date(item.taken_at * 1000) : new Date(),
           status: ContentStatus.INBOX,
         },
       });
@@ -431,15 +215,25 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       data: { lastSyncAt: new Date(), lastSyncError: null },
     });
 
-    console.log(`[Instagram Sync] User ${userId}: synced ${newReelsCount} NEW reels`);
+    console.log(`[Instagram Sync] User ${userId}: synced ${newReelsCount} new reels`);
     return newReelsCount;
 
   } catch (error) {
-    console.error(`[Instagram Sync] Error for user ${userId}:`, error);
-    await prisma.connectedPlatform.update({
-      where: { id: connectionId },
-      data: { lastSyncError: error instanceof Error ? error.message : 'Unknown error' },
-    });
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+
+    if (errorMsg === 'SESSION_EXPIRED') {
+      console.warn(`[Instagram Sync] Session expired for user ${userId}`);
+      await prisma.connectedPlatform.update({
+        where: { id: connectionId },
+        data: { lastSyncError: 'Session expired. Please reconnect Instagram.' },
+      });
+    } else {
+      console.error(`[Instagram Sync] Error for user ${userId}:`, error);
+      await prisma.connectedPlatform.update({
+        where: { id: connectionId },
+        data: { lastSyncError: errorMsg },
+      });
+    }
     return 0;
   }
 }
@@ -471,7 +265,8 @@ export async function runInstagramSync(): Promise<void> {
       console.error(`[Instagram Sync] Failed for user ${connection.userId}:`, error);
       errorCount++;
     }
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    // Small delay between users to avoid rate limiting
+    await new Promise(resolve => setTimeout(resolve, 2000));
   }
 
   const duration = Date.now() - startTime;
