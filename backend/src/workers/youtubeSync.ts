@@ -62,7 +62,7 @@ export async function syncUserYouTube(userId: string, connectionId: string): Pro
 
   let newVideosCount = 0;
   let nextPageToken: string | undefined;
-  const maxPages = 5; // Limit to 5 pages (250 videos max) per sync
+  const maxPages = 1; // Limit to 1 page (15 videos max) per sync
   let currentPage = 0;
 
   try {
@@ -70,7 +70,7 @@ export async function syncUserYouTube(userId: string, connectionId: string): Pro
       const url = new URL(`${YOUTUBE_API_BASE}/playlistItems`);
       url.searchParams.set('part', 'snippet,contentDetails');
       url.searchParams.set('playlistId', likedPlaylistId);
-      url.searchParams.set('maxResults', '50');
+      url.searchParams.set('maxResults', '15');
       if (nextPageToken) {
         url.searchParams.set('pageToken', nextPageToken);
       }

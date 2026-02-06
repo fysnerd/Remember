@@ -288,7 +288,8 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
     // Scroll to load videos regardless of how we got here
     console.log(`[TikTok Sync] Scrolling to load videos...`);
     const maxScrolls = 15;
-    for (let i = 0; i < maxScrolls && !foundExisting; i++) {
+    const maxVideos = 15;
+    for (let i = 0; i < maxScrolls && !foundExisting && likedVideos.length < maxVideos; i++) {
       const prevCount = likedVideos.length;
       await page.mouse.wheel(0, 800);
       await page.waitForTimeout(1500);

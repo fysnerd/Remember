@@ -69,8 +69,8 @@ export async function syncUserSpotify(userId: string, connectionId: string): Pro
   let updatedEpisodesCount = 0;
 
   try {
-    // Fetch ALL saved episodes (paginated)
-    let nextUrl: string | null = `${SPOTIFY_API_BASE}/me/episodes?limit=50`;
+    // Fetch most recent saved episodes (limited to 15)
+    let nextUrl: string | null = `${SPOTIFY_API_BASE}/me/episodes?limit=15`;
 
     while (nextUrl) {
       const response = await fetch(nextUrl, {
@@ -159,8 +159,8 @@ export async function syncUserSpotify(userId: string, connectionId: string): Pro
         }
       }
 
-      // Get next page
-      nextUrl = data.next;
+      // Only fetch first page (15 most recent)
+      nextUrl = null;
 
       // Small delay to avoid rate limiting
       if (nextUrl) {
