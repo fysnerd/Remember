@@ -61,18 +61,15 @@ function buildCookieHeader(cookies: InstagramCookies): string {
  * Build headers for Instagram private API requests
  */
 function buildHeaders(cookies: InstagramCookies): Record<string, string> {
+  // Use the same Safari mobile UA as the iOS WebView that created the cookies
+  // Instagram validates that the UA matches the session
   return {
     'Cookie': buildCookieHeader(cookies),
-    'X-IG-App-ID': '936619743392459',
     'X-CSRFToken': cookies.csrftoken || '',
-    'X-IG-WWW-Claim': '0',
-    'X-Requested-With': 'XMLHttpRequest',
-    // Must use desktop browser UA to match X-IG-App-ID (web app ID)
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
     'Accept': '*/*',
     'Accept-Language': 'fr-FR,fr;q=0.9',
     'Referer': 'https://www.instagram.com/',
-    'Origin': 'https://www.instagram.com',
   };
 }
 
@@ -85,8 +82,8 @@ async function fetchLikedPosts(cookies: InstagramCookies, maxId?: string): Promi
   status: string;
 }> {
   const url = maxId
-    ? `https://www.instagram.com/api/v1/feed/liked/?max_id=${maxId}`
-    : 'https://www.instagram.com/api/v1/feed/liked/';
+    ? `https://i.instagram.com/api/v1/feed/liked/?max_id=${maxId}`
+    : 'https://i.instagram.com/api/v1/feed/liked/';
 
   const response = await fetch(url, {
     headers: buildHeaders(cookies),
