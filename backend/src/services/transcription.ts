@@ -86,8 +86,9 @@ export async function fetchYouTubeTranscriptWithYtDlp(
 
     try {
       // Download auto-generated subtitles in JSON3 format
-      // Use --impersonate chrome to avoid rate limiting (requires curl_cffi: pip install curl_cffi)
-      const command = `yt-dlp --impersonate chrome --write-auto-sub --sub-lang "${lang}" --sub-format json3 --skip-download -o "${outputBase}" "https://www.youtube.com/watch?v=${videoId}"`;
+      // Use WARP proxy (socks5://127.0.0.1:40000) to avoid YouTube datacenter IP blocking
+      // Use --remote-components ejs:github for JS challenge solving
+      const command = `yt-dlp --proxy socks5://127.0.0.1:40000 --remote-components ejs:github --write-auto-sub --sub-lang "${lang}" --sub-format json3 --skip-download -o "${outputBase}" "https://www.youtube.com/watch?v=${videoId}"`;
 
       console.log(`[Transcription] Running yt-dlp for ${videoId} (lang=${lang})...`);
       await execAsync(command, { timeout: 60000 });
