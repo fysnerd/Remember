@@ -310,9 +310,9 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
         await gridItems.nth(itemIndex).click();
         await page.waitForTimeout(2000);
 
-        // Check URL to see if it's a reel
+        // Check URL to see if it's a reel or post (/reel/XXX or /p/XXX)
         const currentUrl = page.url();
-        const reelMatch = currentUrl.match(/\/reel\/([A-Za-z0-9_-]+)/);
+        const reelMatch = currentUrl.match(/\/(?:reel|p)\/([A-Za-z0-9_-]+)/);
 
         if (reelMatch) {
           const shortcode = reelMatch[1];
@@ -384,7 +384,7 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
     for (const reel of uniqueReels) {
       const externalId = reel.id || reel.code;
       const shortcode = reel.code || externalId;
-      const url = `https://www.instagram.com/reel/${shortcode}/`;
+      const url = `https://www.instagram.com/p/${shortcode}/`;
       const authorUsername = reel.user?.username || null;
 
       // Double-check doesn't exist (might have been added by API interception)
