@@ -68,11 +68,17 @@ export async function syncUserSpotify(userId: string, connectionId: string): Pro
   let newEpisodesCount = 0;
   let updatedEpisodesCount = 0;
 
-  try {
-    // Fetch most recent saved episodes (limited to 15)
-    let nextUrl: string | null = `${SPOTIFY_API_BASE}/me/episodes?limit=15`;
+  const MAX_SYNCED = 15;
+  const MAX_PAGES = 10; // Safety limit to avoid infinite pagination
 
-    while (nextUrl) {
+  try {
+    // Paginate until we collect 15 episodes listened >80%
+    let nextUrl: string | null = `${SPOTIFY_API_BASE}/me/episodes?limit=50`;
+    let syncedCount = 0;
+    let pagesChecked = 0;
+
+    while (nextUrl && syncedCount < MAX_SYNCED && pagesChecked < MAX_PAGES) {
+      pagesChecked++;
       const response = await fetch(nextUrl, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -84,6 +90,8 @@ export async function syncUserSpotify(userId: string, connectionId: string): Pro
       const data = await response.json() as SpotifySavedEpisodesResponse;
 
       for (const item of data.items) {
+        if (syncedCount >= MAX_SYNCED) break;
+
         const episode = item.episode;
         if (!episode) continue;
 
@@ -157,10 +165,12 @@ export async function syncUserSpotify(userId: string, connectionId: string): Pro
           });
           newEpisodesCount++;
         }
+
+        syncedCount++;
       }
 
-      // Only fetch first page (15 most recent)
-      nextUrl = null;
+      // Continue to next page if we still need more
+      nextUrl = syncedCount < MAX_SYNCED ? data.next : null;
 
       // Small delay to avoid rate limiting
       if (nextUrl) {
