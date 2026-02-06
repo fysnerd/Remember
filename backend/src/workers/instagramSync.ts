@@ -325,12 +325,25 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
             break;
           }
 
+          // Extract metadata from the post page (og:tags + visible header)
+          const metadata = await page.evaluate(() => {
+            const ogImage = document.querySelector('meta[property="og:image"]')?.getAttribute('content') || null;
+            const ogDesc = document.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
+            const caption = ogDesc.replace(/^.*?:\s*"?/, '').replace(/"?\s*$/, '');
+            // Username from og:description pattern: "XXX likes, XXX comments - USERNAME le DATE:"
+            const usernameMatch = ogDesc.match(/comments\s*-\s*([a-zA-Z0-9_.]+)\s+(?:le|on)\s+/);
+            const username = usernameMatch?.[1] || null;
+            return { ogImage, caption, username };
+          });
+
           likedReels.push({
             id: shortcode,
             code: shortcode,
-            user: { username: 'unknown' },
+            caption: metadata.caption ? { text: metadata.caption } : undefined,
+            user: { username: metadata.username || 'unknown' },
+            image_versions2: metadata.ogImage ? { candidates: [{ url: metadata.ogImage }] } : undefined,
           } as InstagramReel);
-          console.log(`[Instagram Sync] Found NEW liked reel: ${shortcode}`);
+          console.log(`[Instagram Sync] Found NEW liked reel: ${shortcode} by @${metadata.username || 'unknown'}`);
         }
 
         likesChecked++;
