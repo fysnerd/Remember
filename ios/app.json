@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Remember",
-    "slug": "remember",
+    "name": "Ankora",
+    "slug": "ankora",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "remember",
+    "scheme": "ankora",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.fysnerd.remember",
+      "bundleIdentifier": "com.fysnerd.ankora",
       "associatedDomains": [
         "applinks:api.ankora.study"
       ],
@@ -34,7 +34,7 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.remember.app"
+      "package": "com.fysnerd.ankora"
     },
     "web": {
       "bundler": "metro",

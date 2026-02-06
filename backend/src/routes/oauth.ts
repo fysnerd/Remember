@@ -89,13 +89,13 @@ oauthRouter.get('/youtube/callback', async (req: Request, res: Response, next: N
     const redirectToClient = (params: Record<string, string>) => {
       const queryString = new URLSearchParams(params).toString();
       if (isIOS && appRedirectUri) {
-        // Use the app-provided redirect URI (works with exp:// in dev and remember:// in prod)
+        // Use the app-provided redirect URI (works with exp:// in dev and ankora:// in prod)
         const separator = appRedirectUri.includes('?') ? '&' : '?';
         console.log(`[OAuth] Redirecting to iOS app: ${appRedirectUri}${separator}${queryString}`);
         return res.redirect(`${appRedirectUri}${separator}${queryString}`);
       } else if (isIOS) {
         // Fallback for iOS without appRedirectUri (legacy)
-        return res.redirect(`remember://oauth/youtube/callback?${queryString}`);
+        return res.redirect(`ankora://oauth/youtube/callback?${queryString}`);
       }
       return res.redirect(`${config.frontendUrl}/settings?${queryString}`);
     };
@@ -243,7 +243,7 @@ oauthRouter.get('/spotify/callback', async (req: Request, res: Response, next: N
         return res.redirect(`${appRedirectUri}${separator}${queryString}`);
       } else if (isIOS) {
         // Fallback for iOS without appRedirectUri (legacy)
-        return res.redirect(`remember://oauth/spotify/callback?${queryString}`);
+        return res.redirect(`ankora://oauth/spotify/callback?${queryString}`);
       }
       return res.redirect(`${config.frontendUrl}/settings?${queryString}`);
     };
@@ -834,7 +834,7 @@ oauthRouter.get('/desktop/page/:token', async (req: Request, res: Response) => {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Session Expired - Remember</title>
+        <title>Session Expired - Ankora</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
           body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #f5f5f5; }
@@ -846,7 +846,7 @@ oauthRouter.get('/desktop/page/:token', async (req: Request, res: Response) => {
       <body>
         <div class="card">
           <h1>⏰ Session Expired</h1>
-          <p>This link has expired. Please go back to the Remember app and try again.</p>
+          <p>This link has expired. Please go back to the Ankora app and try again.</p>
         </div>
       </body>
       </html>
@@ -860,7 +860,7 @@ oauthRouter.get('/desktop/page/:token', async (req: Request, res: Response) => {
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Connect ${platformName} - Remember</title>
+      <title>Connect ${platformName} - Ankora</title>
       <meta name="viewport" content="width=device-width, initial-scale=1">
       <style>
         * { box-sizing: border-box; }

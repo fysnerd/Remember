@@ -18,4 +18,4 @@ export const FRONTEND_URL = __DEV__
   : 'https://ankora.study';
 
 // OAuth deep link scheme
-export const OAUTH_REDIRECT_SCHEME = 'remember';
+export const OAUTH_REDIRECT_SCHEME = 'ankora';

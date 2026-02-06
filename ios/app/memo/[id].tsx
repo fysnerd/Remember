@@ -103,7 +103,7 @@ export default function MemoScreen() {
     try {
       await Share.share({
         message: memo.content,
-        title: 'Mémo Remember',
+        title: 'Mémo Ankora',
       });
     } catch (error) {
       show('Erreur lors du partage', 'error');

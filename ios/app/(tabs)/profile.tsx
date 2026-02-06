@@ -67,14 +67,14 @@ export default function ProfileScreen() {
       const { data } = await api.get(`/oauth/${platformId}/connect`, {
         params: {
           client: 'ios',
-          appRedirectUri: 'remember://oauth/callback',
+          appRedirectUri: 'ankora://oauth/callback',
         },
       });
       if (data.authUrl) {
         // Use openAuthSessionAsync to properly handle the deep link redirect
         const result = await WebBrowser.openAuthSessionAsync(
           data.authUrl,
-          'remember://oauth/callback'
+          'ankora://oauth/callback'
         );
 
         if (result.type === 'success') {
