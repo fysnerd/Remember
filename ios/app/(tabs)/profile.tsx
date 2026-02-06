@@ -217,7 +217,7 @@ export default function ProfileScreen() {
       {/* DEV Tools - Remove in production */}
       <View style={styles.section}>
         <Text variant="h3" style={styles.sectionTitle}>
-          🛠️ Dev Tools
+          🛠️ Dev Tools (beta)
         </Text>
         <Card padding="md">
           <View style={styles.syncGrid}>
