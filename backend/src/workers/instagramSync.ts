@@ -85,8 +85,8 @@ async function fetchLikedPosts(cookies: InstagramCookies, maxId?: string): Promi
   status: string;
 }> {
   const url = maxId
-    ? `https://i.instagram.com/api/v1/feed/liked/?max_id=${maxId}`
-    : 'https://i.instagram.com/api/v1/feed/liked/';
+    ? `https://www.instagram.com/api/v1/feed/liked/?max_id=${maxId}`
+    : 'https://www.instagram.com/api/v1/feed/liked/';
 
   const response = await fetch(url, {
     headers: buildHeaders(cookies),
