@@ -247,7 +247,7 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
     }
 
     // DOM-based extraction: click on grid items and check URLs
-    const maxLikesToCheck = 50;
+    const maxLikesToCheck = 15;
     let likesChecked = 0;
     let consecutiveErrors = 0;
     const maxConsecutiveErrors = 5;
