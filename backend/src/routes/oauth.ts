@@ -8,6 +8,8 @@ import { startTikTokAuth, cancelTikTokAuth } from '../services/tiktokAuth.js';
 import { startInstagramAuth, cancelInstagramAuth } from '../services/instagramAuth.js';
 import { syncUserYouTube } from '../workers/youtubeSync.js';
 import { syncUserSpotify } from '../workers/spotifySync.js';
+import { syncTikTokForUser } from '../workers/tiktokSync.js';
+import { syncInstagramForUser } from '../workers/instagramSync.js';
 
 // Helper to get required config value or throw
 function requireConfig<T>(value: T | undefined, name: string): T {
@@ -388,6 +390,11 @@ oauthRouter.post('/tiktok/connect', authenticateToken, async (req: Request, res:
         },
       });
 
+      // Trigger immediate sync in background (non-blocking)
+      syncTikTokForUser(req.user!.id).catch((error) => {
+        console.error(`[OAuth] Background TikTok sync failed for user ${req.user!.id}:`, error);
+      });
+
       return res.json({ message: 'TikTok connected successfully' });
     }
 
@@ -423,6 +430,11 @@ oauthRouter.post('/tiktok/connect', authenticateToken, async (req: Request, res:
         refreshToken: null,
         expiresAt: null,
       },
+    });
+
+    // Trigger immediate sync in background (non-blocking)
+    syncTikTokForUser(req.user!.id).catch((error) => {
+      console.error(`[OAuth] Background TikTok sync failed for user ${req.user!.id}:`, error);
     });
 
     return res.json({ message: 'TikTok connected successfully' });
@@ -563,6 +575,11 @@ oauthRouter.post('/instagram/connect', authenticateToken, async (req: Request, r
         },
       });
 
+      // Trigger immediate sync in background (non-blocking)
+      syncInstagramForUser(req.user!.id).catch((error) => {
+        console.error(`[OAuth] Background Instagram sync failed for user ${req.user!.id}:`, error);
+      });
+
       return res.json({ message: 'Instagram connected successfully' });
     }
 
@@ -603,6 +620,11 @@ oauthRouter.post('/instagram/connect', authenticateToken, async (req: Request, r
         refreshToken: null,
         expiresAt: null,
       },
+    });
+
+    // Trigger immediate sync in background (non-blocking)
+    syncInstagramForUser(req.user!.id).catch((error) => {
+      console.error(`[OAuth] Background Instagram sync failed for user ${req.user!.id}:`, error);
     });
 
     return res.json({ message: 'Instagram connected successfully' });
