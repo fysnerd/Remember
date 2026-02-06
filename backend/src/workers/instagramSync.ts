@@ -158,8 +158,14 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
 
     console.log(`[Instagram Sync] Got ${result.items.length} items from API`);
 
+    // Filter: only videos (media_type 2 = video, product_type 'clips' = reel)
+    const videos = result.items.filter((item) =>
+      item.media_type === 2 || item.product_type === 'clips'
+    );
+    console.log(`[Instagram Sync] Filtered to ${videos.length} videos (skipped ${result.items.length - videos.length} photos)`);
+
     // Limit to 15 most recent
-    const items = result.items.slice(0, 15);
+    const items = videos.slice(0, 15);
 
     // Deduplicate
     const seenIds = new Set<string>();
