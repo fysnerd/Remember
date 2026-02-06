@@ -67,6 +67,9 @@ function buildHeaders(cookies: InstagramCookies): Record<string, string> {
     'X-CSRFToken': cookies.csrftoken || '',
     'User-Agent': 'Barcelona 289.0.0.77.109 Android',
     'Accept': '*/*',
+    'Sec-Fetch-Site': 'same-origin',
+    'Sec-Fetch-Mode': 'cors',
+    'Sec-Fetch-Dest': 'empty',
   };
 }
 
