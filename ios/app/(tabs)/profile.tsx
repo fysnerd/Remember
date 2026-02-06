@@ -27,22 +27,21 @@ export default function ProfileScreen() {
   const { data: oauthStatus, isLoading } = useOAuthStatus();
   const queryClient = useQueryClient();
   const [loadingPlatform, setLoadingPlatform] = useState<string | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncingPlatform, setSyncingPlatform] = useState<string | null>(null);
 
-  // DEV: Trigger manual sync for all platforms
-  const handleSyncAll = async () => {
-    setIsSyncing(true);
+  // DEV: Trigger manual sync for a specific platform
+  const handleSync = async (platform: string, label: string) => {
+    setSyncingPlatform(platform);
     try {
-      await api.post('/admin/sync/all');
-      Alert.alert('Sync lancé', 'Le sync de toutes les plateformes a été déclenché. Les nouveaux contenus apparaîtront bientôt.');
-      // Refresh content queries
+      await api.post(`/admin/sync/${platform}`);
+      Alert.alert('Sync lancé', `Le sync ${label} a été déclenché. Les nouveaux contenus apparaîtront bientôt.`);
       queryClient.invalidateQueries({ queryKey: ['content'] });
       queryClient.invalidateQueries({ queryKey: ['inbox'] });
     } catch (error) {
       console.error('Sync error:', error);
-      Alert.alert('Erreur', 'Impossible de lancer le sync');
+      Alert.alert('Erreur', `Impossible de lancer le sync ${label}`);
     } finally {
-      setIsSyncing(false);
+      setSyncingPlatform(null);
     }
   };
 
@@ -221,17 +220,27 @@ export default function ProfileScreen() {
           🛠️ Dev Tools
         </Text>
         <Card padding="md">
-          <Pressable
-            style={styles.syncButton}
-            onPress={handleSyncAll}
-            disabled={isSyncing}
-          >
-            <Text variant="body" weight="medium" style={styles.syncButtonText}>
-              {isSyncing ? '⏳ Sync en cours...' : '🔄 Sync All Platforms'}
-            </Text>
-          </Pressable>
+          <View style={styles.syncGrid}>
+            {([
+              { id: 'youtube', label: 'YouTube', emoji: '🎬' },
+              { id: 'spotify', label: 'Spotify', emoji: '🎧' },
+              { id: 'tiktok', label: 'TikTok', emoji: '📱' },
+              { id: 'instagram', label: 'Instagram', emoji: '📷' },
+            ] as const).map((p) => (
+              <Pressable
+                key={p.id}
+                style={[styles.syncButton, syncingPlatform === p.id && styles.syncButtonDisabled]}
+                onPress={() => handleSync(p.id, p.label)}
+                disabled={syncingPlatform !== null}
+              >
+                <Text variant="body" weight="medium" style={styles.syncButtonText}>
+                  {syncingPlatform === p.id ? '⏳' : p.emoji} {p.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
           <Text variant="caption" color="secondary" style={styles.syncHint}>
-            Récupère les nouveaux likes/saves de toutes les plateformes
+            Sync individuel par plateforme
           </Text>
         </Card>
       </View>
@@ -268,11 +277,21 @@ const styles = StyleSheet.create({
   },
   logoutText: { color: colors.error },
   disconnectText: { color: colors.error },
+  syncGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
   syncButton: {
     backgroundColor: colors.primary,
-    padding: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     borderRadius: borderRadius.md,
     alignItems: 'center',
+    width: '48%' as any,
+  },
+  syncButtonDisabled: {
+    opacity: 0.5,
   },
   syncButtonText: { color: colors.background },
   syncHint: { marginTop: spacing.sm, textAlign: 'center' },
