@@ -10,12 +10,12 @@ const TUNNEL_URL = 'https://atomic-floyd-couple-portrait.trycloudflare.com';
 // API base URL
 export const API_URL = __DEV__
   ? `${TUNNEL_URL}/api`
-  : 'https://api.remember.app/api';
+  : 'https://api.ankora.study/api';
 
 // Frontend web URL (for OAuth callbacks)
 export const FRONTEND_URL = __DEV__
   ? 'http://localhost:5173'
-  : 'https://remember.app';
+  : 'https://ankora.study';
 
 // OAuth deep link scheme
 export const OAUTH_REDIRECT_SCHEME = 'remember';

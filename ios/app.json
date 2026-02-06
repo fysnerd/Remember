@@ -17,7 +17,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.fysnerd.remember",
       "associatedDomains": [
-        "applinks:api.remember.app"
+        "applinks:api.ankora.study"
       ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
