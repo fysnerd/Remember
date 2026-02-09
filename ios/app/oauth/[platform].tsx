@@ -3,7 +3,7 @@
  * Requires development build (not Expo Go) for CookieManager
  */
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -51,9 +51,24 @@ export default function OAuthWebViewScreen() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [cookiesCleared, setCookiesCleared] = useState(false);
 
   const platformKey = platform as Platform;
   const config = PLATFORM_CONFIG[platformKey];
+
+  // Clear old cookies on mount so the user gets a fresh login page
+  useEffect(() => {
+    if (CookieManager && config) {
+      CookieManager.clearAll()
+        .then(() => {
+          console.log(`[OAuth] Cleared cookies for fresh ${config.name} login`);
+          setCookiesCleared(true);
+        })
+        .catch(() => setCookiesCleared(true));
+    } else {
+      setCookiesCleared(true);
+    }
+  }, []);
 
   if (!config) {
     return (
@@ -160,23 +175,26 @@ export default function OAuthWebViewScreen() {
         </View>
 
         <View style={styles.webviewContainer}>
-          {isLoading && (
+          {(isLoading || !cookiesCleared) && (
             <View style={styles.loadingOverlay}>
               <LoadingScreen />
             </View>
           )}
-          <WebView
-            ref={webViewRef}
-            source={{ uri: config.loginUrl }}
-            userAgent={USER_AGENT}
-            onLoadStart={() => setIsLoading(true)}
-            onLoadEnd={() => setIsLoading(false)}
-            javaScriptEnabled={true}
-            domStorageEnabled={true}
-            thirdPartyCookiesEnabled={true}
-            sharedCookiesEnabled={true}
-            style={styles.webview}
-          />
+          {cookiesCleared && (
+            <WebView
+              ref={webViewRef}
+              source={{ uri: config.loginUrl }}
+              userAgent={USER_AGENT}
+              onLoadStart={() => setIsLoading(true)}
+              onLoadEnd={() => setIsLoading(false)}
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+              thirdPartyCookiesEnabled={true}
+              sharedCookiesEnabled={true}
+              incognito={false}
+              style={styles.webview}
+            />
+          )}
         </View>
 
         <View style={styles.footer}>
