@@ -11,27 +11,27 @@ See: .planning/PROJECT.md (updated 2026-02-09)
 
 Phase: 1 of 4 (ESM Migration & Logging Foundation)
 Plan: 4 of 4 (all plans complete, pending full deployment)
-Status: In progress (awaiting parallel plan completion)
-Last activity: 2026-02-09 — Completed plan 01-04 (Route logging migration)
+Status: In progress (awaiting plan 01-02 completion)
+Last activity: 2026-02-09 — Completed plan 01-03 (Service logging migration)
 
-Progress: [████░░░░░░] 75%
+Progress: [███████░░░] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 28 minutes
-- Total execution time: 1.65 hours
+- Total plans completed: 4
+- Average duration: 22 minutes
+- Total execution time: 2.03 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 3 | 83 min | 28 min |
+| 01 | 4 | 122 min | 30 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (5 min), 01-02 (14 min), 01-04 (59 min)
-- Trend: Route migration took longest due to 48 occurrences across 5 route files
+- Last 5 plans: 01-01 (5 min), 01-02 (14 min), 01-04 (59 min), 01-03 (9 min)
+- Trend: Service logging completed quickly (8 files, clean structure)
 
 *Updated after each plan completion*
 
@@ -62,6 +62,11 @@ Recent decisions affecting current work:
 - Use debug level for OAuth iOS redirects (high-frequency operation, noise reduction)
 - Include userId in all route logging contexts (essential for tracing user operations)
 
+**From plan 01-03:**
+- Service-specific child loggers enable filtering by subsystem (quiz-generation, stripe, etc.)
+- Stripe service NEVER logs payment amounts, card details, or tokens (PCI compliance)
+- Auth services log success/failure but never cookie values
+
 ### Pending Todos
 
 None yet.
@@ -75,7 +80,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-09
-Stopped at: Completed 01-04-PLAN.md (Route logging migration) - awaiting 01-02/01-03 completion for VPS deployment
-Resume file: .planning/phases/01-esm-migration-logging-foundation/01-04-SUMMARY.md
+Stopped at: Completed 01-03-PLAN.md (Service logging migration) - awaiting 01-02 completion for VPS deployment
+Resume file: .planning/phases/01-esm-migration-logging-foundation/01-03-SUMMARY.md
 
-**Note:** Plans 01-02, 01-03, and 01-04 ran in parallel (wave 2). Plan 01-04 completed but VPS deployment deferred until all parallel plans finish to ensure clean build.
+**Note:** Plans 01-02, 01-03, and 01-04 ran in parallel (wave 2). Plans 01-03 and 01-04 complete. VPS deployment deferred until 01-02 finishes to ensure clean build.
