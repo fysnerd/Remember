@@ -89,14 +89,12 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       ]
     });
 
+    // Desktop Chrome UA - must match the web X-IG-App-ID to avoid "useragent mismatch"
     const context = await browser.newContext({
-      viewport: { width: 390, height: 844 },
-      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+      viewport: { width: 1280, height: 800 },
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       locale: 'fr-FR',
       timezoneId: 'Europe/Paris',
-      deviceScaleFactor: 3,
-      isMobile: true,
-      hasTouch: true,
       javaScriptEnabled: true,
     });
 
