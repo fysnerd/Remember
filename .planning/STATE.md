@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-09)
 
 **Core value:** See at a glance whether the backend is healthy — which syncs ran, what failed, and how much content is flowing through the pipeline.
-**Current focus:** Phase 1 - ESM Migration & Logging Foundation
+**Current focus:** Phase 2 - Job Execution Tracking
 
 ## Current Position
 
-Phase: 1 of 4 (ESM Migration & Logging Foundation)
-Plan: 4 of 4 (all plans complete, pending full deployment)
-Status: In progress (awaiting plan 01-02 completion)
-Last activity: 2026-02-09 — Completed plan 01-03 (Service logging migration)
+Phase: 2 of 4 (Job Execution Tracking)
+Plan: None (phase not yet planned)
+Status: Ready to plan
+Last activity: 2026-02-09 — Phase 1 complete, deployed to VPS
 
-Progress: [███████░░░] 100%
+Progress: [██░░░░░░░░] 25%
 
 ## Performance Metrics
 
@@ -47,25 +47,13 @@ Recent decisions affecting current work:
 - Phase 2: JobExecution model in Supabase for persistent job history (survives PM2 restarts)
 - Phase 3: Hardcoded admin credentials for single-user access (solo dev, sufficient for now)
 
-**From plan 01-01:**
+**From Phase 1 execution:**
 - Keep console.error in env.ts for bootstrap validation (avoids circular dependency with logger)
 - Use pino-http named export instead of default (ESM/TypeScript compatibility)
 - Skip /health endpoint in HTTP logging (noise reduction)
-
-**From plan 01-02:**
 - Use debug level for browser automation logs (Playwright operations in TikTok/Instagram syncs)
-- Use info level for incremental sync detection (business event, not debug detail)
-- Include structured context (userId, videoCount, durationMs) in all log calls for Phase 4 dashboard queries
-
-**From plan 01-04:**
-- Leave client-side console.log in OAuth HTML page (browser console output, not server logs)
-- Use debug level for OAuth iOS redirects (high-frequency operation, noise reduction)
-- Include userId in all route logging contexts (essential for tracing user operations)
-
-**From plan 01-03:**
-- Service-specific child loggers enable filtering by subsystem (quiz-generation, stripe, etc.)
 - Stripe service NEVER logs payment amounts, card details, or tokens (PCI compliance)
-- Auth services log success/failure but never cookie values
+- Leave client-side console.log in OAuth HTML page (browser console output, not server logs)
 
 ### Pending Todos
 
@@ -73,14 +61,10 @@ None yet.
 
 ### Blockers/Concerns
 
-**Phase 1 risk:** ESM migration is codebase-wide breaking change. All 11 cron jobs, OAuth flows, and API endpoints must be tested after migration. Dependency audit for ESM compatibility needed before starting.
-
 **Phase 4 complexity:** AdminJS custom dashboard pattern (ComponentLoader) has sparse documentation. Fallback option (standalone HTML + Chart.js) available if needed.
 
 ## Session Continuity
 
 Last session: 2026-02-09
-Stopped at: Completed 01-03-PLAN.md (Service logging migration) - awaiting 01-02 completion for VPS deployment
-Resume file: .planning/phases/01-esm-migration-logging-foundation/01-03-SUMMARY.md
-
-**Note:** Plans 01-02, 01-03, and 01-04 ran in parallel (wave 2). Plans 01-03 and 01-04 complete. VPS deployment deferred until 01-02 finishes to ensure clean build.
+Stopped at: Phase 1 complete. VPS deployed and verified (PM2 online, 11 cron jobs, health OK).
+Resume file: .planning/phases/01-esm-migration-logging-foundation/01-VERIFICATION.md
