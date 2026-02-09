@@ -1,225 +1,39 @@
-# Remember - Project Context
-
-## ⚠️ PREMIÈRE CHOSE À FAIRE À CHAQUE SESSION
-
-**Le tunnel Cloudflare change à chaque redémarrage du PC.**
-
-Demande à l'utilisateur :
-> "As-tu lancé le tunnel Cloudflare ? Si oui, donne-moi la nouvelle URL (ex: `https://xxx-xxx.trycloudflare.com`)"
-
-Une fois l'URL reçue, mets à jour ces fichiers :
-1. `backend/.env` → `YOUTUBE_CALLBACK_URL` et `SPOTIFY_CALLBACK_URL`
-2. `ios/lib/constants.ts` → `TUNNEL_URL`
-
-Puis rappelle à l'utilisateur de redémarrer le backend.
-
----
+# Ankora - Project Context
 
 ## Description
-**Remember** est une plateforme d'apprentissage actif qui transforme le contenu consommé sur les réseaux sociaux (YouTube, Spotify) en connaissances durables via des quiz générés par IA et la répétition espacée (algorithme SM-2).
-
-## Stack Technique
-
-### Backend
-| Composant | Technologie |
-|-----------|-------------|
-| Runtime | Node.js v22 |
-| Framework | Express.js |
-| Langage | TypeScript |
-| ORM | Prisma |
-| Base de données | PostgreSQL (Supabase - cloud) |
-| Auth | JWT (access + refresh tokens) |
-| Scheduler | node-cron |
-
-### Frontend
-| Composant | Technologie |
-|-----------|-------------|
-| Framework | React 19 |
-| Build | Vite 6 |
-| Langage | TypeScript |
-| State | Zustand |
-| Data Fetching | TanStack React Query |
-| Router | React Router v7 |
-| CSS | Tailwind CSS |
-| Icons | Lucide React |
-
-### Intégrations OAuth
-| Service | Scopes | Usage |
-|---------|--------|-------|
-| YouTube (Google) | `youtube.readonly` | Vidéos likées |
-| Spotify | `user-read-recently-played`, `user-library-read` | Podcasts écoutés |
-
-### APIs Externes
-| Service | Usage |
-|---------|-------|
-| YouTube Data API v3 | Récupération des vidéos likées |
-| Spotify Web API | Récupération des podcasts écoutés |
-| Podcast Index API | Découverte RSS podcasts (4.4M+, primary) |
-| Mistral AI | Génération de quiz |
-| Groq (Whisper) | Transcription audio podcasts |
-
-### Outils CLI
-| Outil | Usage |
-|-------|-------|
-| yt-dlp | Récupération des sous-titres YouTube (auto-générés inclus) |
-| curl_cffi | Impersonation navigateur pour éviter le rate limiting YouTube |
+**Ankora** (anciennement Remember) est une plateforme d'apprentissage actif qui transforme le contenu consommé sur les réseaux sociaux (YouTube, Spotify, TikTok, Instagram) en connaissances durables via des quiz générés par IA et la répétition espacée (algorithme SM-2).
 
 ---
 
-## Lancement du projet
+## Accès & Credentials
 
-### Prérequis
-- Node.js v22+
-- npm
-- Cloudflared (pour les callbacks OAuth)
-- Python 3.x avec `yt-dlp` et `curl_cffi` (pour la transcription YouTube)
-
-```bash
-# Installation des dépendances Python pour la transcription
-pip install yt-dlp curl_cffi
+### VPS (Hetzner CPX32)
+```
+IP: 116.203.17.203
+SSH: ssh root@116.203.17.203
+Password: UIOloy012%
+Backend path: /root/Remember/backend/
+Caddy config: /etc/caddy/Caddyfile
+PM2 process: remember-api (cluster mode)
 ```
 
-### 1. Backend (Terminal 1)
-```bash
-cd C:\Users\vmsan\Desktop\FREE\PB\VIBE\Remember\backend
-npm install  # première fois uniquement
-npm run dev
+### Supabase (Base de données)
 ```
-Le backend tourne sur **http://localhost:3001**
-
-### 2. Frontend (Terminal 2)
-```bash
-cd C:\Users\vmsan\Desktop\FREE\PB\VIBE\Remember\frontend
-npm install  # première fois uniquement
-npm run dev
+Project ID: iadzfswcpgjczjpkhpjv
+DATABASE_URL: postgresql://postgres.iadzfswcpgjczjpkhpjv:K2WDnPUIN9glWoRQ@aws-1-eu-west-1.pooler.supabase.com:5432/postgres
 ```
-Le frontend tourne sur **http://localhost:5173**
+**RÈGLE:** TOUJOURS utiliser le MCP Supabase (`execute_sql`, project_id `iadzfswcpgjczjpkhpjv`) pour requêter la BDD. JAMAIS de psql/prisma/node via SSH.
 
-### 3. Tunnel Cloudflare (Terminal 3) - Requis pour OAuth
-```bash
-cloudflared tunnel --url http://localhost:3001
+### Apple / EAS
 ```
-**IMPORTANT:** Après le lancement :
-1. Copie la nouvelle URL du tunnel (ex: `https://xxx-xxx.trycloudflare.com`)
-2. Mets à jour `backend/.env` :
-   - `YOUTUBE_CALLBACK_URL`
-   - `SPOTIFY_CALLBACK_URL`
-3. Mets à jour Google Cloud Console (URI de redirection)
-4. Redémarre le backend
-
----
-
-## Structure du projet
-
-```
-Remember/
-├── backend/                 # API Express.js
-│   ├── src/
-│   │   ├── config/          # env.ts, database.ts
-│   │   ├── routes/          # auth, oauth, content, review, admin
-│   │   ├── middleware/      # auth, errorHandler
-│   │   ├── services/        # tokenRefresh, transcription, quizGeneration
-│   │   └── workers/         # scheduler, spotifySync, youtubeSync
-│   ├── prisma/
-│   │   └── schema.prisma    # Schéma de la BDD
-│   └── .env                 # Variables d'environnement
-├── frontend/                # Web App React
-│   ├── src/
-│   │   ├── pages/           # LoginPage, LibraryPage, SettingsPage, ReviewPage
-│   │   ├── components/      # UI components
-│   │   ├── stores/          # Zustand stores (authStore)
-│   │   └── lib/             # api.ts, utils
-│   └── .env                 # Variables frontend (si nécessaire)
-├── ios/                     # 📱 iOS App (Expo + React Native)
-│   └── CLAUDE.md            # ⚠️ Instructions spécifiques iOS
-├── docs/                    # Documentation projet
-└── experiments/             # Tests (webview-auth-test, etc.)
+Bundle ID: com.fysnerd.ankora
+EAS Project: @fysnerd/ankora (ID: 41df5660-1c97-4b52-8b43-e6181bd77c16)
+App Store Connect Apple ID: 6758732600
+Apple Team: HSR27437U4 (Antoine Patarin)
+Apple ID: cobreadgang@gmail.com
 ```
 
----
-
-## 📱 iOS App
-
-### Où lancer les agents Claude ?
-
-| Tâche | Dossier | Raison |
-|-------|---------|--------|
-| UI/Design iOS | `ios/` | Accès direct aux composants, CLAUDE.md spécifique |
-| Bug fix iOS only | `ios/` | Contexte isolé |
-| Backend + iOS | `Remember/` (racine) | Accès aux deux codebases |
-| PM / Issues Linear | `Remember/` (racine) | Vision globale du projet |
-
-> **Pour les tâches purement iOS:** Ouvre une nouvelle fenêtre Claude Code dans le dossier `ios/`
->
-> Le fichier `ios/CLAUDE.md` contient toutes les instructions spécifiques :
-> - Méthodologie BMAD complète
-> - Linear MCP obligatoire
-> - Skills installés (Expo, React Native, iOS Design)
-> - Stack technique et structure
-> - Ordre des issues à suivre
-
-### MCP Servers disponibles
-
-| MCP | Usage |
-|-----|-------|
-| `expo-devtools` | **Interaction live avec l'app iOS** - Screenshots, tap, scroll, navigation, logs, état Zustand |
-| `expo-docs` | Docs Expo SDK 54 offline (~3ms) - 958 docs |
-| `linear-server` | Tracking issues |
-| `supabase` | Queries DB |
-| `context7` | Docs générales |
-
-#### expo-devtools - Commandes disponibles
-
-| Commande | Description |
-|----------|-------------|
-| `connection_status` | Vérifie si l'app Expo Go est connectée |
-| `take_snapshot` | Arbre d'accessibilité de l'écran avec UIDs |
-| `take_screenshot` | Capture d'écran de l'app |
-| `tap` | Tap sur un élément (par UID) |
-| `fill` | Remplir un input texte |
-| `scroll` | Scroll (up/down/left/right) |
-| `navigate` | Navigation vers une route Expo Router |
-| `get_logs` | Logs console récents |
-| `get_state` | État des stores Zustand |
-
-**Prérequis:** L'app doit tourner avec le `DevToolsProvider` configuré et connectée au WebSocket `ws://IP:19876`
-
-### Lancer l'app iOS (après setup)
-```bash
-cd ios
-npx expo start
-# Scanner le QR code avec Expo Go sur iPhone
-```
-
-### Linear projet iOS
-- **Projet:** iOS App
-- **Issues:** REM-51 à REM-65
-- **Documentation:** `docs/remember-current-state.md` + `docs/ios-app-architecture.md`
-
----
-
-## Workers (Cron Jobs automatiques)
-
-| Job | Fréquence | Description |
-|-----|-----------|-------------|
-| YouTube Sync | 15 min | Importe les vidéos likées |
-| Spotify Sync | 30 min | Importe les podcasts écoutés |
-| Transcription YouTube | 5 min | Récupère les sous-titres via yt-dlp |
-| Transcription Podcast | 10 min | Transcrit avec Whisper |
-| Quiz Generation | 5 min | Génère les quiz avec Mistral |
-| Auto-Tagging | 15 min | Tag automatique du contenu |
-
-### Déclencher un sync manuellement
-```bash
-cd backend
-npx tsx trigger-youtube-sync.ts  # YouTube
-npx tsx manual-spotify-sync.ts   # Spotify
-```
-
----
-
-## Compte de test
-
+### Compte de test
 ```
 Email: test@remember.app
 Password: testpassword123
@@ -227,40 +41,189 @@ Password: testpassword123
 
 ---
 
-## Variables d'environnement (.env)
+## Production .env (VPS)
 
 ```env
-# Serveur
 PORT=3001
-NODE_ENV=development
+NODE_ENV=production
 
-# Base de données Supabase
-DATABASE_URL="postgresql://..."
+# Supabase PostgreSQL
+DATABASE_URL="postgresql://postgres.iadzfswcpgjczjpkhpjv:K2WDnPUIN9glWoRQ@aws-1-eu-west-1.pooler.supabase.com:5432/postgres"
+DIRECT_URL="postgresql://postgres.iadzfswcpgjczjpkhpjv:K2WDnPUIN9glWoRQ@aws-1-eu-west-1.pooler.supabase.com:5432/postgres"
 
-# JWT
-JWT_SECRET="..."
-JWT_REFRESH_SECRET="..."
+# JWT (production secrets)
+JWT_SECRET="4dd6850940c0d71b23bd03a70c38143434dd383660cc5b14dd55f6dd3427c370"
+JWT_EXPIRES_IN="7d"
+JWT_REFRESH_SECRET="0b580bc0dcc6a0ca486e41a29daacd0377f21f850806b21b75205c164853864f"
+JWT_REFRESH_EXPIRES_IN="30d"
 
-# LLM (Mistral)
+# Mistral AI (quiz generation)
 LLM_PROVIDER="mistral"
-MISTRAL_API_KEY="..."
+MISTRAL_API_KEY="NvsAQROsB66JQLPWKmpOZi8rTHSLoQgC"
 
-# Transcription (Groq Whisper)
-GROQ_API_KEY="..."
+# Groq Whisper (transcription)
+GROQ_API_KEY="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"
+
+# Podcast Index API
+PODCAST_INDEX_API_KEY="B9CDRUVXWN6DPTPHZPFC"
+PODCAST_INDEX_API_SECRET="tM^2uTZtM#Q^BmX7ScdmcwP5H5TwY$ruVcc9c58n"
 
 # YouTube OAuth
-YOUTUBE_CLIENT_ID="..."
-YOUTUBE_CLIENT_SECRET="..."
-YOUTUBE_CALLBACK_URL="https://[TUNNEL-URL]/api/oauth/youtube/callback"
+YOUTUBE_CLIENT_ID="628216102691-rapig42ndt06hg1dab93pquvvvnp06r1.apps.googleusercontent.com"
+YOUTUBE_CLIENT_SECRET="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"
+YOUTUBE_CALLBACK_URL="https://api.ankora.study/api/oauth/youtube/callback"
 
 # Spotify OAuth
-SPOTIFY_CLIENT_ID="..."
-SPOTIFY_CLIENT_SECRET="..."
-SPOTIFY_CALLBACK_URL="https://[TUNNEL-URL]/api/oauth/spotify/callback"
+SPOTIFY_CLIENT_ID="30cba06b0bc14fa086a6f4c47b25fccf"
+SPOTIFY_CLIENT_SECRET="7ab0a73d72a04ea88789f49f1e244d90"
+SPOTIFY_CALLBACK_URL="https://api.ankora.study/api/oauth/spotify/callback"
 
-# Frontend
-FRONTEND_URL="http://localhost:5173"
+FRONTEND_URL="https://ankora.study"
 ```
+
+---
+
+## Production URLs
+
+| Service | URL |
+|---------|-----|
+| API backend | `https://api.ankora.study` |
+| VPS | Hetzner CPX32 - `116.203.17.203` |
+| Deep link scheme | `ankora://` |
+| Frontend (legacy) | `https://ankora.study` |
+
+---
+
+## Déployer après des modifications
+
+### Modifs backend (le plus courant)
+```bash
+ssh root@116.203.17.203 "cd /root/Remember/backend && git pull && npm run build && pm2 restart remember-api"
+```
+
+### Modifs UI/UX/JS (pas de changement natif)
+```bash
+cd ios
+eas update --branch production --message "description du changement"
+```
+OTA instantané, pas de rebuild, pas de review Apple.
+
+### Modifs natives (nouveau plugin, app.json, lib native)
+```bash
+cd ios
+eas build --profile production --platform ios --auto-submit
+```
+Rebuild + soumission TestFlight automatique.
+
+### Quand proposer quoi
+- Changements `.tsx`, `.ts`, styles, logique, écrans → `eas update`
+- Ajout plugin expo, changement app.json, lib native → `eas build --auto-submit`
+- Changements backend → deploy VPS via SSH
+
+---
+
+## Stack Technique
+
+### Backend (VPS - production)
+| Composant | Technologie |
+|-----------|-------------|
+| Runtime | Node.js v22 |
+| Framework | Express.js |
+| Langage | TypeScript |
+| ORM | Prisma |
+| Base de données | PostgreSQL (Supabase) |
+| Auth | JWT (access + refresh tokens) |
+| Scheduler | node-cron |
+| Process Manager | PM2 (cluster mode) |
+| Reverse Proxy | Caddy (HTTPS auto) |
+
+### iOS App (Expo)
+| Composant | Technologie |
+|-----------|-------------|
+| Framework | Expo SDK 54 |
+| Navigation | expo-router (file-based) |
+| State | Zustand |
+| Data Fetching | TanStack React Query |
+| Storage | expo-secure-store (JWT) |
+| HTTP | Axios |
+| Auth OAuth | expo-web-browser + deep links |
+
+### Intégrations
+| Service | Usage |
+|---------|-------|
+| YouTube (Google OAuth) | Vidéos likées |
+| Spotify (OAuth) | Podcasts écoutés |
+| TikTok (cookies) | Vidéos likées |
+| Instagram (cookies) | Reels sauvegardés |
+| Mistral AI | Génération de quiz |
+| Groq (Whisper) | Transcription audio |
+| Podcast Index API | Découverte RSS (4.4M+) |
+| yt-dlp | Sous-titres YouTube |
+
+---
+
+## Structure du projet
+
+```
+Remember/                    # ← Le dossier s'appelle encore Remember (pas renommé)
+├── backend/                 # API Express.js (déployée sur VPS)
+│   ├── src/
+│   │   ├── config/          # env.ts, database.ts
+│   │   ├── routes/          # auth, oauth, content, review, admin
+│   │   ├── middleware/      # auth, errorHandler
+│   │   ├── services/        # tokenRefresh, transcription, quizGeneration
+│   │   └── workers/         # scheduler, spotifySync, youtubeSync, tiktokSync
+│   ├── prisma/
+│   │   └── schema.prisma    # Schéma BDD
+│   └── .env                 # Variables d'environnement (gitignored)
+├── ios/                     # iOS App (Expo + React Native)
+│   ├── app/                 # Écrans (expo-router file-based)
+│   ├── components/          # UI components
+│   ├── hooks/               # React Query hooks
+│   ├── stores/              # Zustand stores
+│   ├── lib/                 # api.ts, constants.ts
+│   ├── eas.json             # Config EAS Build
+│   └── app.json             # Config Expo
+├── Ankora/                  # Docs spécifiques Ankora v2
+├── frontend/                # Web App React (legacy)
+├── docs/                    # Documentation historique
+└── experiments/             # Tests divers
+```
+
+---
+
+## Workers (Cron Jobs - VPS)
+
+Fichier : `backend/src/workers/scheduler.ts` — Protection anti-overlap via `runningJobs` Set.
+
+### Sync (import contenu)
+
+| Job | Cron | Fréquence | Description |
+|-----|------|-----------|-------------|
+| YouTube Sync | `*/15 * * * *` | 15 min | Vidéos likées (YouTube Data API, playlist LL) |
+| Spotify Sync | `*/30 * * * *` | 30 min | Podcasts écoutés >80% (Spotify API) |
+| TikTok Sync | `*/30 * * * *` | 30 min | Vidéos likées (Playwright + cookies) |
+| Instagram Sync | `*/30 * * * *` | 30 min | Reels likés (API privée Instagram) |
+
+### Transcription
+
+| Job | Cron | Fréquence | Description |
+|-----|------|-----------|-------------|
+| YouTube Transcription | `*/2 * * * *` | 2 min | Sous-titres via yt-dlp (gratuit) |
+| Podcast Transcription | `*/5 * * * *` | 5 min | Whisper via Groq (payant) |
+| TikTok Transcription | `*/2 * * * *` | 2 min | yt-dlp + Whisper |
+| Instagram Transcription | `*/2 * * * *` | 2 min | yt-dlp + Whisper |
+
+### Traitement
+
+| Job | Cron | Fréquence | Description |
+|-----|------|-----------|-------------|
+| Quiz Generation | `*/2 * * * *` | 2 min | Génère les quiz avec Mistral AI |
+| Daily Reminder | `*/5 * * * *` | 5 min | Email reminder (fenêtre 5 min, respecte timezone) |
+| Auto-Tagging | `*/15 * * * *` | 15 min | Tags auto via Mistral AI |
+
+### Trigger manuel
+`POST /api/admin/sync/all` — Valeurs possibles : `youtube`, `spotify`, `tiktok`, `instagram`, `transcription`, `podcast-transcription`, `tiktok-transcription`, `instagram-transcription`, `quiz-generation`, `reminder`, `auto-tagging`.
 
 ---
 
@@ -270,134 +233,82 @@ FRONTEND_URL="http://localhost:5173"
 |---------|-------|-------------|
 | POST | `/api/auth/signup` | Inscription |
 | POST | `/api/auth/login` | Connexion |
+| POST | `/api/auth/refresh` | Refresh token |
 | GET | `/api/oauth/youtube/connect` | Initier OAuth YouTube |
 | GET | `/api/oauth/spotify/connect` | Initier OAuth Spotify |
+| POST | `/api/oauth/tiktok/connect` | Connecter TikTok (cookies) |
+| POST | `/api/oauth/instagram/connect` | Connecter Instagram (cookies) |
 | GET | `/api/oauth/status` | Statut des connexions OAuth |
 | GET | `/api/content` | Liste du contenu |
-| GET | `/api/review/next` | Prochain quiz à réviser |
-| POST | `/api/review/:quizId` | Soumettre une réponse |
-| POST | `/api/admin/sync/youtube` | Forcer sync YouTube |
-| POST | `/api/admin/sync/spotify` | Forcer sync Spotify |
+| GET | `/api/content/inbox` | Contenu à trier |
+| POST | `/api/content/triage/bulk` | Trier en masse |
+| GET | `/api/reviews/due` | Quiz à réviser |
+| POST | `/api/reviews` | Soumettre une réponse |
+| POST | `/api/admin/sync/all` | Forcer sync toutes plateformes |
 
 ---
 
-## Documentation complémentaire
+## Debugging VPS (commandes utiles)
 
-- `docs/remember-current-state.md` - **État RÉEL de l'implémentation** (endpoints, modèles, workers)
-- `docs/remember-architecture.md` - Architecture technique détaillée
-- `docs/remember-prd.md` - Product Requirements Document
-- `docs/remember-ux-design.md` - Design UX
-- `docs/remember-product-brief.md` - Brief produit
-- `docs/ios-app-architecture.md` - Architecture iOS App
+```bash
+# Logs PM2 en temps réel
+ssh root@116.203.17.203 "pm2 logs remember-api --lines 50"
+
+# Status PM2
+ssh root@116.203.17.203 "pm2 status"
+
+# Restart backend
+ssh root@116.203.17.203 "pm2 restart remember-api"
+
+# Voir config Caddy
+ssh root@116.203.17.203 "cat /etc/caddy/Caddyfile"
+
+# Disk space
+ssh root@116.203.17.203 "df -h"
+```
 
 ---
 
-## Git & Branches (Multi-Claude Workflow)
+## Known Issues
+
+- **Instagram sync broken**: Playwright selectors outdated, `No grid items found` every 30min (deferred)
+- **Supabase timeouts**: Intermittent `P1001` on pooler (low priority)
+
+## OAuth Status (validated 2026-02-06)
+- YouTube: working end-to-end
+- Spotify: working end-to-end
+- TikTok: validated previously
+- Instagram: sync broken (Playwright selectors outdated)
+
+---
+
+## Git
 
 ### Repo GitHub
 **https://github.com/fysnerd/Remember** (privé)
 
-### Concept des branches
-```
-master (code stable, testé)
-    │
-    ├── feature/youtube-history   ← Claude 1 travaille ici
-    │
-    ├── feature/quiz-ui           ← Claude 2 travaille ici
-    │
-    └── fix/spotify-sync          ← Claude 3 travaille ici
-```
-
-Chaque instance de Claude travaille sur sa **branche isolée**. Quand c'est fini et testé, on **merge** dans `master`.
-
-### Commandes essentielles
-
-**Créer une nouvelle branche avant de donner une tâche à Claude :**
-```bash
-cd C:\Users\vmsan\Desktop\FREE\PB\VIBE\Remember
-git checkout -b feature/nom-de-la-feature
-```
-
-**Quand Claude a fini, vérifier et merger :**
-```bash
-git checkout master                    # Retour sur master
-git pull                               # Récupérer les derniers changements
-git merge feature/nom-de-la-feature    # Fusionner la branche
-git push                               # Envoyer sur GitHub
-git branch -d feature/nom-de-la-feature  # Supprimer la branche locale
-```
-
-**Voir toutes les branches :**
-```bash
-git branch -a
-```
-
-**Changer de branche :**
-```bash
-git checkout nom-de-la-branche
-```
-
-### Conventions de nommage des branches
+### Conventions de branches
 - `feature/xxx` - Nouvelle fonctionnalité
 - `fix/xxx` - Correction de bug
-- `refactor/xxx` - Refactoring de code
+- `refactor/xxx` - Refactoring
 - `docs/xxx` - Documentation
-
-### Exemple de workflow multi-Claude
-
-| Terminal | Commande | Tâche |
-|----------|----------|-------|
-| Terminal 1 | `git checkout -b feature/quiz-ui` | "Améliore le design des quiz" |
-| Terminal 2 | `git checkout -b feature/watch-history` | "Ajoute l'historique YouTube" |
-| Terminal 3 | `git checkout -b fix/spotify-sync` | "Corrige le bug de sync Spotify" |
-
-### Résoudre les conflits
-Si deux branches modifient le même fichier, Git demandera de résoudre les conflits manuellement lors du merge. Dans ce cas :
-1. Git marquera les conflits dans les fichiers
-2. Édite les fichiers pour choisir quelle version garder
-3. `git add .` puis `git commit` pour finaliser
 
 ---
 
 ## Suivi projet (Linear)
 
-**IMPORTANT pour Claude Code:** Toujours documenter dans Linear (via MCP) :
-- **Nouvelles features** : Créer une issue avec label `feature`
-- **Bug fixes** : Créer une issue avec label `bug`
-- **Améliorations** : Créer une issue avec label `improvement`
-- **Tech debt** : Créer une issue avec label `tech-debt`
-
-Format des issues Linear :
-```
-Titre: [Type] Description courte
-Description:
-- Ce qui a été fait
-- Fichiers modifiés
-- Tests effectués
-- Prérequis/dépendances ajoutées
-```
+**Projet:** Ankora
+**Issues:** REM-123 (Parallelisation workers), REM-124 (Observability), REM-125 (Optimisation prompts), REM-126 (Notifications), REM-128 (QA TikTok/Instagram)
 
 ---
 
-## Changelog récent
+## Règles Claude Code
 
-### 2026-01-30 - Podcast Index API (REM-39)
-- **Type:** Feature
-- **Description:** Ajout de Podcast Index comme source principale pour la découverte de podcasts RSS
-- **Raison:** iTunes ne couvrait que ~500k podcasts, Podcast Index en a 4.4M+
-- **Fichiers modifiés:**
-  - `backend/src/services/podcastTranscription.ts` (nouvelle fonction `searchPodcastIndex()`)
-  - `backend/src/config/env.ts` (ajout config Podcast Index)
-- **Prérequis ajoutés:**
-  - `npm install podcast-index-api`
-  - Variables `.env`: `PODCAST_INDEX_API_KEY`, `PODCAST_INDEX_API_SECRET`
-- **Flow:** Podcast Index (primary) → iTunes (fallback) → UNSUPPORTED
-- **Testé:** "Reflets d'Acide" (introuvable sur iTunes) → transcrit et quiz générés ✅
+1. **BDD**: TOUJOURS utiliser le MCP Supabase (`execute_sql`, project_id `iadzfswcpgjczjpkhpjv`) pour requêter la base de données. JAMAIS de psql/prisma/node via SSH.
+2. **SSH VPS**: Réservé uniquement pour les logs PM2, déploiement (`git pull && npm run build && pm2 restart`), et commandes système.
+3. **Deployer le backend** après chaque modif backend: `ssh root@116.203.17.203 "cd /root/Remember/backend && git pull && npm run build && pm2 restart remember-api"`
+4. **Ne jamais modifier le .env de prod** sans confirmation explicite de l'utilisateur.
 
-### 2025-01-29 - Transcription YouTube via yt-dlp
-- **Type:** Improvement
-- **Description:** Remplacement de `youtube-transcript` par `yt-dlp` pour la récupération des sous-titres YouTube
-- **Raison:** `youtube-transcript` ne gérait pas correctement les sous-titres auto-générés (ASR)
-- **Fichiers modifiés:** `backend/src/services/transcription.ts`
-- **Prérequis ajoutés:** `pip install yt-dlp curl_cffi`
-- **Testé:** Flow complet YouTube → Transcription → Quiz Generation validé
+---
+
+*Mis à jour: 2026-02-09*
