@@ -68,7 +68,7 @@ interface EpisodeData {
  * 1. Recently played - catches any episode listened to (even if not saved)
  * 2. Saved episodes - provides detailed progress info for bookmarked episodes
  */
-export async function syncUserSpotify(userId: string, connectionId: string, userEmail?: string): Promise<number> {
+export async function syncUserSpotify(userId: string, connectionId: string, _userEmail?: string): Promise<number> {
   const connection = await prisma.connectedPlatform.findUnique({
     where: { id: connectionId },
   });
