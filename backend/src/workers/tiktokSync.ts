@@ -111,23 +111,16 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
     page.on('response', async (response) => {
       const url = response.url();
 
-      // Log all TikTok API calls for debugging
-      if (url.includes('tiktok.com/api/') || url.includes('/v1/')) {
-        console.log(`[TikTok Sync] API call: ${url.split('?')[0]} (status: ${response.status()})`);
-      }
-
       // Capture liked videos - ONLY from favorite/item_list endpoint (not post/item_list)
       if (url.includes('favorite/item_list') || url.includes('api/favorite/')) {
-        console.log(`[TikTok Sync] ★ Intercepted LIKED videos API: ${url.substring(0, 100)}`);
         try {
           const data = await response.json();
-          console.log(`[TikTok Sync] Response keys: ${Object.keys(data).join(', ')}`);
           if (data.itemList && Array.isArray(data.itemList)) {
-            console.log(`[TikTok Sync] ★ Found ${data.itemList.length} LIKED videos in response`);
+            console.log(`[TikTok Sync] Found ${data.itemList.length} liked videos in API response`);
             likedVideos.push(...data.itemList);
           }
         } catch (e) {
-          console.log(`[TikTok Sync] Failed to parse response: ${e}`);
+          console.log(`[TikTok Sync] Failed to parse favorite response: ${e}`);
         }
       }
     });
