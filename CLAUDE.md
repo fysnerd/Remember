@@ -203,7 +203,7 @@ Fichier : `backend/src/workers/scheduler.ts` — Protection anti-overlap via `ru
 | YouTube Sync | `*/15 * * * *` | 15 min | Vidéos likées (YouTube Data API, playlist LL) |
 | Spotify Sync | `*/30 * * * *` | 30 min | Podcasts écoutés >80% (Spotify API) |
 | TikTok Sync | `*/30 * * * *` | 30 min | Vidéos likées (Playwright + cookies) |
-| Instagram Sync | `*/30 * * * *` | 30 min | Reels likés (API privée Instagram) |
+| Instagram Sync | `*/30 * * * *` | 30 min | Reels likés (Playwright + context.request, Barcelona UA) |
 
 ### Transcription
 
@@ -271,14 +271,14 @@ ssh root@116.203.17.203 "df -h"
 
 ## Known Issues
 
-- **Instagram sync broken**: Playwright selectors outdated, `No grid items found` every 30min (deferred)
 - **Supabase timeouts**: Intermittent `P1001` on pooler (low priority)
+- **TikTok transcription spam**: Some videos fail repeatedly (sensitive content requiring login) - needs max retry limit
 
-## OAuth Status (validated 2026-02-06)
+## OAuth Status (validated 2026-02-09)
 - YouTube: working end-to-end
 - Spotify: working end-to-end
 - TikTok: validated previously
-- Instagram: sync broken (Playwright selectors outdated)
+- Instagram: working end-to-end (hybrid Playwright + context.request approach)
 
 ---
 
@@ -311,4 +311,4 @@ ssh root@116.203.17.203 "df -h"
 
 ---
 
-*Mis à jour: 2026-02-09*
+*Mis à jour: 2026-02-09 - Instagram sync fixed (hybrid Playwright + context.request)*

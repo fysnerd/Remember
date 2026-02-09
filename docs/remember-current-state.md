@@ -1,7 +1,7 @@
 # Remember - État Actuel de l'Implémentation
 
-**Date:** 2026-02-03
-**Version:** 1.0
+**Date:** 2026-02-06
+**Version:** 1.1
 **Basé sur:** Audit complet du codebase
 
 > Ce document reflète l'état **RÉEL** de l'implémentation, pas ce qui était prévu dans le PRD/Architecture.
@@ -10,9 +10,9 @@
 
 ## 🎯 Résumé
 
-Remember est une plateforme d'apprentissage actif qui transforme le contenu des réseaux sociaux en connaissances durables via des quiz générés par IA et la répétition espacée (SM-2).
+Remember (rebrandé **Ankora**) est une plateforme d'apprentissage actif qui transforme le contenu des réseaux sociaux en connaissances durables via des quiz générés par IA et la répétition espacée (SM-2).
 
-**Statut:** ✅ MVP Complet + TikTok/Instagram implémentés
+**Statut:** ✅ MVP Complet + TikTok/Instagram implémentés + VPS déployé
 
 ---
 
@@ -53,6 +53,51 @@ Remember est une plateforme d'apprentissage actif qui transforme le contenu des 
 ```
 
 **Note:** Architecture monolithique (pas de microservices), pas de Redis queue (cron direct).
+
+---
+
+## 🖥️ Infrastructure Production
+
+### VPS (Hetzner CPX32)
+
+| Composant | Détails |
+|-----------|---------|
+| **Provider** | Hetzner CPX32 (Nuremberg, DE) |
+| **Specs** | 4 vCPU, 8GB RAM, 160GB NVMe |
+| **IP** | `116.203.17.203` |
+| **OS** | Ubuntu 24.04 |
+| **Coût** | ~€13.19/mois |
+| **Domaine** | `ankora.study` |
+| **API URL** | `https://api.ankora.study` |
+| **SSH** | `ssh root@116.203.17.203` |
+
+### Services
+
+| Service | Config | Status |
+|---------|--------|--------|
+| **Caddy** | Reverse proxy HTTPS (Let's Encrypt auto) | ✅ Active |
+| **PM2** | Process manager, cluster mode, auto-restart | ✅ Active |
+| **Node.js** | v22.22.0 | ✅ |
+| **Playwright** | v1.58.1 + Chromium 145 | ✅ |
+| **yt-dlp** | 2026.02.04 | ✅ |
+| **Python** | 3.12.3 | ✅ |
+| **Cron cleanup** | `/etc/cron.daily/cleanup-remember` (fichiers temp) | ✅ |
+
+### URLs Production
+
+| Usage | URL |
+|-------|-----|
+| Health check | `https://api.ankora.study/health` |
+| YouTube OAuth callback | `https://api.ankora.study/api/oauth/youtube/callback` |
+| Spotify OAuth callback | `https://api.ankora.study/api/oauth/spotify/callback` |
+| Frontend (futur) | `https://ankora.study` |
+
+### Bugs connus VPS
+
+| Bug | Sévérité | Détail |
+|-----|----------|--------|
+| Instagram sync cassé | 🔴 HIGH | Sélecteurs Playwright outdated, `No grid items found` |
+| Supabase timeouts | 🟡 LOW | `P1001` intermittent sur le pooler Supabase |
 
 ---
 
@@ -481,13 +526,45 @@ enum ContentStatus {
 
 ### Deep Links (à implémenter)
 ```
-remember://oauth/youtube/callback
-remember://oauth/spotify/callback
-remember://content/:id
-remember://review
+ankora://oauth/youtube/callback
+ankora://oauth/spotify/callback
+ankora://content/:id
+ankora://review
 ```
 
 ---
 
-**Document généré automatiquement depuis l'audit du codebase.**
-**Dernière mise à jour:** 2026-02-03
+## 🚧 Prochaines Étapes (V1 Beta)
+
+### Phase 1 - Bloquants infra (DONE)
+1. ✅ ~~Acheter domaine + configurer DNS~~
+2. ✅ ~~Activer HTTPS (Caddy + Let's Encrypt)~~
+3. ✅ ~~Update OAuth callback URLs (.env VPS)~~
+4. ✅ ~~Update iOS app (associatedDomains + constants.ts)~~
+5. ✅ ~~Update Google Cloud Console (YouTube redirect URI)~~
+6. ✅ ~~Update Spotify Developer Dashboard (redirect URI)~~
+7. ✅ ~~EAS Preview build (fbbcd528, commit 204d17f)~~
+
+### Phase 2 - Rendre l'app fonctionnelle (EN COURS)
+8. ✅ ~~Tester OAuth YouTube end-to-end sur device~~ (06/02/2026)
+9. ✅ ~~Tester OAuth Spotify end-to-end sur device~~ (06/02/2026)
+10. 🟡 Fix Instagram sync (sélecteurs Playwright outdated sur VPS)
+11. 🟡 Deep links iOS (`ankora://` scheme complet)
+12. ⬜ Nouveau preview build si corrections nécessaires
+
+### Phase 3 - Polish UX
+13. ⬜ Pull-to-refresh sync dans Library
+14. ⬜ Loading states manquants
+15. ⬜ Gestion erreurs réseau
+16. ⬜ Haptic feedback (quiz, triage)
+
+### Phase 4 - Prod Ready
+17. ⬜ Monitoring basique (PM2 logs + alertes)
+18. ⬜ Backup quotidien BDD Supabase
+19. ⬜ Optimisation prompts quiz/mémo (REM-125)
+20. ⬜ Production build → TestFlight
+21. ⬜ Beta testing (10 users)
+
+---
+
+**Dernière mise à jour:** 2026-02-06

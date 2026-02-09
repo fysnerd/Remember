@@ -1,4 +1,7 @@
 {
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
   "permissions": {
     "allow": [
       "Bash(tree:*)",
@@ -42,7 +45,32 @@
       "Bash(taskkill:*)",
       "Bash(netstat:*)",
       "Bash(findstr:*)",
-      "Bash(npx tsx:*)"
+      "Bash(npx tsx:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd iOS Expo app + update backend workers\n\n- Add complete iOS app with Expo SDK 54\n  - Tabs: Feed, Library, Reviews, Profile\n  - OAuth flows for YouTube/Spotify/TikTok/Instagram\n  - Quiz and memo screens\n  - Content filtering and triage\n  - Zustand stores + React Query hooks\n- Update backend workers for TikTok and Instagram sync\n- Update admin routes\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "mcp__linear-server__create_comment",
+      "mcp__linear-server__list_comments",
+      "WebFetch(domain:letsencrypt.org)",
+      "Bash(ssh:*)",
+      "Bash(grep:*)",
+      "Bash(nslookup:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nchore\\(ios\\): update domain from remember.app to ankora.study\n\nUpdate production URLs and associated domains to use the new\nankora.study domain with HTTPS via Caddy + Let''s Encrypt on VPS.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(npx eas build:*)",
+      "Bash(npx eas:*)",
+      "Bash(gh repo view:*)",
+      "Bash(gh api:*)",
+      "Bash(python -m base64:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nchore: rebrand Remember → Ankora across iOS and backend\n\n- app.json: name, slug, scheme, bundleIdentifier, package\n- constants.ts: OAUTH_REDIRECT_SCHEME\n- profile.tsx: OAuth redirect URIs\n- memo/[id].tsx: share sheet title\n- package.json: package name\n- oauth.ts: fallback deep link redirects and HTML page titles\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(eas build:*)",
+      "Bash(eas:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nchore\\(eas\\): create new EAS project @fysnerd/ankora\n\nReplace old projectId \\(remember\\) with new one for ankora slug.\nNew EAS project ID: 41df5660-1c97-4b52-8b43-e6181bd77c16\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "mcp__expo-mcp__build_list",
+      "mcp__expo-mcp__build_info",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix\\(backend\\): paginate Spotify sync to collect 15 listened episodes\n\nPreviously fetched only 15 episodes then filtered by >80% listened,\nresulting in far fewer items synced. Now paginates through saved\nepisodes until 15 qualifying ones are collected.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "WebFetch(domain:issuetracker.google.com)",
+      "Bash(git commit:*)",
+      "mcp__expo-mcp__search_documentation",
+      "Bash(npx eas-cli:*)",
+      "Bash(python:*)"
     ]
   }
 }
