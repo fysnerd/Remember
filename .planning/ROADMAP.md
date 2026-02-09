@@ -48,10 +48,11 @@ Plans:
   3. Failed jobs capture error message and stack trace in JobExecution table
   4. Automatic cleanup deletes execution records older than 30 days
   5. Job execution tracking does not delay or interfere with existing job behavior
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] TBD during planning
+- [ ] 02-01-PLAN.md -- Prisma JobExecution model + migration + tracker wrapper + cleanup worker
+- [ ] 02-02-PLAN.md -- Wire tracking into scheduler.ts + register cleanup cron + deploy to VPS
 
 ### Phase 3: AdminJS Panel & Manual Triggers
 **Goal**: Admin can browse all database models and manually trigger sync jobs
@@ -94,6 +95,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. ESM Migration & Logging Foundation | 4/4 | ✅ Complete | 2026-02-09 |
-| 2. Job Execution Tracking | 0/TBD | Not started | - |
+| 2. Job Execution Tracking | 0/2 | In progress | - |
 | 3. AdminJS Panel & Manual Triggers | 0/TBD | Not started | - |
 | 4. Observability Dashboard | 0/TBD | Not started | - |
