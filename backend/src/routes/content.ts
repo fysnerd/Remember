@@ -603,9 +603,9 @@ contentRouter.post('/triage/bulk', async (req: Request, res: Response, next: Nex
         for (const content of ownedContent) {
           if (content.transcript && content.quizzes.length === 0) {
             // Has transcript, no quiz yet - generate immediately
-            log.debug({ contentId: content.id, userId }, 'Bulk triage: triggering immediate quiz for transcribed content');
+            log.debug({ contentId: content.id, userId: req.user!.id }, 'Bulk triage: triggering immediate quiz for transcribed content');
             processContentQuiz(content.id).catch((error) => {
-              log.error({ err: error, contentId: content.id, userId }, 'Bulk triage quiz generation failed');
+              log.error({ err: error, contentId: content.id, userId: req.user!.id }, 'Bulk triage quiz generation failed');
             });
             processingStarted++;
           } else if (!content.transcript) {
@@ -710,7 +710,7 @@ contentRouter.post('/bulk-generate-quiz', async (req: Request, res: Response, ne
 
       // Fire and forget - process in background
       processContentQuiz(content.id).catch(err => {
-        log.error({ err, contentId: content.id, userId }, 'Bulk quiz generation failed');
+        log.error({ err, contentId: content.id, userId: req.user!.id }, 'Bulk quiz generation failed');
       });
 
       results.queued.push(content.id);
