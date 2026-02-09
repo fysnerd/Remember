@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-09)
 ## Current Position
 
 Phase: 1 of 4 (ESM Migration & Logging Foundation)
-Plan: 3 of 4 (next: service logging migration)
-Status: In progress
-Last activity: 2026-02-09 — Completed plan 01-02 (Worker structured logging)
+Plan: 4 of 4 (all plans complete, pending full deployment)
+Status: In progress (awaiting parallel plan completion)
+Last activity: 2026-02-09 — Completed plan 01-04 (Route logging migration)
 
-Progress: [████░░░░░░] 50%
+Progress: [████░░░░░░] 75%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Average duration: 10 minutes
-- Total execution time: 0.32 hours
+- Total plans completed: 3
+- Average duration: 28 minutes
+- Total execution time: 1.65 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 2 | 19 min | 10 min |
+| 01 | 3 | 83 min | 28 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (5 min), 01-02 (14 min)
-- Trend: Worker migration took longer due to 127 statements across 6 files
+- Last 5 plans: 01-01 (5 min), 01-02 (14 min), 01-04 (59 min)
+- Trend: Route migration took longest due to 48 occurrences across 5 route files
 
 *Updated after each plan completion*
 
@@ -57,6 +57,11 @@ Recent decisions affecting current work:
 - Use info level for incremental sync detection (business event, not debug detail)
 - Include structured context (userId, videoCount, durationMs) in all log calls for Phase 4 dashboard queries
 
+**From plan 01-04:**
+- Leave client-side console.log in OAuth HTML page (browser console output, not server logs)
+- Use debug level for OAuth iOS redirects (high-frequency operation, noise reduction)
+- Include userId in all route logging contexts (essential for tracing user operations)
+
 ### Pending Todos
 
 None yet.
@@ -70,5 +75,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-09
-Stopped at: Completed 01-02-PLAN.md (Worker Structured Logging Migration)
-Resume file: .planning/phases/01-esm-migration-logging-foundation/01-02-SUMMARY.md
+Stopped at: Completed 01-04-PLAN.md (Route logging migration) - awaiting 01-02/01-03 completion for VPS deployment
+Resume file: .planning/phases/01-esm-migration-logging-foundation/01-04-SUMMARY.md
+
+**Note:** Plans 01-02, 01-03, and 01-04 ran in parallel (wave 2). Plan 01-04 completed but VPS deployment deferred until all parallel plans finish to ensure clean build.
