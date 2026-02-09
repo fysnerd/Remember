@@ -1,6 +1,9 @@
 // Daily Review Reminder Worker (S010)
+import { logger } from '../config/logger.js';
 import { prisma } from '../config/database.js';
 import { sendDailyReminder } from '../services/email.js';
+
+const log = logger.child({ job: 'reminder' });
 
 /**
  * Check if it's time to send a reminder for a user based on their settings
@@ -37,7 +40,7 @@ function isReminderTime(reminderTime: string, timezone: string): boolean {
  * This should be called every 5 minutes by the scheduler
  */
 export async function runReminderWorker(): Promise<void> {
-  console.log('[Reminder Worker] Starting...');
+  log.info('Starting');
 
   try {
     // Get all users with email reminders enabled
@@ -56,7 +59,7 @@ export async function runReminderWorker(): Promise<void> {
       },
     });
 
-    console.log(`[Reminder Worker] Found ${usersWithSettings.length} users with reminders enabled`);
+    log.info({ userCount: usersWithSettings.length }, 'Found users with reminders enabled');
 
     let sentCount = 0;
 
@@ -109,9 +112,9 @@ export async function runReminderWorker(): Promise<void> {
       }
     }
 
-    console.log(`[Reminder Worker] Sent ${sentCount} reminders`);
+    log.info({ sentCount }, 'Reminders sent');
   } catch (error) {
-    console.error('[Reminder Worker] Error:', error);
+    log.error({ err: error }, 'Worker error');
   }
 }
 
@@ -127,7 +130,7 @@ export async function sendTestReminder(userId: string): Promise<boolean> {
   });
 
   if (!user) {
-    console.error('[Reminder Worker] User not found:', userId);
+    log.error({ userId }, 'User not found');
     return false;
   }
 

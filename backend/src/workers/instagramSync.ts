@@ -2,8 +2,11 @@
 // 1. Playwright browser for cookie auth + anti-detection
 // 2. page.evaluate() to call Instagram private API from browser context
 // This avoids UA mismatch and uses the browser's real cookies/session
+import { logger } from '../config/logger.js';
 import { prisma } from '../config/database.js';
 import { Platform, ContentStatus } from '@prisma/client';
+
+const log = logger.child({ job: 'instagram-sync' });
 
 interface InstagramCookies {
   sessionid: string;
@@ -40,7 +43,7 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
   });
 
   if (!connection) {
-    console.error(`[Instagram Sync] Connection ${connectionId} not found`);
+    log.error({ connectionId }, 'Connection not found');
     return 0;
   }
 
@@ -48,7 +51,7 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
   try {
     cookies = JSON.parse(connection.accessToken) as InstagramCookies;
   } catch {
-    console.error(`[Instagram Sync] Invalid cookies for user ${userId}`);
+    log.error({ userId }, 'Invalid cookies for user');
     await prisma.connectedPlatform.update({
       where: { id: connectionId },
       data: { lastSyncError: 'Invalid cookies format' },
@@ -57,7 +60,7 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
   }
 
   if (!cookies.sessionid) {
-    console.error(`[Instagram Sync] Missing sessionid for user ${userId}`);
+    log.error({ userId }, 'Missing sessionid for user');
     await prisma.connectedPlatform.update({
       where: { id: connectionId },
       data: { lastSyncError: 'Missing sessionid cookie' },
@@ -111,14 +114,14 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
     const page = await context.newPage();
 
     // Navigate to i.instagram.com (mobile domain) to establish session
-    console.log(`[Instagram Sync] Navigating to Instagram for user ${userId}...`);
+    log.debug({ userId }, 'Navigating to Instagram');
     await page.waitForTimeout(1000 + Math.random() * 2000);
     await page.goto('https://i.instagram.com/', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForTimeout(3000 + Math.random() * 2000);
 
     // Check if logged in
     if (page.url().includes('/accounts/login')) {
-      console.error(`[Instagram Sync] Cookies expired for user ${userId}`);
+      log.error({ userId }, 'Cookies expired for user');
       await browser.close();
       await prisma.connectedPlatform.update({
         where: { id: connectionId },
@@ -127,7 +130,7 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       return 0;
     }
 
-    console.log(`[Instagram Sync] Session valid, fetching liked posts via Playwright API request...`);
+    log.debug({ userId }, 'Session valid, fetching liked posts via Playwright API request');
 
     // Use context.request: sends cookies from browser context but with our own headers
     // This avoids the UA mismatch from page.evaluate's browser-controlled fetch
@@ -153,7 +156,7 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
     await browser.close();
 
     if (apiResult.error) {
-      console.error(`[Instagram Sync] API error: ${apiResult.error}`);
+      log.error({ userId, error: apiResult.error }, 'API error');
       await prisma.connectedPlatform.update({
         where: { id: connectionId },
         data: { lastSyncError: apiResult.error },
@@ -162,13 +165,17 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
     }
 
     const allItems = apiResult.items as LikedMediaItem[];
-    console.log(`[Instagram Sync] Got ${allItems.length} items from API`);
+    log.info({ userId, itemCount: allItems.length }, 'Got items from API');
 
     // Filter: only videos (media_type 2 = video, product_type 'clips' = reel)
     const videos = allItems.filter((item: LikedMediaItem) =>
       item.media_type === 2 || item.product_type === 'clips'
     );
-    console.log(`[Instagram Sync] Filtered to ${videos.length} videos (skipped ${allItems.length - videos.length} photos/other)`);
+    log.info({
+      userId,
+      videoCount: videos.length,
+      skippedCount: allItems.length - videos.length
+    }, 'Filtered to videos');
 
     if (videos.length === 0) {
       await prisma.connectedPlatform.update({
@@ -202,7 +209,7 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       if (!externalId) continue;
 
       if (existingIds.has(externalId)) {
-        console.log(`[Instagram Sync] Found existing ${externalId} - incremental sync complete`);
+        log.info({ userId, externalId }, 'Found existing - incremental sync complete');
         break;
       }
 
@@ -237,12 +244,12 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       data: { lastSyncAt: new Date(), lastSyncError: null },
     });
 
-    console.log(`[Instagram Sync] User ${userId}: synced ${newReelsCount} new reels`);
+    log.info({ userId, reelCount: newReelsCount }, 'New content synced');
     return newReelsCount;
 
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`[Instagram Sync] Error for user ${userId}:`, error);
+    log.error({ err: error, userId }, 'Sync failed for user');
     await prisma.connectedPlatform.update({
       where: { id: connectionId },
       data: { lastSyncError: errorMsg },
@@ -255,7 +262,7 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
  * Main sync function - syncs all connected Instagram accounts
  */
 export async function runInstagramSync(): Promise<void> {
-  console.log('[Instagram Sync] Starting sync job...');
+  log.info('Starting sync');
   const startTime = Date.now();
 
   const connections = await prisma.connectedPlatform.findMany({
@@ -263,7 +270,7 @@ export async function runInstagramSync(): Promise<void> {
     include: { user: true },
   });
 
-  console.log(`[Instagram Sync] Found ${connections.length} Instagram connections`);
+  log.info({ userCount: connections.length }, 'Found users to sync');
 
   let totalNewReels = 0;
   let successCount = 0;
@@ -275,7 +282,7 @@ export async function runInstagramSync(): Promise<void> {
       totalNewReels += newReels;
       successCount++;
     } catch (error) {
-      console.error(`[Instagram Sync] Failed for user ${connection.userId}:`, error);
+      log.error({ err: error, userId: connection.userId }, 'Sync failed for user');
       errorCount++;
     }
     // Human-like delay between users
@@ -283,8 +290,12 @@ export async function runInstagramSync(): Promise<void> {
   }
 
   const duration = Date.now() - startTime;
-  console.log(`[Instagram Sync] Completed in ${duration}ms`);
-  console.log(`[Instagram Sync] Results: ${successCount} success, ${errorCount} errors, ${totalNewReels} new reels`);
+  log.info({
+    durationMs: duration,
+    successCount,
+    errorCount,
+    totalNewReels
+  }, 'Sync completed');
 }
 
 /**

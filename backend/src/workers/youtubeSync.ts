@@ -1,9 +1,12 @@
 // YouTube Sync Worker - Fetches liked videos from YouTube Data API
 // Runs every 15 minutes via cron job
+import { logger } from '../config/logger.js';
 import { prisma } from '../config/database.js';
 import { Platform, ContentStatus } from '@prisma/client';
 import { getValidToken } from '../services/tokenRefresh.js';
 import { youtubeLimiter } from '../utils/rateLimiter.js';
+
+const log = logger.child({ job: 'youtube-sync' });
 
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
 
@@ -41,7 +44,7 @@ export async function syncUserYouTube(userId: string, connectionId: string): Pro
   });
 
   if (!connection) {
-    console.error(`[YouTube Sync] Connection ${connectionId} not found`);
+    log.error({ connectionId }, 'Connection not found');
     return 0;
   }
 
@@ -49,7 +52,7 @@ export async function syncUserYouTube(userId: string, connectionId: string): Pro
   try {
     accessToken = await getValidToken(connection);
   } catch (error) {
-    console.error(`[YouTube Sync] Failed to get valid token for user ${userId}:`, error);
+    log.error({ err: error, userId }, 'Failed to get valid token');
     await prisma.connectedPlatform.update({
       where: { id: connectionId },
       data: { lastSyncError: 'Failed to refresh token' },
@@ -158,11 +161,11 @@ export async function syncUserYouTube(userId: string, connectionId: string): Pro
       },
     });
 
-    console.log(`[YouTube Sync] User ${userId}: synced ${newVideosCount} new videos`);
+    log.info({ userId, videoCount: newVideosCount }, 'New content synced');
     return newVideosCount;
 
   } catch (error) {
-    console.error(`[YouTube Sync] Error for user ${userId}:`, error);
+    log.error({ err: error, userId }, 'Sync failed for user');
     await prisma.connectedPlatform.update({
       where: { id: connectionId },
       data: {
@@ -177,7 +180,7 @@ export async function syncUserYouTube(userId: string, connectionId: string): Pro
  * Main sync function - syncs all connected YouTube accounts
  */
 export async function runYouTubeSync(): Promise<void> {
-  console.log('[YouTube Sync] Starting sync job...');
+  log.info('Starting sync');
   const startTime = Date.now();
 
   // Get all active YouTube connections
@@ -186,7 +189,7 @@ export async function runYouTubeSync(): Promise<void> {
     include: { user: true },
   });
 
-  console.log(`[YouTube Sync] Found ${connections.length} YouTube connections`);
+  log.info({ userCount: connections.length }, 'Found users to sync');
 
   let totalNewVideos = 0;
   let successCount = 0;
@@ -208,6 +211,10 @@ export async function runYouTubeSync(): Promise<void> {
   }
 
   const duration = Date.now() - startTime;
-  console.log(`[YouTube Sync] Completed in ${duration}ms`);
-  console.log(`[YouTube Sync] Results: ${successCount} success, ${errorCount} errors, ${totalNewVideos} new videos`);
+  log.info({
+    durationMs: duration,
+    successCount,
+    errorCount,
+    totalNewVideos
+  }, 'Sync completed');
 }

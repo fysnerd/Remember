@@ -1,11 +1,14 @@
 // TikTok Sync Worker - Fetches liked videos using browser automation
 // Uses Playwright with stored session cookies to access private likes
+import { logger } from '../config/logger.js';
 import { prisma } from '../config/database.js';
 import { Platform, ContentStatus } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { tiktokLimiter } from '../utils/rateLimiter.js';
+
+const log = logger.child({ job: 'tiktok-sync' });
 
 interface TikTokCookies {
   sessionid: string;
@@ -50,7 +53,7 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
   });
 
   if (!connection) {
-    console.error(`[TikTok Sync] Connection ${connectionId} not found`);
+    log.error({ connectionId }, 'Connection not found');
     return 0;
   }
 
@@ -59,7 +62,7 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
   try {
     cookies = JSON.parse(connection.accessToken) as TikTokCookies;
   } catch (error) {
-    console.error(`[TikTok Sync] Invalid cookies for user ${userId}`);
+    log.error({ userId }, 'Invalid cookies for user');
     await prisma.connectedPlatform.update({
       where: { id: connectionId },
       data: { lastSyncError: 'Invalid cookies format' },
@@ -68,7 +71,7 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
   }
 
   if (!cookies.sessionid) {
-    console.error(`[TikTok Sync] Missing sessionid for user ${userId}`);
+    log.error({ userId }, 'Missing sessionid for user');
     await prisma.connectedPlatform.update({
       where: { id: connectionId },
       data: { lastSyncError: 'Missing sessionid cookie' },
@@ -116,19 +119,19 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
         try {
           const data = await response.json();
           if (data.itemList && Array.isArray(data.itemList)) {
-            console.log(`[TikTok Sync] Found ${data.itemList.length} liked videos in API response`);
+            log.debug({ userId, videoCount: data.itemList.length }, 'Found liked videos in API response');
             likedVideos.push(...data.itemList);
           }
         } catch (e) {
-          console.log(`[TikTok Sync] Failed to parse favorite response: ${e}`);
+          log.debug({ userId }, 'Failed to parse favorite response');
         }
       }
     });
 
     // Navigate to profile and wait for full load
-    console.log(`[TikTok Sync] Navigating to profile for user ${userId}...`);
+    log.debug({ userId }, 'Navigating to profile');
     await page.goto('https://www.tiktok.com/profile', { waitUntil: 'networkidle' });
-    console.log(`[TikTok Sync] Page loaded, waiting for dynamic content...`);
+    log.debug({ userId }, 'Page loaded, waiting for dynamic content');
     await page.waitForTimeout(5000);
 
     // Close cookie popup if present
@@ -143,35 +146,35 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
     }
 
     // Wait for tabs to appear (they load dynamically)
-    console.log(`[TikTok Sync] Waiting for Liked tab to appear...`);
+    log.debug({ userId }, 'Waiting for Liked tab to appear');
     try {
       await page.waitForSelector('text=Liked', { timeout: 10000 });
-      console.log(`[TikTok Sync] ✓ Found "Liked" text on page`);
+      log.debug({ userId }, 'Found "Liked" text on page');
     } catch {
-      console.log(`[TikTok Sync] "Liked" text not found, trying "A aimé"...`);
+      log.debug({ userId }, 'Liked text not found, trying A aimé');
       try {
         await page.waitForSelector('text=A aimé', { timeout: 5000 });
-        console.log(`[TikTok Sync] ✓ Found "A aimé" text on page`);
+        log.debug({ userId }, 'Found "A aimé" text on page');
       } catch {
-        console.log(`[TikTok Sync] Neither "Liked" nor "A aimé" found - tabs may not be rendered`);
+        log.debug({ userId }, 'Neither Liked nor A aimé found - tabs may not be rendered');
       }
     }
 
     // Check current URL after navigation
     const currentUrl = page.url();
-    console.log(`[TikTok Sync] Current URL: ${currentUrl}`);
+    log.debug({ userId, currentUrl }, 'Current URL after navigation');
 
     // Take screenshot for debug
     const debugDir = path.join(os.tmpdir(), 'tiktok-debug');
     if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir, { recursive: true });
     const screenshotPath = path.join(debugDir, `profile-${Date.now()}.png`);
     await page.screenshot({ path: screenshotPath });
-    console.log(`[TikTok Sync] Debug screenshot saved: ${screenshotPath}`);
+    log.debug({ userId, screenshotPath }, 'Debug screenshot saved');
 
     // Extract username from current URL for direct navigation
     const usernameMatch = currentUrl.match(/@([^/?]+)/);
     const username = usernameMatch ? usernameMatch[1] : null;
-    console.log(`[TikTok Sync] Detected username: ${username || 'NOT FOUND'}`);
+    log.debug({ userId, username: username || 'NOT FOUND' }, 'Detected username');
 
     // List all available tabs using JavaScript
     const tabsInfo = await page.evaluate(() => {
@@ -182,11 +185,10 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
       });
       return results;
     });
-    console.log(`[TikTok Sync] Available tabs found: ${tabsInfo.length}`);
-    tabsInfo.forEach(t => console.log(`[TikTok Sync]   - ${t}`));
+    log.debug({ userId, tabCount: tabsInfo.length, tabs: tabsInfo }, 'Available tabs found');
 
     // Try clicking on "Liked" tab using Playwright's powerful selectors
-    console.log(`[TikTok Sync] Attempting to click on Liked tab...`);
+    log.debug({ userId }, 'Attempting to click on Liked tab');
 
     let clickedLikedTab = false;
 
@@ -195,11 +197,11 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
       const likedByText = page.getByText('Liked', { exact: true });
       if (await likedByText.count() > 0) {
         await likedByText.first().click();
-        console.log(`[TikTok Sync] ✓ Clicked via getByText('Liked')`);
+        log.debug({ userId, method: 'getByText(Liked)' }, 'Clicked Liked tab');
         clickedLikedTab = true;
       }
     } catch (e) {
-      console.log(`[TikTok Sync] getByText('Liked') failed: ${e}`);
+      log.debug({ userId }, 'getByText(Liked) failed');
     }
 
     // Method 2: Try French "A aimé"
@@ -208,11 +210,11 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
         const aiméByText = page.getByText('A aimé', { exact: true });
         if (await aiméByText.count() > 0) {
           await aiméByText.first().click();
-          console.log(`[TikTok Sync] ✓ Clicked via getByText('A aimé')`);
+          log.debug({ userId, method: 'getByText(A aimé)' }, 'Clicked Liked tab');
           clickedLikedTab = true;
         }
       } catch (e) {
-        console.log(`[TikTok Sync] getByText('A aimé') failed`);
+        log.debug({ userId }, 'getByText(A aimé) failed');
       }
     }
 
@@ -221,19 +223,19 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
       try {
         const tabs = page.getByRole('tab');
         const count = await tabs.count();
-        console.log(`[TikTok Sync] Found ${count} tabs by role`);
+        log.debug({ userId, tabCount: count }, 'Found tabs by role');
         for (let i = 0; i < count; i++) {
           const tabText = await tabs.nth(i).textContent();
-          console.log(`[TikTok Sync]   Tab ${i}: "${tabText}"`);
+          log.debug({ userId, tabIndex: i, tabText }, 'Checking tab');
           if (tabText?.toLowerCase().includes('liked') || tabText?.toLowerCase().includes('aimé')) {
             await tabs.nth(i).click();
-            console.log(`[TikTok Sync] ✓ Clicked tab ${i} with text "${tabText}"`);
+            log.debug({ userId, tabIndex: i, tabText, method: 'role' }, 'Clicked Liked tab');
             clickedLikedTab = true;
             break;
           }
         }
       } catch (e) {
-        console.log(`[TikTok Sync] Role-based tab search failed: ${e}`);
+        log.debug({ userId }, 'Role-based tab search failed');
       }
     }
 
@@ -243,11 +245,11 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
         const likedTab = await page.$('[data-e2e="liked-tab"], [data-e2e*="liked"]');
         if (likedTab) {
           await likedTab.click();
-          console.log(`[TikTok Sync] ✓ Clicked via data-e2e selector`);
+          log.debug({ userId, method: 'data-e2e' }, 'Clicked Liked tab');
           clickedLikedTab = true;
         }
       } catch (e) {
-        console.log(`[TikTok Sync] data-e2e selector failed`);
+        log.debug({ userId }, 'data-e2e selector failed');
       }
     }
 
@@ -257,31 +259,31 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
         const likedSpan = await page.$('xpath=//span[contains(text(), "Liked")]');
         if (likedSpan) {
           await likedSpan.click();
-          console.log(`[TikTok Sync] ✓ Clicked via XPath span`);
+          log.debug({ userId, method: 'xpath' }, 'Clicked Liked tab');
           clickedLikedTab = true;
         }
       } catch (e) {
-        console.log(`[TikTok Sync] XPath selector failed`);
+        log.debug({ userId }, 'XPath selector failed');
       }
     }
 
     if (clickedLikedTab) {
-      console.log(`[TikTok Sync] Waiting for Liked content to load...`);
+      log.debug({ userId }, 'Waiting for Liked content to load');
       await page.waitForTimeout(4000);
 
       // Take screenshot to confirm we're on Liked tab
       const likesScreenshot = path.join(debugDir, `liked-tab-${Date.now()}.png`);
       await page.screenshot({ path: likesScreenshot });
-      console.log(`[TikTok Sync] Liked tab screenshot: ${likesScreenshot}`);
+      log.debug({ userId, likesScreenshot }, 'Liked tab screenshot saved');
     } else {
-      console.error(`[TikTok Sync] ✗ FAILED to click Liked tab with all methods!`);
+      log.error({ userId }, 'FAILED to click Liked tab with all methods');
       const errorScreenshot = path.join(debugDir, `failed-click-${Date.now()}.png`);
       await page.screenshot({ path: errorScreenshot, fullPage: true });
-      console.log(`[TikTok Sync] Error screenshot: ${errorScreenshot}`);
+      log.debug({ userId, errorScreenshot }, 'Error screenshot saved');
     }
 
     // Scroll to load videos regardless of how we got here
-    console.log(`[TikTok Sync] Scrolling to load videos...`);
+    log.debug({ userId }, 'Scrolling to load videos');
     const maxScrolls = 15;
     const maxVideos = 15;
     for (let i = 0; i < maxScrolls && !foundExisting && likedVideos.length < maxVideos; i++) {
@@ -302,7 +304,7 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
           select: { id: true },
         });
         if (existing) {
-          console.log(`[TikTok Sync] ✓ Found existing video ${video.id} - stopping (incremental sync complete)`);
+          log.info({ userId, videoId: video.id }, 'Found existing video - stopping (incremental sync complete)');
           foundExisting = true;
           break;
         }
@@ -311,28 +313,25 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
       if (foundExisting) break;
 
       if (likedVideos.length > 0) {
-        console.log(`[TikTok Sync] Scroll ${i + 1}: captured ${likedVideos.length} LIKED videos`);
+        log.debug({ userId, scrollNumber: i + 1, videoCount: likedVideos.length }, 'Scroll progress');
       }
 
       // Stop if no new videos loaded after 3 scrolls
       if (i > 3 && likedVideos.length === prevCount) {
-        console.log(`[TikTok Sync] No more videos to load after ${i} scrolls`);
+        log.debug({ userId, scrollCount: i }, 'No more videos to load');
         break;
       }
     }
 
     // If still no liked videos, check if likes might be private
     if (likedVideos.length === 0) {
-      console.error(`[TikTok Sync] WARNING: No liked videos found. Possible causes:`);
-      console.error(`[TikTok Sync]   1. Likes are set to PRIVATE in TikTok settings`);
-      console.error(`[TikTok Sync]   2. Session cookies expired`);
-      console.error(`[TikTok Sync]   3. TikTok UI changed`);
+      log.error({ userId }, 'WARNING: No liked videos found. Possible causes: 1. Likes set to PRIVATE 2. Cookies expired 3. TikTok UI changed');
       const errorScreenshot = path.join(debugDir, `no-likes-${Date.now()}.png`);
       await page.screenshot({ path: errorScreenshot, fullPage: true });
-      console.log(`[TikTok Sync] Error screenshot saved: ${errorScreenshot}`);
+      log.debug({ userId, errorScreenshot }, 'Error screenshot saved');
     }
 
-    console.log(`[TikTok Sync] User ${userId}: found ${likedVideos.length} liked videos`);
+    log.info({ userId, videoCount: likedVideos.length }, 'Found liked videos');
 
     // Deduplicate videos
     const seenIds = new Set<string>();
@@ -358,7 +357,7 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
 
       if (existing) {
         // STOP - we've reached previously synced content
-        console.log(`[TikTok Sync] ✓ Found existing video ${video.id} during save - stopping`);
+        log.info({ userId, videoId: video.id }, 'Found existing video during save - stopping');
         break;
       }
 
@@ -394,7 +393,7 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
       },
     });
 
-    console.log(`[TikTok Sync] User ${userId}: synced ${newVideosCount} new videos`);
+    log.info({ userId, videoCount: newVideosCount }, 'New content synced');
     return newVideosCount;
 
     } finally {
@@ -402,7 +401,7 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
     }
 
   } catch (error) {
-    console.error(`[TikTok Sync] Error for user ${userId}:`, error);
+    log.error({ err: error, userId }, 'Sync failed for user');
     await prisma.connectedPlatform.update({
       where: { id: connectionId },
       data: {
@@ -417,7 +416,7 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
  * Main sync function - syncs all connected TikTok accounts
  */
 export async function runTikTokSync(): Promise<void> {
-  console.log('[TikTok Sync] Starting sync job...');
+  log.info('Starting sync');
   const startTime = Date.now();
 
   // Get all active TikTok connections
@@ -426,7 +425,7 @@ export async function runTikTokSync(): Promise<void> {
     include: { user: true },
   });
 
-  console.log(`[TikTok Sync] Found ${connections.length} TikTok connections`);
+  log.info({ userCount: connections.length }, 'Found users to sync');
 
   let totalNewVideos = 0;
   let successCount = 0;
@@ -452,14 +451,18 @@ export async function runTikTokSync(): Promise<void> {
       totalNewVideos += result.value;
       successCount++;
     } else {
-      console.error(`[TikTok Sync] Failed:`, result.reason);
+      log.error({ err: result.reason }, 'User sync failed');
       errorCount++;
     }
   }
 
   const duration = Date.now() - startTime;
-  console.log(`[TikTok Sync] Completed in ${duration}ms`);
-  console.log(`[TikTok Sync] Results: ${successCount} success, ${errorCount} errors, ${totalNewVideos} new videos`);
+  log.info({
+    durationMs: duration,
+    successCount,
+    errorCount,
+    totalNewVideos
+  }, 'Sync completed');
 }
 
 /**

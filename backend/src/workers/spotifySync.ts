@@ -1,9 +1,12 @@
 // Spotify Sync Worker - Fetches listened podcast episodes
 // Sources: recently-played (any episode listened) + saved episodes (bookmarked)
+import { logger } from '../config/logger.js';
 import { prisma } from '../config/database.js';
 import { Platform, ContentStatus } from '@prisma/client';
 import { getValidToken } from '../services/tokenRefresh.js';
 import { spotifyLimiter } from '../utils/rateLimiter.js';
+
+const log = logger.child({ job: 'spotify-sync' });
 
 const SPOTIFY_API_BASE = 'https://api.spotify.com/v1';
 
@@ -66,13 +69,12 @@ interface EpisodeData {
  * 2. Saved episodes - provides detailed progress info for bookmarked episodes
  */
 export async function syncUserSpotify(userId: string, connectionId: string, userEmail?: string): Promise<number> {
-  const label = userEmail || userId;
   const connection = await prisma.connectedPlatform.findUnique({
     where: { id: connectionId },
   });
 
   if (!connection) {
-    console.error(`[Spotify Sync] Connection ${connectionId} not found`);
+    log.error({ connectionId }, 'Connection not found');
     return 0;
   }
 
@@ -80,7 +82,7 @@ export async function syncUserSpotify(userId: string, connectionId: string, user
   try {
     accessToken = await getValidToken(connection);
   } catch (error) {
-    console.error(`[Spotify Sync] Failed to get valid token for ${label}:`, error);
+    log.error({ err: error, userId }, 'Failed to get valid token');
     await prisma.connectedPlatform.update({
       where: { id: connectionId },
       data: { lastSyncError: 'Failed to refresh token' },
@@ -136,12 +138,12 @@ export async function syncUserSpotify(userId: string, connectionId: string, user
             fullyPlayed,
           });
         }
-        console.log(`[Spotify Sync] ${label}: found ${episodes.size} episodes from recently-played`);
+        log.info({ userId, episodeCount: episodes.size }, 'Found episodes from recently-played');
       } else {
-        console.warn(`[Spotify Sync] ${label}: recently-played returned ${recentResponse.status}, continuing with saved episodes`);
+        log.warn({ userId, status: recentResponse.status }, 'Recently-played returned error, continuing with saved episodes');
       }
     } catch (recentError) {
-      console.warn(`[Spotify Sync] ${label}: recently-played fetch failed, continuing with saved episodes`);
+      log.warn({ userId }, 'Recently-played fetch failed, continuing with saved episodes');
     }
 
     // Source 2: Saved episodes - detailed progress info for bookmarked episodes
@@ -191,10 +193,10 @@ export async function syncUserSpotify(userId: string, connectionId: string, user
           });
         }
       } else {
-        console.warn(`[Spotify Sync] ${label}: saved episodes returned ${savedResponse.status}`);
+        log.warn({ userId, status: savedResponse.status }, 'Saved episodes returned error');
       }
     } catch (savedError) {
-      console.warn(`[Spotify Sync] ${label}: saved episodes fetch failed`);
+      log.warn({ userId }, 'Saved episodes fetch failed');
     }
 
     // Upsert all collected episodes (deduplicated by ID)
@@ -241,11 +243,16 @@ export async function syncUserSpotify(userId: string, connectionId: string, user
       data: { lastSyncAt: new Date(), lastSyncError: null },
     });
 
-    console.log(`[Spotify Sync] ${label}: ${newEpisodesCount} new, ${updatedEpisodesCount} updated (${episodes.size} total)`);
+    log.info({
+      userId,
+      newCount: newEpisodesCount,
+      updatedCount: updatedEpisodesCount,
+      totalCount: episodes.size
+    }, 'New content synced');
     return newEpisodesCount;
 
   } catch (error) {
-    console.error(`[Spotify Sync] Error for ${label}:`, error);
+    log.error({ err: error, userId }, 'Sync failed for user');
     await prisma.connectedPlatform.update({
       where: { id: connectionId },
       data: { lastSyncError: error instanceof Error ? error.message : 'Unknown error' },
@@ -258,7 +265,7 @@ export async function syncUserSpotify(userId: string, connectionId: string, user
  * Main sync function - syncs all connected Spotify accounts
  */
 export async function runSpotifySync(): Promise<void> {
-  console.log('[Spotify Sync] Starting sync job...');
+  log.info('Starting sync');
   const startTime = Date.now();
 
   const connections = await prisma.connectedPlatform.findMany({
@@ -266,7 +273,7 @@ export async function runSpotifySync(): Promise<void> {
     include: { user: true },
   });
 
-  console.log(`[Spotify Sync] Found ${connections.length} Spotify connections`);
+  log.info({ userCount: connections.length }, 'Found users to sync');
 
   let totalNewEpisodes = 0;
   let successCount = 0;
@@ -288,6 +295,10 @@ export async function runSpotifySync(): Promise<void> {
   }
 
   const duration = Date.now() - startTime;
-  console.log(`[Spotify Sync] Completed in ${duration}ms`);
-  console.log(`[Spotify Sync] Results: ${successCount} success, ${errorCount} errors, ${totalNewEpisodes} new episodes`);
+  log.info({
+    durationMs: duration,
+    successCount,
+    errorCount,
+    totalNewEpisodes
+  }, 'Sync completed');
 }
