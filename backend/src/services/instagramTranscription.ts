@@ -375,6 +375,11 @@ async function processInstagramWithCache(
     return 'failed';
   }
 
+  // If cache is FAILED and waiting for backoff, skip silently
+  if (cache.status === TranscriptCacheStatus.FAILED && !acquired) {
+    return 'failed';
+  }
+
   // We acquired the lock, need to fetch transcript
   if (!acquired) {
     return 'failed';

@@ -10,6 +10,7 @@ const LOCK_TIMEOUT_MS = 5 * 60 * 1000;
 // Retry delays
 const RETRY_UNAVAILABLE_DAYS = 7; // Retry after 7 days if no subtitles
 const RETRY_FAILED_HOURS = [1, 6, 24]; // Exponential backoff for transient errors
+const MAX_RETRY_ATTEMPTS = 5; // After this many failures, mark as UNAVAILABLE permanently
 
 interface TranscriptData {
   text: string;
@@ -71,6 +72,14 @@ export async function getOrCreateCacheWithLock(
     // Fall through to try acquiring lock for retry
   }
 
+  // If cache exists and is FAILED, check if we should retry (respect backoff)
+  if (cache && cache.status === TranscriptCacheStatus.FAILED) {
+    if (!shouldRetry(cache.nextRetryAt)) {
+      return { cache, acquired: false };
+    }
+    // Fall through to try acquiring lock for retry
+  }
+
   // If cache exists and is PROCESSING, check if lock is expired
   if (cache && cache.status === TranscriptCacheStatus.PROCESSING) {
     if (cache.lockedAt && cache.lockedAt > lockExpiry) {
@@ -105,7 +114,12 @@ export async function getOrCreateCacheWithLock(
         OR: [
           { lockedBy: null },
           { lockedAt: { lt: lockExpiry } },
-          { status: { in: [TranscriptCacheStatus.PENDING, TranscriptCacheStatus.FAILED] } },
+          { status: TranscriptCacheStatus.PENDING },
+          // Allow retry of FAILED only if nextRetryAt has passed (respect backoff)
+          {
+            status: TranscriptCacheStatus.FAILED,
+            nextRetryAt: { lt: now },
+          },
           // Allow retry of UNAVAILABLE if nextRetryAt has passed
           {
             status: TranscriptCacheStatus.UNAVAILABLE,
@@ -221,13 +235,20 @@ export async function markCacheFailed(
   });
 
   const attemptCount = (cache?.attemptCount || 0) + 1;
+  const errorMessage = error instanceof Error ? error.message : String(error);
+
+  // After MAX_RETRY_ATTEMPTS, give up and mark as UNAVAILABLE permanently
+  if (attemptCount >= MAX_RETRY_ATTEMPTS) {
+    console.log(`[TranscriptCache] ${cacheId} exceeded max retries (${attemptCount}/${MAX_RETRY_ATTEMPTS}), marking UNAVAILABLE`);
+    await markCacheUnavailable(cacheId, `Max retries exceeded (${attemptCount}): ${errorMessage.substring(0, 300)}`, _workerId);
+    return;
+  }
+
   const retryIndex = Math.min(attemptCount - 1, RETRY_FAILED_HOURS.length - 1);
   const retryHours = RETRY_FAILED_HOURS[retryIndex];
 
   const nextRetry = new Date();
   nextRetry.setHours(nextRetry.getHours() + retryHours);
-
-  const errorMessage = error instanceof Error ? error.message : String(error);
 
   await prisma.transcriptCache.update({
     where: { id: cacheId },
@@ -241,7 +262,7 @@ export async function markCacheFailed(
       attemptCount,
     },
   });
-  console.log(`[TranscriptCache] Marked ${cacheId} as FAILED (attempt ${attemptCount}), retry at ${nextRetry.toISOString()}`);
+  console.log(`[TranscriptCache] Marked ${cacheId} as FAILED (attempt ${attemptCount}/${MAX_RETRY_ATTEMPTS}), retry at ${nextRetry.toISOString()}`);
 }
 
 /**
