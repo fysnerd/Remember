@@ -127,39 +127,28 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       return 0;
     }
 
-    console.log(`[Instagram Sync] Session valid, fetching liked posts via in-browser API call...`);
+    console.log(`[Instagram Sync] Session valid, fetching liked posts via Playwright API request...`);
 
-    // Use page.evaluate() to call the private API from within i.instagram.com context
-    const apiResult = await page.evaluate(async () => {
-      try {
-        // Get CSRF token from cookies
-        const csrfMatch = document.cookie.match(/csrftoken=([^;]+)/);
-        const csrfToken = csrfMatch ? csrfMatch[1] : '';
-
-        const response = await fetch('/api/v1/feed/liked/', {
-          headers: {
-            'X-CSRFToken': csrfToken,
-            'Accept': '*/*',
-          },
-          credentials: 'include',
-        });
-
-        if (!response.ok) {
-          const text = await response.text().catch(() => '');
-          return { error: `API error ${response.status}: ${text.substring(0, 200)}`, items: [] };
-        }
-
-        const data = await response.json();
-        return {
-          items: data.items || [],
-          nextMaxId: data.next_max_id,
-          status: data.status,
-          error: null,
-        };
-      } catch (e) {
-        return { error: String(e), items: [] };
-      }
+    // Use context.request: sends cookies from browser context but with our own headers
+    // This avoids the UA mismatch from page.evaluate's browser-controlled fetch
+    const response = await context.request.get('https://i.instagram.com/api/v1/feed/liked/', {
+      headers: {
+        'User-Agent': 'Barcelona 289.0.0.77.109 Android',
+        'X-IG-App-ID': '1217981644879628',
+        'X-CSRFToken': cookies.csrftoken || '',
+        'Accept': '*/*',
+      },
     });
+
+    const apiResult: { error: string | null; items: any[] } = { error: null, items: [] };
+
+    if (!response.ok()) {
+      const text = await response.text().catch(() => '');
+      apiResult.error = `API error ${response.status()}: ${text.substring(0, 200)}`;
+    } else {
+      const data = await response.json();
+      apiResult.items = data.items || [];
+    }
 
     await browser.close();
 
