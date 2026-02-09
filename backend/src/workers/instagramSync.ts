@@ -89,12 +89,14 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       ]
     });
 
-    // Desktop Chrome UA - must match the web X-IG-App-ID to avoid "useragent mismatch"
+    // Match the UA from the iOS WebView that captured the cookies
     const context = await browser.newContext({
-      viewport: { width: 1280, height: 800 },
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      viewport: { width: 390, height: 844 },
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
       locale: 'fr-FR',
       timezoneId: 'Europe/Paris',
+      isMobile: true,
+      hasTouch: true,
       javaScriptEnabled: true,
     });
 
@@ -108,10 +110,10 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
     await context.addCookies(playwrightCookies);
     const page = await context.newPage();
 
-    // Navigate to Instagram to establish session
+    // Navigate to i.instagram.com (mobile domain) to establish session
     console.log(`[Instagram Sync] Navigating to Instagram for user ${userId}...`);
     await page.waitForTimeout(1000 + Math.random() * 2000);
-    await page.goto('https://www.instagram.com/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.goto('https://i.instagram.com/', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForTimeout(3000 + Math.random() * 2000);
 
     // Check if logged in
@@ -127,8 +129,7 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
 
     console.log(`[Instagram Sync] Session valid, fetching liked posts via in-browser API call...`);
 
-    // Use page.evaluate() to call the private API from within the browser context
-    // Must use www.instagram.com (same origin) + CSRF token from cookies
+    // Use page.evaluate() to call the private API from within i.instagram.com context
     const apiResult = await page.evaluate(async () => {
       try {
         // Get CSRF token from cookies
@@ -137,9 +138,7 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
 
         const response = await fetch('/api/v1/feed/liked/', {
           headers: {
-            'X-IG-App-ID': '936619743392459',
             'X-CSRFToken': csrfToken,
-            'X-Requested-With': 'XMLHttpRequest',
             'Accept': '*/*',
           },
           credentials: 'include',
