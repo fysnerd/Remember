@@ -1,6 +1,7 @@
 // Transcription Service - Fetches transcripts for YouTube videos
 // Uses yt-dlp (primary) for robust subtitle extraction including auto-generated captions
 // Uses global TranscriptCache to avoid redundant calls across users
+import { logger } from '../config/logger.js';
 import { prisma } from '../config/database.js';
 import { ContentStatus, TranscriptSource, TranscriptCacheStatus, Platform } from '@prisma/client';
 import { exec } from 'child_process';
@@ -9,6 +10,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import pLimit from 'p-limit';
+
+const log = logger.child({ service: 'youtube-transcription' });
 import {
   generateWorkerId,
   getOrCreateCacheWithLock,
@@ -90,7 +93,7 @@ export async function fetchYouTubeTranscriptWithYtDlp(
       // Use --remote-components ejs:github for JS challenge solving
       const command = `yt-dlp --proxy socks5://127.0.0.1:40000 --remote-components ejs:github --write-auto-sub --sub-lang "${lang}" --sub-format json3 --skip-download -o "${outputBase}" "https://www.youtube.com/watch?v=${videoId}"`;
 
-      console.log(`[Transcription] Running yt-dlp for ${videoId} (lang=${lang})...`);
+      log.debug({ videoId, lang }, 'Downloading subtitles with yt-dlp');
       await execAsync(command, { timeout: 60000 });
 
       // Find the downloaded subtitle file
@@ -98,7 +101,7 @@ export async function fetchYouTubeTranscriptWithYtDlp(
       const subFile = files.find(f => f.startsWith(`yt_subs_${videoId}_`) && f.endsWith('.json3'));
 
       if (!subFile) {
-        console.log(`[Transcription] No subtitle file for ${videoId} in ${lang}, trying next...`);
+        log.debug({ videoId, lang }, 'No subtitle file found, trying next language');
         continue;
       }
 
@@ -116,7 +119,7 @@ export async function fetchYouTubeTranscriptWithYtDlp(
       const textEvents = events.filter(e => e.segs && e.segs.length > 0);
 
       if (textEvents.length === 0) {
-        console.log(`[Transcription] No text segments for ${videoId} in ${lang}, trying next...`);
+        log.debug({ videoId, lang }, 'No text segments found, trying next language');
         continue;
       }
 
@@ -139,7 +142,7 @@ export async function fetchYouTubeTranscriptWithYtDlp(
       const langMatch = subFile.match(/\.([a-z]{2}(?:-[a-zA-Z]+)?)\.json3$/);
       const detectedLang = langMatch ? langMatch[1] : lang;
 
-      console.log(`[Transcription] yt-dlp success: ${segments.length} segments, ${fullText.length} chars, lang=${detectedLang}`);
+      log.info({ videoId, segments: segments.length, chars: fullText.length, language: detectedLang }, 'Subtitle extraction completed');
 
       return {
         text: fullText,
@@ -155,12 +158,12 @@ export async function fetchYouTubeTranscriptWithYtDlp(
           .forEach(f => fs.unlinkSync(path.join(tempDir, f)));
       } catch {}
 
-      console.log(`[Transcription] yt-dlp failed for ${videoId} (lang=${lang}): ${error.message?.substring(0, 100) || error}`);
+      log.debug({ err: error, videoId, lang }, 'yt-dlp failed for language');
       // Continue to next language
     }
   }
 
-  console.error(`[Transcription] yt-dlp failed for ${videoId} - no subtitles found in any language`);
+  log.warn({ videoId }, 'No subtitles found in any language');
   return null;
 }
 
@@ -177,7 +180,7 @@ export async function fetchYouTubeTranscript(
   const ytDlpAvailable = await isYtDlpAvailable();
 
   if (!ytDlpAvailable) {
-    console.error('[Transcription] yt-dlp is not installed. Please install it with: pip install yt-dlp');
+    log.error('yt-dlp is not installed');
     return null;
   }
 
@@ -197,19 +200,19 @@ export async function processContentTranscript(contentId: string): Promise<boole
   });
 
   if (!content) {
-    console.error(`[Transcription] Content ${contentId} not found`);
+    log.error({ contentId }, 'Content not found');
     return false;
   }
 
   // Skip if already has transcript
   if (content.transcript) {
-    console.log(`[Transcription] Content ${contentId} already has transcript`);
+    log.debug({ contentId }, 'Content already has transcript');
     return true;
   }
 
   // Only process YouTube for now (Spotify handled by podcastTranscription.ts)
   if (content.platform !== Platform.YOUTUBE) {
-    console.log(`[Transcription] Content ${contentId} is not YouTube, skipping`);
+    log.debug({ contentId, platform: content.platform }, 'Not YouTube content, skipping');
     return false;
   }
 
@@ -217,13 +220,13 @@ export async function processContentTranscript(contentId: string): Promise<boole
   if (content.transcriptCache?.status === TranscriptCacheStatus.SUCCESS && content.transcriptCache.text) {
     // Copy from cache
     await copyTranscriptFromCache(contentId, content.transcriptCache);
-    console.log(`[Transcription] Content ${contentId} - copied from cache`);
+    log.info({ contentId, cacheHit: true }, 'Copied transcript from cache');
     return true;
   }
 
   // Check if cache exists but is UNAVAILABLE
   if (content.transcriptCache?.status === TranscriptCacheStatus.UNAVAILABLE) {
-    console.log(`[Transcription] Content ${contentId} - cache UNAVAILABLE`);
+    log.warn({ contentId }, 'Transcript cache unavailable');
     return false;
   }
 
@@ -241,7 +244,7 @@ export async function processContentTranscript(contentId: string): Promise<boole
 
     if (!cacheResult) {
       // Cache is locked, wait and retry
-      console.log(`[Transcription] Content ${contentId} - cache locked, will retry later`);
+      log.debug({ contentId }, 'Cache locked, will retry later');
       await prisma.content.update({
         where: { id: contentId },
         data: { status: ContentStatus.SELECTED },
@@ -259,7 +262,7 @@ export async function processContentTranscript(contentId: string): Promise<boole
         where: { id: contentId },
         data: { status: ContentStatus.SELECTED },
       });
-      console.log(`[Transcription] ✅ Content ${contentId} - cache hit`);
+      log.info({ contentId, cacheHit: true }, 'Transcription completed from cache');
       return true;
     }
 
@@ -286,7 +289,7 @@ export async function processContentTranscript(contentId: string): Promise<boole
           transcriptCacheId: cache.id,
         },
       });
-      console.log(`[Transcription] No transcript available for ${content.externalId} - marked as failed`);
+      log.warn({ contentId, externalId: content.externalId }, 'No transcript available, marked as failed');
       return false;
     }
 
@@ -318,11 +321,11 @@ export async function processContentTranscript(contentId: string): Promise<boole
       data: { status: ContentStatus.SELECTED },
     });
 
-    console.log(`[Transcription] ✅ Successfully transcribed ${content.externalId} (${result.text.length} chars)`);
+    log.info({ contentId, externalId: content.externalId, chars: result.text.length, language: result.language }, 'Transcription completed');
     return true;
 
   } catch (error) {
-    console.error(`[Transcription] Error processing ${contentId}:`, error);
+    log.error({ err: error, contentId }, 'Transcription failed');
     await prisma.content.update({
       where: { id: contentId },
       data: {
@@ -368,7 +371,7 @@ export async function batchProcessTranscripts(contentIds: string[]): Promise<{
  * Processes content items that are in SELECTED or INBOX status
  */
 export async function runTranscriptionWorker(): Promise<void> {
-  console.log('[Transcription Worker] Starting...');
+  log.info('Starting transcription worker');
 
   const workerId = generateWorkerId();
 
@@ -407,7 +410,7 @@ export async function runTranscriptionWorker(): Promise<void> {
   });
 
   if (pendingContent.length === 0) {
-    console.log('[Transcription Worker] No pending content to process');
+    log.debug('No pending content to process');
     return;
   }
 
@@ -421,7 +424,7 @@ export async function runTranscriptionWorker(): Promise<void> {
 
   const selectedCount = pendingContent.filter(c => c.status === ContentStatus.SELECTED).length;
   const inboxCount = pendingContent.filter(c => c.status === ContentStatus.INBOX).length;
-  console.log(`[Transcription Worker] Processing ${pendingContent.length} items → ${uniqueVideos.size} unique videos (${selectedCount} SELECTED, ${inboxCount} INBOX)`);
+  log.info({ total: pendingContent.length, unique: uniqueVideos.size, selected: selectedCount, inbox: inboxCount }, 'Found pending transcriptions');
 
   let success = 0;
   let cacheHits = 0;
@@ -445,7 +448,7 @@ export async function runTranscriptionWorker(): Promise<void> {
     }
   }
 
-  console.log(`[Transcription Worker] Completed: ${success} transcribed, ${cacheHits} cache hits, ${failed} failed`);
+  log.info({ success, cacheHits, failed }, 'Transcription worker completed');
 }
 
 /**
@@ -473,7 +476,7 @@ async function processWithCache(
     // Copy transcript to Content's Transcript table for backward compatibility
     await copyTranscriptToAllContent(content.platform, content.externalId, cache);
 
-    console.log(`[Transcription] Cache hit for ${content.externalId}`);
+    log.debug({ externalId: content.externalId, cacheHit: true }, 'Cache hit for video');
     return 'cache_hit';
   }
 
@@ -512,7 +515,7 @@ async function processWithCache(
       // Update status for SELECTED content
       await updateContentStatusAfterTranscription(content.platform, content.externalId);
 
-      console.log(`[Transcription] ✅ ${content.externalId} - SUCCESS (${transcript.text.length} chars)`);
+      log.info({ externalId: content.externalId, chars: transcript.text.length, language: transcript.language }, 'Transcription completed successfully');
       return 'success';
 
     } else {
@@ -520,13 +523,13 @@ async function processWithCache(
       await markCacheUnavailable(cache.id, 'No subtitles available', workerId);
       await markContentTranscriptionFailed(content.platform, content.externalId);
 
-      console.log(`[Transcription] ${content.externalId} - UNAVAILABLE`);
+      log.warn({ externalId: content.externalId }, 'Transcript unavailable');
       return 'failed';
     }
 
   } catch (error: any) {
     await markCacheFailed(cache.id, error, workerId);
-    console.error(`[Transcription] ${content.externalId} - ERROR: ${error.message}`);
+    log.error({ err: error, externalId: content.externalId }, 'Transcription error');
     return 'failed';
   }
 }

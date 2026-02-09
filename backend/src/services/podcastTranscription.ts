@@ -1,8 +1,11 @@
 // Podcast Transcription Service - RSS feed lookup + Whisper API
 // For Spotify podcasts that aren't "Spotify Exclusive"
 // Uses global TranscriptCache to avoid redundant transcription calls
+import { logger } from '../config/logger.js';
 import { config } from '../config/env.js';
 import { prisma } from '../config/database.js';
+
+const log = logger.child({ service: 'podcast-transcription' });
 import { ContentStatus, TranscriptSource, TranscriptCacheStatus, Platform } from '@prisma/client';
 import OpenAI from 'openai';
 import Parser from 'rss-parser';
@@ -92,20 +95,20 @@ function isValidAudioFile(filePath: string): boolean {
     // Check file size (should be > 100KB for audio)
     const stats = fs.statSync(filePath);
     if (stats.size < 100000) {
-      console.log(`[Podcast] File too small: ${stats.size} bytes`);
+      log.debug({ sizeBytes: stats.size }, 'File too small');
       return false;
     }
 
     // If file is large enough, assume it might be valid audio
     // (some MP3s have weird headers)
     if (stats.size > 500000) {
-      console.log(`[Podcast] File is ${Math.round(stats.size / 1024 / 1024)}MB, assuming valid`);
+      log.debug({ sizeMB: Math.round(stats.size / 1024 / 1024) }, 'File large enough, assuming valid audio');
       return true;
     }
 
     return false;
   } catch (error) {
-    console.error('[Podcast] Error checking file:', error);
+    log.error({ err: error }, 'Error checking audio file');
     return false;
   }
 }
@@ -202,12 +205,12 @@ function getPodcastIndexHeaders(): Record<string, string> {
  */
 async function searchPodcastIndex(showName: string, episodeTitle: string): Promise<PodcastRSSResult | null> {
   if (!config.podcastIndex?.apiKey || !config.podcastIndex?.apiSecret) {
-    console.log('[Podcast] Podcast Index not configured, skipping');
+    log.debug('Podcast Index not configured, skipping');
     return null;
   }
 
   try {
-    console.log(`[Podcast] Searching Podcast Index for: "${showName}"`);
+    log.debug({ showName }, 'Searching Podcast Index');
 
     // Search for the podcast by title
     const headers = getPodcastIndexHeaders();
@@ -219,7 +222,7 @@ async function searchPodcastIndex(showName: string, episodeTitle: string): Promi
 
     const feeds = searchResponse.data.feeds;
     if (!feeds || feeds.length === 0) {
-      console.log('[Podcast] No results from Podcast Index');
+      log.debug('No results from Podcast Index');
       return null;
     }
 
@@ -235,25 +238,25 @@ async function searchPodcastIndex(showName: string, episodeTitle: string): Promi
       }
     }
 
-    console.log(`[Podcast] Podcast Index best match: "${bestFeed.title}" (score: ${bestScore.toFixed(2)})`);
+    log.debug({ feedTitle: bestFeed.title, score: bestScore.toFixed(2) }, 'Podcast Index best match');
 
     if (bestScore < 0.5) {
-      console.log(`[Podcast] ✗ Podcast Index match score too low (${bestScore.toFixed(2)} < 0.5)`);
+      log.debug({ score: bestScore.toFixed(2) }, 'Podcast Index match score too low');
       return null;
     }
 
     const feedUrl = bestFeed.url;
     if (!feedUrl) {
-      console.log('[Podcast] No RSS URL in Podcast Index result');
+      log.debug('No RSS URL in Podcast Index result');
       return null;
     }
 
-    console.log(`[Podcast] Found RSS via Podcast Index: ${feedUrl}`);
+    log.info({ feedUrl }, 'Found RSS via Podcast Index');
 
     // Parse RSS to find episode
     const feed = await rssParser.parseURL(feedUrl);
     if (!feed || !feed.items || feed.items.length === 0) {
-      console.log('[Podcast] RSS feed empty or invalid');
+      log.debug('RSS feed empty or invalid');
       return null;
     }
 
@@ -269,10 +272,10 @@ async function searchPodcastIndex(showName: string, episodeTitle: string): Promi
       }
     }
 
-    console.log(`[Podcast] Best episode match: "${bestEpisode?.title}" (score: ${bestEpisodeScore.toFixed(2)})`);
+    log.debug({ episodeTitle: bestEpisode?.title, score: bestEpisodeScore.toFixed(2) }, 'Best episode match');
 
     if (bestEpisode && bestEpisode.enclosure?.url && bestEpisodeScore > 0.5) {
-      console.log(`[Podcast] ✓ Found episode via Podcast Index: ${bestEpisode.title}`);
+      log.info({ episodeTitle: bestEpisode.title }, 'Found episode via Podcast Index');
       return {
         rssUrl: feedUrl,
         episodeAudioUrl: bestEpisode.enclosure.url,
@@ -280,11 +283,11 @@ async function searchPodcastIndex(showName: string, episodeTitle: string): Promi
       };
     }
 
-    console.log(`[Podcast] ✗ Episode match score too low (${bestEpisodeScore.toFixed(2)} < 0.5)`);
+    log.debug({ score: bestEpisodeScore.toFixed(2) }, 'Episode match score too low');
     return null;
 
   } catch (error: any) {
-    console.error('[Podcast] Podcast Index API error:', error.message || error);
+    log.error({ err: error }, 'Podcast Index API error');
     return null;
   }
 }
@@ -293,7 +296,7 @@ async function searchPodcastIndex(showName: string, episodeTitle: string): Promi
  * Search for podcast RSS feed - tries Podcast Index first, then iTunes
  */
 async function findPodcastRSS(showName: string, episodeTitle: string): Promise<PodcastRSSResult> {
-  console.log(`[Podcast] Searching for: "${showName}" - "${episodeTitle}"`);
+  log.debug({ showName, episodeTitle }, 'Searching for podcast RSS');
 
   // Method 1: Podcast Index API (4.4M+ podcasts, better coverage)
   const podcastIndexResult = await searchPodcastIndex(showName, episodeTitle);
@@ -303,7 +306,7 @@ async function findPodcastRSS(showName: string, episodeTitle: string): Promise<P
 
   // Method 2: iTunes Search API (fallback, free, no key required)
   try {
-    console.log(`[Podcast] Falling back to iTunes for: ${showName}`);
+    log.debug({ showName }, 'Falling back to iTunes search');
     const itunesResponse = await axios.get('https://itunes.apple.com/search', {
       params: {
         term: showName,
@@ -328,12 +331,12 @@ async function findPodcastRSS(showName: string, episodeTitle: string): Promise<P
         }
       }
 
-      console.log(`[Podcast] Best match: "${bestPodcast.collectionName}" (score: ${bestScore.toFixed(2)})`);
+      log.debug({ podcastName: bestPodcast.collectionName, score: bestScore.toFixed(2) }, 'iTunes best match');
 
       const feedUrl = bestPodcast.feedUrl;
       // IMPORTANT: Increased threshold from 0.3 to 0.5 to avoid false positives
       if (feedUrl && bestScore > 0.5) {
-        console.log(`[Podcast] Found RSS: ${feedUrl}`);
+        log.info({ feedUrl }, 'Found RSS via iTunes');
 
         // Parse RSS to find episode
         try {
@@ -351,36 +354,36 @@ async function findPodcastRSS(showName: string, episodeTitle: string): Promise<P
               }
             }
 
-            console.log(`[Podcast] Best episode match: "${bestEpisode?.title}" (score: ${bestEpisodeScore.toFixed(2)})`);
+            log.debug({ episodeTitle: bestEpisode?.title, score: bestEpisodeScore.toFixed(2) }, 'Best episode match');
 
             // IMPORTANT: Increased threshold from 0.4 to 0.5 to avoid false positives
             // A score of 0.5+ with Levenshtein means strings are fairly similar
             if (bestEpisode && bestEpisode.enclosure?.url && bestEpisodeScore > 0.5) {
-              console.log(`[Podcast] ✓ Found episode audio: ${bestEpisode.title}`);
+              log.info({ episodeTitle: bestEpisode.title }, 'Found episode audio');
               return {
                 rssUrl: feedUrl,
                 episodeAudioUrl: bestEpisode.enclosure.url,
                 episodeTitle: bestEpisode.title,
               };
             } else {
-              console.log(`[Podcast] ✗ Episode match score too low (${bestEpisodeScore.toFixed(2)} < 0.5), skipping to avoid wrong transcription`);
+              log.warn({ score: bestEpisodeScore.toFixed(2) }, 'Episode match score too low, skipping to avoid wrong transcription');
             }
           }
         } catch (rssError) {
-          console.error(`[Podcast] Failed to parse RSS:`, rssError);
+          log.error({ err: rssError }, 'Failed to parse RSS');
         }
       } else {
-        console.log(`[Podcast] ✗ Podcast match score too low (${bestScore.toFixed(2)} < 0.5) for "${showName}" → found "${bestPodcast.collectionName}"`);
+        log.warn({ score: bestScore.toFixed(2), requested: showName, found: bestPodcast.collectionName }, 'Podcast match score too low');
       }
     }
   } catch (error) {
-    console.error('[Podcast] iTunes Search API error:', error);
+    log.error({ err: error }, 'iTunes Search API error');
   }
 
   // Method 2: Listen Notes API if available
   if (config.listenNotes?.apiKey) {
     try {
-      console.log(`[Podcast] Trying Listen Notes API...`);
+      log.debug('Trying Listen Notes API');
       const searchResponse = await axios.get('https://listen-api.listennotes.com/api/v2/search', {
         params: {
           q: `${showName} ${episodeTitle}`,
@@ -396,7 +399,7 @@ async function findPodcastRSS(showName: string, episodeTitle: string): Promise<P
       const results = searchResponse.data.results;
       if (results && results.length > 0) {
         const episode = results[0];
-        console.log(`[Podcast] Listen Notes found: ${episode.title_original}`);
+        log.info({ episodeTitle: episode.title_original }, 'Listen Notes found episode');
 
         return {
           rssUrl: null,
@@ -405,7 +408,7 @@ async function findPodcastRSS(showName: string, episodeTitle: string): Promise<P
         };
       }
     } catch (error) {
-      console.error('[Podcast] Listen Notes API error:', error);
+      log.error({ err: error }, 'Listen Notes API error');
     }
   }
 
@@ -423,7 +426,7 @@ async function downloadAudio(audioUrl: string): Promise<string> {
   const tempDir = os.tmpdir();
   const tempFile = path.join(tempDir, `podcast_${Date.now()}.mp3`);
 
-  console.log(`[Podcast] Downloading from: ${audioUrl}`);
+  log.debug({ audioUrl }, 'Downloading podcast audio');
 
   // Follow redirects and get final URL
   const response = await axios({
@@ -440,7 +443,7 @@ async function downloadAudio(audioUrl: string): Promise<string> {
   });
 
   const contentType = response.headers['content-type'] || '';
-  console.log(`[Podcast] Content-Type: ${contentType}, Status: ${response.status}`);
+  log.debug({ contentType, status: response.status }, 'Audio download response');
 
   // Check if response is HTML (error page)
   if (contentType.includes('text/html')) {
@@ -457,7 +460,7 @@ async function downloadAudio(audioUrl: string): Promise<string> {
 
   // Validate the downloaded file
   const stats = fs.statSync(tempFile);
-  console.log(`[Podcast] Downloaded ${Math.round(stats.size / 1024 / 1024 * 100) / 100}MB`);
+  log.debug({ sizeMB: Math.round(stats.size / 1024 / 1024 * 100) / 100 }, 'Audio downloaded');
 
   if (!isValidAudioFile(tempFile)) {
     fs.unlinkSync(tempFile);
@@ -467,12 +470,12 @@ async function downloadAudio(audioUrl: string): Promise<string> {
   // Check file size for Groq limit (25MB) - compress if needed
   const maxSize = 25 * 1024 * 1024;
   if (groqClient && stats.size > maxSize) {
-    console.log(`[Podcast] File too large (${Math.round(stats.size / 1024 / 1024)}MB), compressing with ffmpeg...`);
+    log.info({ sizeMB: Math.round(stats.size / 1024 / 1024) }, 'File too large, compressing with ffmpeg');
     const compressedFile = await compressAudio(tempFile);
     fs.unlinkSync(tempFile); // Remove original
 
     const compressedStats = fs.statSync(compressedFile);
-    console.log(`[Podcast] Compressed to ${Math.round(compressedStats.size / 1024 / 1024 * 100) / 100}MB`);
+    log.info({ sizeMB: Math.round(compressedStats.size / 1024 / 1024 * 100) / 100 }, 'Audio compressed');
 
     if (compressedStats.size > maxSize) {
       fs.unlinkSync(compressedFile);
@@ -492,7 +495,7 @@ async function getAudioDuration(inputPath: string): Promise<number> {
     const cmd = `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${inputPath}"`;
     exec(cmd, { timeout: 30000 }, (error, stdout, stderr) => {
       if (error) {
-        console.error('[Podcast] ffprobe error:', stderr);
+        log.error({ stderr }, 'ffprobe error');
         reject(new Error(`ffprobe failed: ${error.message}`));
         return;
       }
@@ -521,10 +524,10 @@ async function compressAudio(inputPath: string): Promise<string> {
       // targetSizeBytes * 8 (bits) / duration (seconds) / 1000 = kbps
       const optimalBitrate = Math.floor((targetSizeBytes * 8) / duration / 1000);
       bitrate = Math.max(minBitrate, Math.min(maxBitrate, optimalBitrate));
-      console.log(`[Podcast] Duration: ${Math.round(duration / 60)}min, optimal bitrate: ${bitrate}kbps`);
+      log.debug({ durationMin: Math.round(duration / 60), bitrateKbps: bitrate }, 'Calculated optimal bitrate');
     }
   } catch (error) {
-    console.warn('[Podcast] Could not get duration, using default bitrate');
+    log.warn('Could not get duration, using default bitrate');
   }
 
   return new Promise((resolve, reject) => {
@@ -533,7 +536,7 @@ async function compressAudio(inputPath: string): Promise<string> {
 
     exec(cmd, { timeout: 600000 }, (error, _stdout, stderr) => {
       if (error) {
-        console.error('[Podcast] ffmpeg compression error:', stderr);
+        log.error({ stderr }, 'ffmpeg compression error');
         reject(new Error(`ffmpeg compression failed: ${error.message}`));
         return;
       }
@@ -560,7 +563,7 @@ async function transcribeWithWhisper(audioPath: string): Promise<{
   // Groq uses whisper-large-v3, OpenAI uses whisper-1
   const model = isGroq ? 'whisper-large-v3' : 'whisper-1';
 
-  console.log(`[Podcast] Using ${isGroq ? 'Groq (free)' : 'OpenAI'} for transcription`);
+  log.debug({ provider: isGroq ? 'Groq' : 'OpenAI' }, 'Using Whisper for transcription');
 
   // Use verbose_json for timestamped segments
   const transcription = await whisperClient.audio.transcriptions.create({
@@ -597,19 +600,19 @@ export async function processPodcastTranscript(contentId: string): Promise<boole
   });
 
   if (!content) {
-    console.error(`[Podcast] Content ${contentId} not found`);
+    log.error({ contentId }, 'Content not found');
     return false;
   }
 
   // Skip if already has transcript
   if (content.transcript) {
-    console.log(`[Podcast] Content ${contentId} already has transcript`);
+    log.debug({ contentId }, 'Content already has transcript');
     return true;
   }
 
   // Only process Spotify content
   if (content.platform !== Platform.SPOTIFY) {
-    console.log(`[Podcast] Content ${contentId} is not Spotify, skipping`);
+    log.debug({ contentId, platform: content.platform }, 'Not Spotify content, skipping');
     return false;
   }
 
@@ -621,7 +624,7 @@ export async function processPodcastTranscript(contentId: string): Promise<boole
 
   try {
     // Step 1: Find RSS feed and audio URL
-    console.log(`[Podcast] Looking up RSS for: ${content.showName} - ${content.title}`);
+    log.debug({ showName: content.showName, episodeTitle: content.title }, 'Looking up RSS feed');
     const rssResult = await findPodcastRSS(content.showName || '', content.title);
 
     if (!rssResult.episodeAudioUrl) {
@@ -630,16 +633,16 @@ export async function processPodcastTranscript(contentId: string): Promise<boole
         where: { id: contentId },
         data: { status: ContentStatus.UNSUPPORTED },
       });
-      console.log(`[Podcast] ${rssResult.error || 'No audio found'} - marking as unsupported`);
+      log.warn({ reason: rssResult.error || 'No audio found' }, 'Marking as unsupported');
       return false;
     }
 
     // Step 2: Download audio
-    console.log(`[Podcast] Downloading audio...`);
+    log.debug('Downloading audio');
     const audioPath = await downloadAudio(rssResult.episodeAudioUrl);
 
     // Step 3: Transcribe with Whisper (rate limited)
-    console.log(`[Podcast] Transcribing with Whisper...`);
+    log.debug('Transcribing with Whisper');
     const result = await groqLimiter(() => transcribeWithWhisper(audioPath));
 
     // Step 4: Save transcript
@@ -659,11 +662,11 @@ export async function processPodcastTranscript(contentId: string): Promise<boole
       data: { status: ContentStatus.SELECTED },
     });
 
-    console.log(`[Podcast] ✅ Successfully transcribed "${content.title}" (${result.text.length} chars, ${result.language})`);
+    log.info({ episodeTitle: content.title, chars: result.text.length, language: result.language }, 'Podcast transcription completed');
     return true;
 
   } catch (error: any) {
-    console.error(`[Podcast] ❌ Error processing ${content.title}:`, error.message || error);
+    log.error({ err: error, episodeTitle: content.title }, 'Podcast transcription failed');
     await prisma.content.update({
       where: { id: contentId },
       data: { status: ContentStatus.FAILED },
@@ -677,7 +680,7 @@ export async function processPodcastTranscript(contentId: string): Promise<boole
  * Uses global TranscriptCache to avoid redundant Whisper calls
  */
 export async function runPodcastTranscriptionWorker(): Promise<void> {
-  console.log('[Podcast Worker] Starting...');
+  log.info('Starting podcast transcription worker');
 
   const workerId = generateWorkerId();
 
@@ -696,7 +699,7 @@ export async function runPodcastTranscriptionWorker(): Promise<void> {
   });
 
   if (pendingContent.length === 0) {
-    console.log('[Podcast Worker] No pending podcasts to process');
+    log.debug('No pending podcasts to process');
     return;
   }
 
@@ -708,7 +711,7 @@ export async function runPodcastTranscriptionWorker(): Promise<void> {
     }
   }
 
-  console.log(`[Podcast Worker] Processing ${pendingContent.length} items → ${uniqueEpisodes.size} unique episodes`);
+  log.info({ total: pendingContent.length, unique: uniqueEpisodes.size }, 'Found pending podcasts');
 
   let success = 0;
   let cacheHits = 0;
@@ -732,7 +735,7 @@ export async function runPodcastTranscriptionWorker(): Promise<void> {
     }
   }
 
-  console.log(`[Podcast Worker] Completed: ${success} transcribed, ${cacheHits} cache hits, ${failed} failed`);
+  log.info({ success, cacheHits, failed }, 'Podcast transcription worker completed');
 }
 
 /**
@@ -756,7 +759,7 @@ async function processPodcastWithCache(
   if (cache.status === TranscriptCacheStatus.SUCCESS && cache.text) {
     await linkCacheToContent(content.platform, content.externalId, cache.id);
     await copyTranscriptToAllSpotifyContent(content.externalId, cache);
-    console.log(`[Podcast] Cache hit for ${content.externalId}`);
+    log.debug({ externalId: content.externalId, cacheHit: true }, 'Cache hit for podcast');
     return 'cache_hit';
   }
 
@@ -773,23 +776,23 @@ async function processPodcastWithCache(
 
   try {
     // Step 1: Find RSS feed and audio URL
-    console.log(`[Podcast] Looking up RSS for: ${content.showName} - ${content.title}`);
+    log.debug({ showName: content.showName, episodeTitle: content.title }, 'Looking up RSS feed');
     const rssResult = await findPodcastRSS(content.showName || '', content.title);
 
     if (!rssResult.episodeAudioUrl) {
       // Mark as unsupported (likely Spotify Exclusive)
       await markCacheUnavailable(cache.id, rssResult.error || 'No audio found', workerId);
       await markSpotifyContentUnsupported(content.externalId);
-      console.log(`[Podcast] ${rssResult.error || 'No audio found'} - marking as unsupported`);
+      log.warn({ reason: rssResult.error || 'No audio found' }, 'Marking as unsupported');
       return 'failed';
     }
 
     // Step 2: Download audio
-    console.log(`[Podcast] Downloading audio...`);
+    log.debug('Downloading audio');
     const audioPath = await downloadAudio(rssResult.episodeAudioUrl);
 
     // Step 3: Transcribe with Whisper (rate limited)
-    console.log(`[Podcast] Transcribing with Whisper...`);
+    log.debug('Transcribing with Whisper');
     const transcript = await groqLimiter(() => transcribeWithWhisper(audioPath));
 
     // Step 4: Save to cache
@@ -819,12 +822,12 @@ async function processPodcastWithCache(
       data: { status: ContentStatus.SELECTED },
     });
 
-    console.log(`[Podcast] ✅ ${content.externalId} - SUCCESS (${transcript.text.length} chars)`);
+    log.info({ externalId: content.externalId, chars: transcript.text.length, language: transcript.language }, 'Podcast transcription completed successfully');
     return 'success';
 
   } catch (error: any) {
     await markCacheFailed(cache.id, error, workerId);
-    console.error(`[Podcast] ${content.externalId} - ERROR: ${error.message}`);
+    log.error({ err: error, externalId: content.externalId }, 'Podcast transcription error');
     return 'failed';
   }
 }

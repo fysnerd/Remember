@@ -1,8 +1,11 @@
 // Instagram Transcription Service - Download reel video + Whisper transcription
 // Pattern based on tiktokTranscription.ts
 // Uses global TranscriptCache to avoid redundant transcription calls
+import { logger } from '../config/logger.js';
 import { config } from '../config/env.js';
 import { prisma } from '../config/database.js';
+
+const log = logger.child({ service: 'instagram-transcription' });
 import { ContentStatus, TranscriptSource, TranscriptCacheStatus, Platform } from '@prisma/client';
 import OpenAI from 'openai';
 import * as fs from 'fs';
@@ -57,7 +60,7 @@ async function downloadInstagramReel(url: string, outputPath: string): Promise<v
     const args = ['--no-warnings', '-f', 'best[ext=mp4]/best', '-o', outputPath, url];
     execFile('yt-dlp', args, { timeout: 120000 }, (error, _stdout, stderr) => {
       if (error) {
-        console.error('[Instagram] yt-dlp error:', stderr);
+        log.error({ stderr }, 'yt-dlp error');
         reject(new Error(`yt-dlp failed: ${error.message}`));
       } else {
         resolve();
@@ -76,7 +79,7 @@ async function extractAudio(videoPath: string, audioPath: string): Promise<void>
     const args = ['-y', '-i', videoPath, '-vn', '-acodec', 'libmp3lame', '-q:a', '2', audioPath];
     execFile('ffmpeg', args, { timeout: 60000 }, (error, _stdout, stderr) => {
       if (error) {
-        console.error('[Instagram] ffmpeg error:', stderr);
+        log.error({ stderr }, 'ffmpeg error');
         reject(new Error(`ffmpeg failed: ${error.message}`));
       } else {
         resolve();
@@ -98,7 +101,7 @@ async function compressAudio(inputPath: string): Promise<string> {
     const args = ['-y', '-i', inputPath, '-ac', '1', '-ar', '16000', '-b:a', '32k', outputPath];
     execFile('ffmpeg', args, { timeout: 300000 }, (error, _stdout, stderr) => {
       if (error) {
-        console.error('[Instagram] ffmpeg compression error:', stderr);
+        log.error({ stderr }, 'ffmpeg compression error');
         reject(new Error(`ffmpeg compression failed: ${error.message}`));
         return;
       }
@@ -125,7 +128,7 @@ async function transcribeWithWhisper(audioPath: string): Promise<{
   // Groq uses whisper-large-v3, OpenAI uses whisper-1
   const model = isGroq ? 'whisper-large-v3' : 'whisper-1';
 
-  console.log(`[Instagram] Using ${isGroq ? 'Groq (free)' : 'OpenAI'} for transcription`);
+  log.debug({ provider: isGroq ? 'Groq' : 'OpenAI' }, 'Using Whisper for transcription');
 
   // Use verbose_json for timestamped segments
   const transcription = await whisperClient.audio.transcriptions.create({
@@ -159,7 +162,7 @@ function cleanupFiles(...filePaths: string[]): void {
         fs.unlinkSync(filePath);
       }
     } catch (error) {
-      console.error(`[Instagram] Failed to cleanup ${filePath}:`, error);
+      log.error({ err: error, filePath }, 'Failed to cleanup file');
     }
   }
 }
@@ -174,19 +177,19 @@ export async function processInstagramTranscript(contentId: string): Promise<boo
   });
 
   if (!content) {
-    console.error(`[Instagram] Content ${contentId} not found`);
+    log.error({ contentId }, 'Content not found');
     return false;
   }
 
   // Skip if already has transcript
   if (content.transcript) {
-    console.log(`[Instagram] Content ${contentId} already has transcript`);
+    log.debug({ contentId }, 'Content already has transcript');
     return true;
   }
 
   // Only process Instagram content
   if (content.platform !== Platform.INSTAGRAM) {
-    console.log(`[Instagram] Content ${contentId} is not Instagram, skipping`);
+    log.debug({ contentId, platform: content.platform }, 'Not Instagram content, skipping');
     return false;
   }
 
@@ -203,11 +206,11 @@ export async function processInstagramTranscript(contentId: string): Promise<boo
 
   try {
     // Step 1: Download video via yt-dlp (supports Instagram!)
-    console.log(`[Instagram] Downloading: ${content.url}`);
+    log.debug({ externalId: content.externalId, url: content.url }, 'Downloading reel');
     await downloadInstagramReel(content.url, videoPath);
 
     // Step 2: Extract audio via ffmpeg
-    console.log(`[Instagram] Extracting audio...`);
+    log.debug({ externalId: content.externalId }, 'Extracting audio');
     await extractAudio(videoPath, audioPath);
 
     // Remove video file (no longer needed)
@@ -219,13 +222,13 @@ export async function processInstagramTranscript(contentId: string): Promise<boo
 
     let finalAudioPath = audioPath;
     if (groqClient && stats.size > maxSize) {
-      console.log(`[Instagram] Audio too large (${Math.round(stats.size / 1024 / 1024)}MB), compressing...`);
+      log.info({ externalId: content.externalId, sizeMB: Math.round(stats.size / 1024 / 1024) }, 'Audio too large, compressing');
       compressedPath = await compressAudio(audioPath);
       cleanupFiles(audioPath);
       finalAudioPath = compressedPath;
 
       const compressedStats = fs.statSync(compressedPath);
-      console.log(`[Instagram] Compressed to ${Math.round(compressedStats.size / 1024 / 1024 * 100) / 100}MB`);
+      log.info({ externalId: content.externalId, sizeMB: Math.round(compressedStats.size / 1024 / 1024 * 100) / 100 }, 'Audio compressed');
 
       if (compressedStats.size > maxSize) {
         throw new Error(`File still too large after compression (${Math.round(compressedStats.size / 1024 / 1024)}MB > 25MB limit)`);
@@ -233,12 +236,12 @@ export async function processInstagramTranscript(contentId: string): Promise<boo
     }
 
     // Step 4: Transcribe with Whisper (rate limited)
-    console.log(`[Instagram] Transcribing with Whisper...`);
+    log.debug({ externalId: content.externalId }, 'Transcribing with Whisper');
     const result = await groqLimiter(() => transcribeWithWhisper(finalAudioPath));
 
     // Step 5: Check if transcript is valid (filters music-only reels)
     if (result.text.length < MIN_TRANSCRIPT_LENGTH) {
-      console.log(`[Instagram] Transcript too short (${result.text.length} < ${MIN_TRANSCRIPT_LENGTH} chars) - marking as UNSUPPORTED`);
+      log.warn({ contentId, textLength: result.text.length, minLength: MIN_TRANSCRIPT_LENGTH }, 'Transcript too short, marking as unsupported');
       await prisma.content.update({
         where: { id: contentId },
         data: { status: ContentStatus.UNSUPPORTED },
@@ -263,11 +266,11 @@ export async function processInstagramTranscript(contentId: string): Promise<boo
       data: { status: ContentStatus.SELECTED },
     });
 
-    console.log(`[Instagram] Successfully transcribed "${content.title}" (${result.text.length} chars, ${result.language})`);
+    log.info({ contentId, title: content.title, chars: result.text.length, language: result.language }, 'Instagram transcription completed');
     return true;
 
   } catch (error: any) {
-    console.error(`[Instagram] Error processing ${content.title}:`, error.message || error);
+    log.error({ err: error, contentId, title: content.title }, 'Instagram transcription failed');
 
     await prisma.content.update({
       where: { id: contentId },
@@ -286,7 +289,7 @@ export async function processInstagramTranscript(contentId: string): Promise<boo
  * Uses global TranscriptCache to avoid redundant Whisper calls
  */
 export async function runInstagramTranscriptionWorker(): Promise<void> {
-  console.log('[Instagram Worker] Starting...');
+  log.info('Starting Instagram transcription worker');
 
   const workerId = generateWorkerId();
 
@@ -305,7 +308,7 @@ export async function runInstagramTranscriptionWorker(): Promise<void> {
   });
 
   if (pendingContent.length === 0) {
-    console.log('[Instagram Worker] No pending Instagram reels to process');
+    log.debug('No pending Instagram reels to process');
     return;
   }
 
@@ -317,7 +320,7 @@ export async function runInstagramTranscriptionWorker(): Promise<void> {
     }
   }
 
-  console.log(`[Instagram Worker] Processing ${pendingContent.length} items → ${uniqueReels.size} unique reels`);
+  log.info({ total: pendingContent.length, unique: uniqueReels.size }, 'Found pending Instagram reels');
 
   let success = 0;
   let cacheHits = 0;
@@ -341,7 +344,7 @@ export async function runInstagramTranscriptionWorker(): Promise<void> {
     }
   }
 
-  console.log(`[Instagram Worker] Completed: ${success} transcribed, ${cacheHits} cache hits, ${failed} failed`);
+  log.info({ success, cacheHits, failed }, 'Instagram transcription worker completed');
 }
 
 /**
@@ -365,7 +368,7 @@ async function processInstagramWithCache(
   if (cache.status === TranscriptCacheStatus.SUCCESS && cache.text) {
     await linkCacheToContent(content.platform, content.externalId, cache.id);
     await copyTranscriptToAllInstagramContent(content.externalId, cache);
-    console.log(`[Instagram] Cache hit for ${content.externalId}`);
+    log.debug({ externalId: content.externalId, cacheHit: true }, 'Cache hit for Instagram reel');
     return 'cache_hit';
   }
 
@@ -392,11 +395,11 @@ async function processInstagramWithCache(
 
   try {
     // Step 1: Download video via yt-dlp
-    console.log(`[Instagram] Downloading: ${content.url}`);
+    log.debug({ externalId: content.externalId, url: content.url }, 'Downloading reel');
     await downloadInstagramReel(content.url, videoPath);
 
     // Step 2: Extract audio via ffmpeg
-    console.log(`[Instagram] Extracting audio...`);
+    log.debug({ externalId: content.externalId }, 'Extracting audio');
     await extractAudio(videoPath, audioPath);
 
     // Remove video file (no longer needed)
@@ -408,13 +411,13 @@ async function processInstagramWithCache(
 
     let finalAudioPath = audioPath;
     if (groqClient && stats.size > maxSize) {
-      console.log(`[Instagram] Audio too large (${Math.round(stats.size / 1024 / 1024)}MB), compressing...`);
+      log.info({ externalId: content.externalId, sizeMB: Math.round(stats.size / 1024 / 1024) }, 'Audio too large, compressing');
       compressedPath = await compressAudio(audioPath);
       cleanupFiles(audioPath);
       finalAudioPath = compressedPath;
 
       const compressedStats = fs.statSync(compressedPath);
-      console.log(`[Instagram] Compressed to ${Math.round(compressedStats.size / 1024 / 1024 * 100) / 100}MB`);
+      log.info({ externalId: content.externalId, sizeMB: Math.round(compressedStats.size / 1024 / 1024 * 100) / 100 }, 'Audio compressed');
 
       if (compressedStats.size > maxSize) {
         throw new Error(`File still too large after compression (${Math.round(compressedStats.size / 1024 / 1024)}MB > 25MB limit)`);
@@ -422,7 +425,7 @@ async function processInstagramWithCache(
     }
 
     // Step 4: Transcribe with Whisper (rate limited)
-    console.log(`[Instagram] Transcribing with Whisper...`);
+    log.debug({ externalId: content.externalId }, 'Transcribing with Whisper');
     const transcript = await groqLimiter(() => transcribeWithWhisper(finalAudioPath));
 
     // Cleanup audio files
@@ -431,7 +434,7 @@ async function processInstagramWithCache(
 
     // Step 5: Check if transcript is valid (filters music-only reels)
     if (transcript.text.length < MIN_TRANSCRIPT_LENGTH) {
-      console.log(`[Instagram] Transcript too short (${transcript.text.length} < ${MIN_TRANSCRIPT_LENGTH} chars) - marking as UNSUPPORTED`);
+      log.warn({ externalId: content.externalId, textLength: transcript.text.length, minLength: MIN_TRANSCRIPT_LENGTH }, 'Transcript too short, marking as unsupported');
       await markCacheUnavailable(cache.id, 'Transcript too short (music-only reel)', workerId);
       await markInstagramContentUnsupported(content.externalId);
       return 'failed';
@@ -464,12 +467,12 @@ async function processInstagramWithCache(
       data: { status: ContentStatus.SELECTED },
     });
 
-    console.log(`[Instagram] ✅ ${content.externalId} - SUCCESS (${transcript.text.length} chars)`);
+    log.info({ externalId: content.externalId, title: content.title, chars: transcript.text.length, language: transcript.language }, 'Instagram transcription completed successfully');
     return 'success';
 
   } catch (error: any) {
     await markCacheFailed(cache.id, error, workerId);
-    console.error(`[Instagram] ${content.externalId} - ERROR: ${error.message}`);
+    log.error({ err: error, externalId: content.externalId }, 'Instagram transcription error');
     return 'failed';
   } finally {
     // Cleanup in finally block to ensure temp files are always removed

@@ -1,8 +1,11 @@
 // TikTok Transcription Service - Download video + Whisper transcription
 // Pattern based on podcastTranscription.ts
 // Uses global TranscriptCache to avoid redundant transcription calls
+import { logger } from '../config/logger.js';
 import { config } from '../config/env.js';
 import { prisma } from '../config/database.js';
+
+const log = logger.child({ service: 'tiktok-transcription' });
 import { ContentStatus, TranscriptSource, TranscriptCacheStatus, Platform } from '@prisma/client';
 import OpenAI from 'openai';
 import * as fs from 'fs';
@@ -57,7 +60,7 @@ async function downloadTikTokVideo(url: string, outputPath: string): Promise<voi
     const args = ['--no-warnings', '-f', 'best[ext=mp4]/best', '-o', outputPath, url];
     execFile('yt-dlp', args, { timeout: 120000 }, (error, _stdout, stderr) => {
       if (error) {
-        console.error('[TikTok] yt-dlp error:', stderr);
+        log.error({ stderr }, 'yt-dlp error');
         reject(new Error(`yt-dlp failed: ${error.message}`));
       } else {
         resolve();
@@ -76,7 +79,7 @@ async function extractAudio(videoPath: string, audioPath: string): Promise<void>
     const args = ['-y', '-i', videoPath, '-vn', '-acodec', 'libmp3lame', '-q:a', '2', audioPath];
     execFile('ffmpeg', args, { timeout: 60000 }, (error, _stdout, stderr) => {
       if (error) {
-        console.error('[TikTok] ffmpeg error:', stderr);
+        log.error({ stderr }, 'ffmpeg error');
         reject(new Error(`ffmpeg failed: ${error.message}`));
       } else {
         resolve();
@@ -98,7 +101,7 @@ async function compressAudio(inputPath: string): Promise<string> {
     const args = ['-y', '-i', inputPath, '-ac', '1', '-ar', '16000', '-b:a', '32k', outputPath];
     execFile('ffmpeg', args, { timeout: 300000 }, (error, _stdout, stderr) => {
       if (error) {
-        console.error('[TikTok] ffmpeg compression error:', stderr);
+        log.error({ stderr }, 'ffmpeg compression error');
         reject(new Error(`ffmpeg compression failed: ${error.message}`));
         return;
       }
@@ -125,7 +128,7 @@ async function transcribeWithWhisper(audioPath: string): Promise<{
   // Groq uses whisper-large-v3, OpenAI uses whisper-1
   const model = isGroq ? 'whisper-large-v3' : 'whisper-1';
 
-  console.log(`[TikTok] Using ${isGroq ? 'Groq (free)' : 'OpenAI'} for transcription`);
+  log.debug({ provider: isGroq ? 'Groq' : 'OpenAI' }, 'Using Whisper for transcription');
 
   // Use verbose_json for timestamped segments
   const transcription = await whisperClient.audio.transcriptions.create({
@@ -159,7 +162,7 @@ function cleanupFiles(...filePaths: string[]): void {
         fs.unlinkSync(filePath);
       }
     } catch (error) {
-      console.error(`[TikTok] Failed to cleanup ${filePath}:`, error);
+      log.error({ err: error, filePath }, 'Failed to cleanup file');
     }
   }
 }
@@ -174,19 +177,19 @@ export async function processTikTokTranscript(contentId: string): Promise<boolea
   });
 
   if (!content) {
-    console.error(`[TikTok] Content ${contentId} not found`);
+    log.error({ contentId }, 'Content not found');
     return false;
   }
 
   // Skip if already has transcript
   if (content.transcript) {
-    console.log(`[TikTok] Content ${contentId} already has transcript`);
+    log.debug({ contentId }, 'Content already has transcript');
     return true;
   }
 
   // Only process TikTok content
   if (content.platform !== Platform.TIKTOK) {
-    console.log(`[TikTok] Content ${contentId} is not TikTok, skipping`);
+    log.debug({ contentId, platform: content.platform }, 'Not TikTok content, skipping');
     return false;
   }
 
@@ -203,11 +206,11 @@ export async function processTikTokTranscript(contentId: string): Promise<boolea
 
   try {
     // Step 1: Download video via yt-dlp
-    console.log(`[TikTok] Downloading: ${content.url}`);
+    log.debug({ externalId: content.externalId, url: content.url }, 'Downloading video');
     await downloadTikTokVideo(content.url, videoPath);
 
     // Step 2: Extract audio via ffmpeg
-    console.log(`[TikTok] Extracting audio...`);
+    log.debug({ externalId: content.externalId }, 'Extracting audio');
     await extractAudio(videoPath, audioPath);
 
     // Remove video file (no longer needed)
@@ -219,13 +222,13 @@ export async function processTikTokTranscript(contentId: string): Promise<boolea
 
     let finalAudioPath = audioPath;
     if (groqClient && stats.size > maxSize) {
-      console.log(`[TikTok] Audio too large (${Math.round(stats.size / 1024 / 1024)}MB), compressing...`);
+      log.info({ externalId: content.externalId, sizeMB: Math.round(stats.size / 1024 / 1024) }, 'Audio too large, compressing');
       compressedPath = await compressAudio(audioPath);
       cleanupFiles(audioPath);
       finalAudioPath = compressedPath;
 
       const compressedStats = fs.statSync(compressedPath);
-      console.log(`[TikTok] Compressed to ${Math.round(compressedStats.size / 1024 / 1024 * 100) / 100}MB`);
+      log.info({ externalId: content.externalId, sizeMB: Math.round(compressedStats.size / 1024 / 1024 * 100) / 100 }, 'Audio compressed');
 
       if (compressedStats.size > maxSize) {
         throw new Error(`File still too large after compression (${Math.round(compressedStats.size / 1024 / 1024)}MB > 25MB limit)`);
@@ -233,14 +236,14 @@ export async function processTikTokTranscript(contentId: string): Promise<boolea
     }
 
     // Step 4: Transcribe with Whisper (rate limited)
-    console.log(`[TikTok] Transcribing with Whisper...`);
+    log.debug({ externalId: content.externalId }, 'Transcribing with Whisper');
     const result = await groqLimiter(() => transcribeWithWhisper(finalAudioPath));
 
     // Note: Local transcribeWithWhisper doesn't auto-cleanup, handled in finally block
 
     // Step 5: Check if transcript is valid (filters music-only videos)
     if (result.text.length < MIN_TRANSCRIPT_LENGTH) {
-      console.log(`[TikTok] Transcript too short (${result.text.length} < ${MIN_TRANSCRIPT_LENGTH} chars) - marking as UNSUPPORTED`);
+      log.warn({ contentId, textLength: result.text.length, minLength: MIN_TRANSCRIPT_LENGTH }, 'Transcript too short, marking as unsupported');
       await prisma.content.update({
         where: { id: contentId },
         data: { status: ContentStatus.UNSUPPORTED },
@@ -265,11 +268,11 @@ export async function processTikTokTranscript(contentId: string): Promise<boolea
       data: { status: ContentStatus.SELECTED },
     });
 
-    console.log(`[TikTok] Successfully transcribed "${content.title}" (${result.text.length} chars, ${result.language})`);
+    log.info({ contentId, title: content.title, chars: result.text.length, language: result.language }, 'TikTok transcription completed');
     return true;
 
   } catch (error: any) {
-    console.error(`[TikTok] Error processing ${content.title}:`, error.message || error);
+    log.error({ err: error, contentId, title: content.title }, 'TikTok transcription failed');
 
     await prisma.content.update({
       where: { id: contentId },
@@ -288,7 +291,7 @@ export async function processTikTokTranscript(contentId: string): Promise<boolea
  * Uses global TranscriptCache to avoid redundant Whisper calls
  */
 export async function runTikTokTranscriptionWorker(): Promise<void> {
-  console.log('[TikTok Worker] Starting...');
+  log.info('Starting TikTok transcription worker');
 
   const workerId = generateWorkerId();
 
@@ -307,7 +310,7 @@ export async function runTikTokTranscriptionWorker(): Promise<void> {
   });
 
   if (pendingContent.length === 0) {
-    console.log('[TikTok Worker] No pending TikToks to process');
+    log.debug('No pending TikToks to process');
     return;
   }
 
@@ -319,7 +322,7 @@ export async function runTikTokTranscriptionWorker(): Promise<void> {
     }
   }
 
-  console.log(`[TikTok Worker] Processing ${pendingContent.length} items → ${uniqueVideos.size} unique videos`);
+  log.info({ total: pendingContent.length, unique: uniqueVideos.size }, 'Found pending TikToks');
 
   let success = 0;
   let cacheHits = 0;
@@ -343,7 +346,7 @@ export async function runTikTokTranscriptionWorker(): Promise<void> {
     }
   }
 
-  console.log(`[TikTok Worker] Completed: ${success} transcribed, ${cacheHits} cache hits, ${failed} failed`);
+  log.info({ success, cacheHits, failed }, 'TikTok transcription worker completed');
 }
 
 /**
@@ -367,7 +370,7 @@ async function processTikTokWithCache(
   if (cache.status === TranscriptCacheStatus.SUCCESS && cache.text) {
     await linkCacheToContent(content.platform, content.externalId, cache.id);
     await copyTranscriptToAllTikTokContent(content.externalId, cache);
-    console.log(`[TikTok] Cache hit for ${content.externalId}`);
+    log.debug({ externalId: content.externalId, cacheHit: true }, 'Cache hit for TikTok video');
     return 'cache_hit';
   }
 
@@ -394,11 +397,11 @@ async function processTikTokWithCache(
 
   try {
     // Step 1: Download video via yt-dlp
-    console.log(`[TikTok] Downloading: ${content.url}`);
+    log.debug({ externalId: content.externalId, url: content.url }, 'Downloading video');
     await downloadTikTokVideo(content.url, videoPath);
 
     // Step 2: Extract audio via ffmpeg
-    console.log(`[TikTok] Extracting audio...`);
+    log.debug({ externalId: content.externalId }, 'Extracting audio');
     await extractAudio(videoPath, audioPath);
 
     // Remove video file (no longer needed)
@@ -410,13 +413,13 @@ async function processTikTokWithCache(
 
     let finalAudioPath = audioPath;
     if (groqClient && stats.size > maxSize) {
-      console.log(`[TikTok] Audio too large (${Math.round(stats.size / 1024 / 1024)}MB), compressing...`);
+      log.info({ externalId: content.externalId, sizeMB: Math.round(stats.size / 1024 / 1024) }, 'Audio too large, compressing');
       compressedPath = await compressAudio(audioPath);
       cleanupFiles(audioPath);
       finalAudioPath = compressedPath;
 
       const compressedStats = fs.statSync(compressedPath);
-      console.log(`[TikTok] Compressed to ${Math.round(compressedStats.size / 1024 / 1024 * 100) / 100}MB`);
+      log.info({ externalId: content.externalId, sizeMB: Math.round(compressedStats.size / 1024 / 1024 * 100) / 100 }, 'Audio compressed');
 
       if (compressedStats.size > maxSize) {
         throw new Error(`File still too large after compression (${Math.round(compressedStats.size / 1024 / 1024)}MB > 25MB limit)`);
@@ -424,7 +427,7 @@ async function processTikTokWithCache(
     }
 
     // Step 4: Transcribe with Whisper (rate limited)
-    console.log(`[TikTok] Transcribing with Whisper...`);
+    log.debug({ externalId: content.externalId }, 'Transcribing with Whisper');
     const transcript = await groqLimiter(() => transcribeWithWhisper(finalAudioPath));
 
     // Cleanup audio files
@@ -433,7 +436,7 @@ async function processTikTokWithCache(
 
     // Step 5: Check if transcript is valid (filters music-only videos)
     if (transcript.text.length < MIN_TRANSCRIPT_LENGTH) {
-      console.log(`[TikTok] Transcript too short (${transcript.text.length} < ${MIN_TRANSCRIPT_LENGTH} chars) - marking as UNSUPPORTED`);
+      log.warn({ externalId: content.externalId, textLength: transcript.text.length, minLength: MIN_TRANSCRIPT_LENGTH }, 'Transcript too short, marking as unsupported');
       await markCacheUnavailable(cache.id, 'Transcript too short (music-only video)', workerId);
       await markTikTokContentUnsupported(content.externalId);
       return 'failed';
@@ -466,12 +469,12 @@ async function processTikTokWithCache(
       data: { status: ContentStatus.SELECTED },
     });
 
-    console.log(`[TikTok] ✅ ${content.externalId} - SUCCESS (${transcript.text.length} chars)`);
+    log.info({ externalId: content.externalId, title: content.title, chars: transcript.text.length, language: transcript.language }, 'TikTok transcription completed successfully');
     return 'success';
 
   } catch (error: any) {
     await markCacheFailed(cache.id, error, workerId);
-    console.error(`[TikTok] ${content.externalId} - ERROR: ${error.message}`);
+    log.error({ err: error, externalId: content.externalId }, 'TikTok transcription error');
     return 'failed';
   } finally {
     // Cleanup in finally block to ensure temp files are always removed
