@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { logger } from '../config/logger.js';
 
 export class AppError extends Error {
   constructor(
@@ -13,11 +14,11 @@ export class AppError extends Error {
 
 export const errorHandler = (
   err: Error,
-  _req: Request,
+  req: Request,
   res: Response,
   _next: NextFunction
 ) => {
-  console.error('Error:', err);
+  logger.error({ err, path: req.path, method: req.method }, 'Unhandled error');
 
   if (err instanceof AppError) {
     return res.status(err.statusCode).json({

@@ -1,6 +1,7 @@
 // Shared rate limiters for all workers
 // Uses p-limit to control concurrency per external service
 import pLimit from 'p-limit';
+import { logger } from '../config/logger.js';
 
 // --- Concurrency limiters (shared singletons) ---
 
@@ -71,7 +72,8 @@ export async function withRetry<T>(
         options.maxDelayMs
       );
       const jitter = delay * 0.2 * Math.random();
-      console.log(`[Retry] Attempt ${attempt + 1}/${options.maxRetries} failed, retrying in ${Math.round(delay + jitter)}ms...`);
+      const retryDelay = Math.round(delay + jitter);
+      logger.warn({ attempt: attempt + 1, maxRetries: options.maxRetries, retryDelay }, 'Retry attempt after failure');
       await new Promise(resolve => setTimeout(resolve, delay + jitter));
     }
   }

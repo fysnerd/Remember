@@ -3,6 +3,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { config } from './config/env.js';
+import { logger } from './config/logger.js';
+import { httpLogger } from './middleware/httpLogger.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { authRouter } from './routes/auth.js';
 import { oauthRouter } from './routes/oauth.js';
@@ -63,6 +65,9 @@ app.use('/api/subscription/webhook', express.raw({ type: 'application/json' }), 
 // Body parsing
 app.use(express.json());
 
+// HTTP request logging (after body parsing, before routes)
+app.use(httpLogger);
+
 // Health check
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -83,8 +88,8 @@ app.use(errorHandler);
 
 // Start server
 app.listen(config.port, () => {
-  console.log(`Remember API running on http://localhost:${config.port}`);
-  console.log(`Environment: ${config.nodeEnv}`);
+  logger.info({ port: config.port }, 'Ankora API started');
+  logger.info({ env: config.nodeEnv }, 'Environment loaded');
 
   // Start background job scheduler
   if (config.nodeEnv !== 'test') {
