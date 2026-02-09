@@ -130,19 +130,26 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
     console.log(`[Instagram Sync] Session valid, fetching liked posts via in-browser API call...`);
 
     // Use page.evaluate() to call the private API from within the browser context
-    // This sends the real cookies + matching UA automatically (no mismatch)
+    // Must use www.instagram.com (same origin) + CSRF token from cookies
     const apiResult = await page.evaluate(async () => {
       try {
-        const response = await fetch('https://i.instagram.com/api/v1/feed/liked/', {
+        // Get CSRF token from cookies
+        const csrfMatch = document.cookie.match(/csrftoken=([^;]+)/);
+        const csrfToken = csrfMatch ? csrfMatch[1] : '';
+
+        const response = await fetch('/api/v1/feed/liked/', {
           headers: {
-            'X-IG-App-ID': '936619743392459', // Instagram web app ID
+            'X-IG-App-ID': '936619743392459',
+            'X-CSRFToken': csrfToken,
             'X-Requested-With': 'XMLHttpRequest',
+            'Accept': '*/*',
           },
           credentials: 'include',
         });
 
         if (!response.ok) {
-          return { error: `API error ${response.status}`, items: [] };
+          const text = await response.text().catch(() => '');
+          return { error: `API error ${response.status}: ${text.substring(0, 200)}`, items: [] };
         }
 
         const data = await response.json();
