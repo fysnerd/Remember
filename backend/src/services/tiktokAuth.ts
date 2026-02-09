@@ -2,6 +2,9 @@
 // Opens a browser window for the user to login and captures cookies automatically
 
 import { chromium, BrowserContext } from 'playwright';
+import { logger } from '../config/logger.js';
+
+const log = logger.child({ service: 'tiktok-auth' });
 
 interface TikTokCookies {
   sessionid: string;
@@ -32,7 +35,7 @@ const pendingAuthSessions = new Map<string, { context: BrowserContext; browser: 
  * Returns when the user has successfully logged in or after timeout
  */
 export async function startTikTokAuth(userId: string): Promise<AuthResult> {
-  console.log(`[TikTok Auth] Starting auth for user ${userId}`);
+  log.info({ userId, platform: 'tiktok' }, 'Starting auth');
 
   try {
     // Launch browser in visible mode so user can interact
@@ -68,7 +71,7 @@ export async function startTikTokAuth(userId: string): Promise<AuthResult> {
     });
 
     // Navigate to TikTok login
-    console.log(`[TikTok Auth] Navigating to TikTok...`);
+    log.debug({ userId }, 'Navigating to TikTok login page');
     await page.goto('https://www.tiktok.com/login', { waitUntil: 'domcontentloaded' });
 
     // Handle cookie consent popup if it appears
@@ -82,7 +85,7 @@ export async function startTikTokAuth(userId: string): Promise<AuthResult> {
       // Ignore if popup not found
     }
 
-    console.log(`[TikTok Auth] Waiting for user to login...`);
+    log.debug({ userId }, 'Waiting for user to login');
 
     // Wait for successful login (check for profile indicator or sessionid cookie)
     // Timeout after 5 minutes
@@ -98,7 +101,7 @@ export async function startTikTokAuth(userId: string): Promise<AuthResult> {
       const sessionCookie = allCookies.find(c => c.name === 'sessionid');
 
       if (sessionCookie && sessionCookie.value && sessionCookie.value.length > 10) {
-        console.log(`[TikTok Auth] Session cookie found!`);
+        log.debug({ userId }, 'Session cookie found');
 
         // Build cookies object
         cookies = {} as TikTokCookies;
@@ -120,15 +123,15 @@ export async function startTikTokAuth(userId: string): Promise<AuthResult> {
     await browser.close();
 
     if (cookies && cookies.sessionid) {
-      console.log(`[TikTok Auth] Auth successful for user ${userId}`);
+      log.info({ userId, platform: 'tiktok' }, 'Auth successful');
       return { success: true, cookies };
     } else {
-      console.log(`[TikTok Auth] Auth timeout for user ${userId}`);
+      log.warn({ userId, platform: 'tiktok' }, 'Auth timeout');
       return { success: false, error: 'Authentication timeout. Please try again.' };
     }
 
   } catch (error) {
-    console.error(`[TikTok Auth] Error:`, error);
+    log.error({ err: error, userId, platform: 'tiktok' }, 'Auth error');
     pendingAuthSessions.delete(userId);
     return {
       success: false,

@@ -3,6 +3,9 @@ import { prisma } from '../config/database.js';
 import { getLLMClient } from './llm.js';
 import pLimit from 'p-limit';
 import { llmLimiter } from '../utils/rateLimiter.js';
+import { logger } from '../config/logger.js';
+
+const log = logger.child({ service: 'auto-tagging' });
 
 /**
  * Generate tags for content based on transcript
@@ -53,7 +56,7 @@ Generate 3-5 relevant tags for this content.`,
 
     const content = response.content?.trim();
     if (!content) {
-      console.error('[Tagging] Empty response from LLM');
+      log.error('Empty response from LLM');
       return [];
     }
 
@@ -70,11 +73,11 @@ Generate 3-5 relevant tags for this content.`,
         .filter(tag => tag.length > 0 && tag.length <= 50)
         .slice(0, 5);
     } catch {
-      console.error('[Tagging] Failed to parse tags JSON:', content);
+      log.error({ content }, 'Failed to parse tags JSON');
       return [];
     }
   } catch (error) {
-    console.error('[Tagging] Error generating tags:', error);
+    log.error({ err: error }, 'Error generating tags');
     return [];
   }
 }
@@ -89,22 +92,22 @@ export async function autoTagContent(contentId: string): Promise<string[]> {
   });
 
   if (!content) {
-    console.error('[Tagging] Content not found:', contentId);
+    log.error({ contentId }, 'Content not found');
     return [];
   }
 
   // Skip if already has tags
   if (content.tags.length > 0) {
-    console.log('[Tagging] Content already has tags:', contentId);
+    log.debug({ contentId }, 'Content already has tags');
     return content.tags.map(t => t.name);
   }
 
   if (!content.transcript) {
-    console.log('[Tagging] No transcript available:', contentId);
+    log.debug({ contentId }, 'No transcript available');
     return [];
   }
 
-  console.log('[Tagging] Generating tags for:', content.title);
+  log.info({ contentId, title: content.title }, 'Generating tags');
 
   const tagNames = await generateTags(content.transcript.text, content.title);
 
@@ -133,7 +136,7 @@ export async function autoTagContent(contentId: string): Promise<string[]> {
     },
   });
 
-  console.log('[Tagging] Added tags to content:', contentId, tagNames);
+  log.info({ contentId, tagCount: tagNames.length, tags: tagNames }, 'Tags applied to content');
 
   return tagNames;
 }
@@ -142,7 +145,7 @@ export async function autoTagContent(contentId: string): Promise<string[]> {
  * Run auto-tagging worker for all content without tags
  */
 export async function runAutoTaggingWorker(): Promise<void> {
-  console.log('[Tagging Worker] Starting...');
+  log.info('Auto-tagging worker starting');
 
   try {
     // Find content with transcripts but no tags
@@ -156,7 +159,7 @@ export async function runAutoTaggingWorker(): Promise<void> {
       orderBy: { createdAt: 'asc' },
     });
 
-    console.log(`[Tagging Worker] Found ${contentToTag.length} items to tag`);
+    log.info({ count: contentToTag.length }, 'Found items to tag');
 
     const limit = pLimit(5); // 5 concurrent tagging jobs
 
@@ -167,8 +170,8 @@ export async function runAutoTaggingWorker(): Promise<void> {
     );
 
     const tagged = results.filter(r => r.status === 'fulfilled' && (r.value as string[]).length > 0).length;
-    console.log(`[Tagging Worker] Completed: ${tagged}/${contentToTag.length} tagged`);
+    log.info({ tagged, total: contentToTag.length }, 'Auto-tagging worker completed');
   } catch (error) {
-    console.error('[Tagging Worker] Error:', error);
+    log.error({ err: error }, 'Auto-tagging worker error');
   }
 }

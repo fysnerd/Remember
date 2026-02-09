@@ -3,6 +3,9 @@ import Stripe from 'stripe';
 import { config } from '../config/env.js';
 import { prisma } from '../config/database.js';
 import { Plan } from '@prisma/client';
+import { logger } from '../config/logger.js';
+
+const log = logger.child({ service: 'stripe' });
 
 // Initialize Stripe (only if API key is configured)
 const stripe = config.stripe.secretKey
@@ -79,7 +82,7 @@ export async function createCheckoutSession(
 
     return { url: session.url };
   } catch (error) {
-    console.error('[Stripe] Error creating checkout session:', error);
+    log.error({ err: error, userId }, 'Error creating checkout session');
     return { error: 'Failed to create checkout session' };
   }
 }
@@ -120,7 +123,7 @@ export async function createPortalSession(
 
     return { url: session.url };
   } catch (error) {
-    console.error('[Stripe] Error creating portal session:', error);
+    log.error({ err: error, userId }, 'Error creating portal session');
     return { error: 'Failed to create portal session' };
   }
 }
@@ -145,11 +148,11 @@ export async function handleStripeWebhook(
       config.stripe.webhookSecret
     );
   } catch (error) {
-    console.error('[Stripe] Webhook signature verification failed:', error);
+    log.error({ err: error }, 'Webhook signature verification failed');
     return { success: false, message: 'Invalid signature' };
   }
 
-  console.log('[Stripe] Received webhook event:', event.type);
+  log.info({ eventType: event.type }, 'Received webhook event');
 
   try {
     switch (event.type) {
@@ -179,12 +182,12 @@ export async function handleStripeWebhook(
       }
 
       default:
-        console.log('[Stripe] Unhandled event type:', event.type);
+        log.debug({ eventType: event.type }, 'Unhandled event type');
     }
 
     return { success: true, message: 'Webhook processed' };
   } catch (error) {
-    console.error('[Stripe] Error processing webhook:', error);
+    log.error({ err: error, eventType: event.type }, 'Error processing webhook');
     return { success: false, message: 'Webhook processing failed' };
   }
 }
@@ -195,11 +198,11 @@ export async function handleStripeWebhook(
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const userId = session.metadata?.userId;
   if (!userId) {
-    console.error('[Stripe] No userId in checkout session metadata');
+    log.error({ sessionId: session.id }, 'No userId in checkout session metadata');
     return;
   }
 
-  console.log('[Stripe] Checkout completed for user:', userId);
+  log.info({ userId, sessionId: session.id }, 'Checkout completed');
 
   // Update user plan to PRO
   await prisma.user.update({
@@ -210,7 +213,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     },
   });
 
-  console.log('[Stripe] User plan updated to PRO:', userId);
+  log.info({ userId }, 'User plan updated to PRO');
 }
 
 /**
@@ -230,7 +233,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     });
 
     if (!user) {
-      console.error('[Stripe] Could not find user for subscription:', subscription.id);
+      log.error({ subscriptionId: subscription.id }, 'Could not find user for subscription');
       return;
     }
 
@@ -240,7 +243,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
       data: { plan },
     });
 
-    console.log('[Stripe] User plan updated:', user.id, plan);
+    log.info({ userId: user.id, plan, subscriptionStatus: subscription.status }, 'User plan updated');
     return;
   }
 
@@ -250,7 +253,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     data: { plan },
   });
 
-  console.log('[Stripe] User plan updated:', userId, plan);
+  log.info({ userId, plan, subscriptionStatus: subscription.status }, 'User plan updated');
 }
 
 /**
@@ -270,7 +273,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
     });
 
     if (!user) {
-      console.error('[Stripe] Could not find user for cancelled subscription');
+      log.error({ subscriptionId: subscription.id }, 'Could not find user for cancelled subscription');
       return;
     }
 
@@ -279,7 +282,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
       data: { plan: Plan.FREE },
     });
 
-    console.log('[Stripe] User plan downgraded to FREE:', user.id);
+    log.info({ userId: user.id }, 'User plan downgraded to FREE');
     return;
   }
 
@@ -288,7 +291,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
     data: { plan: Plan.FREE },
   });
 
-  console.log('[Stripe] User plan downgraded to FREE:', userId);
+  log.info({ userId }, 'User plan downgraded to FREE');
 }
 
 /**
@@ -301,7 +304,7 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
   const customer = await stripe.customers.retrieve(customerId);
   if (customer.deleted) return;
 
-  console.log('[Stripe] Payment failed for customer:', customer.email);
+  log.warn({ customerEmail: customer.email }, 'Payment failed for customer');
 
   // Note: We don't immediately downgrade - Stripe will retry
   // After all retries fail, subscription.deleted event will fire

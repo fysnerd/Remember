@@ -4,6 +4,9 @@ import { ContentStatus, QuizType } from '@prisma/client';
 import { getLLMClient, generateText } from './llm.js';
 import pLimit from 'p-limit';
 import { llmLimiter } from '../utils/rateLimiter.js';
+import { logger } from '../config/logger.js';
+
+const log = logger.child({ service: 'quiz-generation' });
 
 interface GeneratedQuestion {
   question: string;
@@ -184,7 +187,7 @@ Réponds uniquement avec du JSON:
         allQuestions.push(...result.questions);
       }
     } catch (error) {
-      console.error(`[Quiz] Error generating questions from chunk ${i}:`, error);
+      log.error({ err: error, chunkIndex: i }, 'Error generating questions from chunk');
     }
   }
 
@@ -238,19 +241,19 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
   });
 
   if (!content) {
-    console.error(`[Quiz] Content ${contentId} not found`);
+    log.error({ contentId }, 'Content not found');
     return false;
   }
 
   // Check if already has quizzes
   if (content.quizzes.length > 0) {
-    console.log(`[Quiz] Content ${contentId} already has quizzes`);
+    log.debug({ contentId }, 'Content already has quizzes');
     return true;
   }
 
   // Must have transcript
   if (!content.transcript) {
-    console.log(`[Quiz] Content ${contentId} has no transcript, skipping`);
+    log.debug({ contentId }, 'Content has no transcript, skipping');
     return false;
   }
 
@@ -263,7 +266,7 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
   try {
     const contentType = content.platform === 'YOUTUBE' ? 'video' : 'podcast';
 
-    console.log(`[Quiz] Generating quiz for: ${content.title}`);
+    log.info({ contentId, title: content.title }, 'Generating quiz');
     const result = await generateQuizFromTranscript(
       content.transcript.text,
       content.title,
@@ -271,7 +274,7 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
     );
 
     if (!result.isEducational) {
-      console.log(`[Quiz] Content not educational: ${result.rejectionReason}`);
+      log.warn({ contentId, reason: result.rejectionReason }, 'Content not educational');
       // Still mark as ready, but with no quizzes
       await prisma.content.update({
         where: { id: contentId },
@@ -281,7 +284,7 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
     }
 
     if (result.questions.length === 0) {
-      console.log(`[Quiz] No questions generated for ${contentId}`);
+      log.warn({ contentId }, 'No questions generated');
       await prisma.content.update({
         where: { id: contentId },
         data: { status: ContentStatus.READY },
@@ -322,7 +325,7 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
     });
 
     // Generate memo in parallel (non-blocking, after quiz creation)
-    console.log(`[Quiz] Generating memo for: ${content.title}`);
+    log.debug({ contentId, title: content.title }, 'Generating memo');
     try {
       const tagNames = content.tags.map(t => t.name);
       const memo = await generateMemoFromTranscript(
@@ -342,17 +345,17 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
           },
         },
       });
-      console.log(`[Quiz] Memo generated and cached for: ${content.title}`);
+      log.info({ contentId }, 'Memo generated and cached');
     } catch (memoError) {
       // Don't fail the whole process if memo generation fails
-      console.error(`[Quiz] Memo generation failed for ${contentId}:`, memoError);
+      log.error({ err: memoError, contentId }, 'Memo generation failed');
     }
 
-    console.log(`[Quiz] Created ${result.questions.length} questions for ${content.title}`);
+    log.info({ contentId, questionCount: result.questions.length, title: content.title }, 'Quiz generation completed');
     return true;
 
   } catch (error) {
-    console.error(`[Quiz] Error generating quiz for ${contentId}:`, error);
+    log.error({ err: error, contentId }, 'Error generating quiz');
     await prisma.content.update({
       where: { id: contentId },
       data: { status: ContentStatus.FAILED },
@@ -378,7 +381,7 @@ export async function regenerateQuiz(contentId: string): Promise<boolean> {
  * Background worker to process pending quiz generation
  */
 export async function runQuizGenerationWorker(): Promise<void> {
-  console.log('[Quiz Worker] Starting...');
+  log.info('Quiz generation worker starting');
 
   // Get content items with transcripts that need quiz generation
   const pendingContent = await prisma.content.findMany({
@@ -392,11 +395,11 @@ export async function runQuizGenerationWorker(): Promise<void> {
   });
 
   if (pendingContent.length === 0) {
-    console.log('[Quiz Worker] No pending content for quiz generation');
+    log.debug('No pending content for quiz generation');
     return;
   }
 
-  console.log(`[Quiz Worker] Processing ${pendingContent.length} items`);
+  log.info({ count: pendingContent.length }, 'Processing pending content');
 
   let success = 0;
   let failed = 0;
@@ -417,5 +420,5 @@ export async function runQuizGenerationWorker(): Promise<void> {
     }
   }
 
-  console.log(`[Quiz Worker] Completed: ${success} success, ${failed} failed`);
+  log.info({ success, failed }, 'Quiz generation worker completed');
 }

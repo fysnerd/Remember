@@ -1,5 +1,8 @@
 // Unified LLM Service - Supports OpenAI, Mistral, and Anthropic
 import { config } from '../config/env.js';
+import { logger } from '../config/logger.js';
+
+const log = logger.child({ service: 'llm' });
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -70,7 +73,7 @@ class LLMClient {
         break;
     }
 
-    console.log(`[LLM] Using provider: ${this.provider}`);
+    log.info({ provider: this.provider }, 'LLM client initialized');
   }
 
   /**

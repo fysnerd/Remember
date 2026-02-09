@@ -3,6 +3,9 @@
 // Pattern based on tiktokAuth.ts
 
 import { chromium, BrowserContext } from 'playwright';
+import { logger } from '../config/logger.js';
+
+const log = logger.child({ service: 'instagram-auth' });
 
 interface InstagramCookies {
   sessionid: string;
@@ -30,12 +33,12 @@ const pendingAuthSessions = new Map<string, { context: BrowserContext; browser: 
  * Returns when the user has successfully logged in or after timeout
  */
 export async function startInstagramAuth(userId: string): Promise<AuthResult> {
-  console.log(`[Instagram Auth] Starting auth for user ${userId}`);
+  log.info({ userId, platform: 'instagram' }, 'Starting auth');
 
   // F2 Fix: Close any existing session for this user before starting a new one
   const existingSession = pendingAuthSessions.get(userId);
   if (existingSession) {
-    console.log(`[Instagram Auth] Closing existing auth session for user ${userId}`);
+    log.debug({ userId }, 'Closing existing auth session');
     try {
       await existingSession.browser.close();
     } catch {
@@ -78,7 +81,7 @@ export async function startInstagramAuth(userId: string): Promise<AuthResult> {
     });
 
     // Navigate to Instagram login
-    console.log(`[Instagram Auth] Navigating to Instagram...`);
+    log.debug({ userId }, 'Navigating to Instagram login page');
     await page.goto('https://www.instagram.com/accounts/login/', { waitUntil: 'domcontentloaded' });
 
     // Handle cookie consent popup if it appears
@@ -104,7 +107,7 @@ export async function startInstagramAuth(userId: string): Promise<AuthResult> {
       // Ignore if popup not found
     }
 
-    console.log(`[Instagram Auth] Waiting for user to login...`);
+    log.debug({ userId }, 'Waiting for user to login');
 
     // Wait for successful login (check for sessionid cookie)
     // Timeout after 5 minutes
@@ -120,7 +123,7 @@ export async function startInstagramAuth(userId: string): Promise<AuthResult> {
       const sessionCookie = allCookies.find(c => c.name === 'sessionid');
 
       if (sessionCookie && sessionCookie.value && sessionCookie.value.length > 10) {
-        console.log(`[Instagram Auth] Session cookie found!`);
+        log.debug({ userId }, 'Session cookie found');
 
         // Build cookies object
         cookies = {} as InstagramCookies;
@@ -165,15 +168,15 @@ export async function startInstagramAuth(userId: string): Promise<AuthResult> {
     await browser.close();
 
     if (cookies && cookies.sessionid) {
-      console.log(`[Instagram Auth] Auth successful for user ${userId}`);
+      log.info({ userId, platform: 'instagram' }, 'Auth successful');
       return { success: true, cookies };
     } else {
-      console.log(`[Instagram Auth] Auth timeout for user ${userId}`);
+      log.warn({ userId, platform: 'instagram' }, 'Auth timeout');
       return { success: false, error: 'Authentication timeout. Please try again.' };
     }
 
   } catch (error) {
-    console.error(`[Instagram Auth] Error:`, error);
+    log.error({ err: error, userId, platform: 'instagram' }, 'Auth error');
     pendingAuthSessions.delete(userId);
     return {
       success: false,

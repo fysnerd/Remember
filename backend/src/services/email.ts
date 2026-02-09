@@ -1,5 +1,8 @@
 // Email Service - Daily Review Reminders (S010)
 import { config } from '../config/env.js';
+import { logger } from '../config/logger.js';
+
+const log = logger.child({ service: 'email' });
 
 interface EmailOptions {
   to: string;
@@ -13,9 +16,7 @@ interface EmailOptions {
  */
 export async function sendEmail(options: EmailOptions): Promise<boolean> {
   if (!config.email.resendApiKey) {
-    console.log('[Email] Resend API key not configured, skipping email');
-    console.log('[Email] Would send to:', options.to);
-    console.log('[Email] Subject:', options.subject);
+    log.warn({ to: options.to, subject: options.subject }, 'Resend API key not configured, skipping email');
     return false;
   }
 
@@ -37,14 +38,14 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
 
     if (!response.ok) {
       const error = await response.text();
-      console.error('[Email] Failed to send:', error);
+      log.error({ to: options.to, error }, 'Failed to send email');
       return false;
     }
 
-    console.log('[Email] Sent successfully to:', options.to);
+    log.info({ to: options.to, subject: options.subject }, 'Email sent successfully');
     return true;
   } catch (error) {
-    console.error('[Email] Error sending email:', error);
+    log.error({ err: error, to: options.to }, 'Error sending email');
     return false;
   }
 }

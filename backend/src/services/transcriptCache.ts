@@ -3,6 +3,9 @@
 import { prisma } from '../config/database.js';
 import { Platform, TranscriptCacheStatus, TranscriptSource } from '@prisma/client';
 import { randomBytes } from 'crypto';
+import { logger } from '../config/logger.js';
+
+const log = logger.child({ service: 'transcript-cache' });
 
 // Lock timeout in milliseconds (5 minutes)
 const LOCK_TIMEOUT_MS = 5 * 60 * 1000;
@@ -84,7 +87,7 @@ export async function getOrCreateCacheWithLock(
   if (cache && cache.status === TranscriptCacheStatus.PROCESSING) {
     if (cache.lockedAt && cache.lockedAt > lockExpiry) {
       // Still locked by another worker
-      console.log(`[TranscriptCache] ${externalId} locked by ${cache.lockedBy}, skipping`);
+      log.debug({ externalId, lockedBy: cache.lockedBy }, 'Cache locked by another worker');
       return null;
     }
     // Lock expired, we can steal it
@@ -103,7 +106,7 @@ export async function getOrCreateCacheWithLock(
           lockedAt: now,
         },
       });
-      console.log(`[TranscriptCache] Created new cache for ${externalId}`);
+      log.debug({ externalId, cacheId: cache.id }, 'Created new cache entry');
       return { cache, acquired: true };
     }
 
@@ -135,7 +138,7 @@ export async function getOrCreateCacheWithLock(
     });
 
     if (updated.count === 0) {
-      console.log(`[TranscriptCache] Failed to acquire lock for ${externalId}`);
+      log.debug({ externalId }, 'Failed to acquire lock');
       return null;
     }
 
@@ -146,13 +149,13 @@ export async function getOrCreateCacheWithLock(
 
     if (!cache) return null;
 
-    console.log(`[TranscriptCache] Acquired lock for ${externalId}`);
+    log.debug({ externalId, cacheId: cache.id }, 'Acquired lock');
     return { cache, acquired: true };
 
   } catch (error: any) {
     // Handle unique constraint violation (race condition on create)
     if (error.code === 'P2002') {
-      console.log(`[TranscriptCache] Race condition on create for ${externalId}, retrying...`);
+      log.debug({ externalId }, 'Race condition on create, retrying');
       // Retry with existing record
       return getOrCreateCacheWithLock(platform, externalId, workerId);
     }
@@ -189,7 +192,7 @@ export async function markCacheSuccess(
       lastAttemptAt: new Date(),
     },
   });
-  console.log(`[TranscriptCache] Marked ${cacheId} as SUCCESS`);
+  log.info({ cacheId, source: data.source }, 'Cache marked as SUCCESS');
 }
 
 /**
@@ -216,7 +219,7 @@ export async function markCacheUnavailable(
       attemptCount: { increment: 1 },
     },
   });
-  console.log(`[TranscriptCache] Marked ${cacheId} as UNAVAILABLE, retry at ${nextRetry.toISOString()}`);
+  log.info({ cacheId, reason, nextRetryAt: nextRetry.toISOString() }, 'Cache marked as UNAVAILABLE');
 }
 
 /**
@@ -239,7 +242,7 @@ export async function markCacheFailed(
 
   // After MAX_RETRY_ATTEMPTS, give up and mark as UNAVAILABLE permanently
   if (attemptCount >= MAX_RETRY_ATTEMPTS) {
-    console.log(`[TranscriptCache] ${cacheId} exceeded max retries (${attemptCount}/${MAX_RETRY_ATTEMPTS}), marking UNAVAILABLE`);
+    log.warn({ cacheId, attemptCount, maxRetries: MAX_RETRY_ATTEMPTS }, 'Max retries exceeded, marking UNAVAILABLE');
     await markCacheUnavailable(cacheId, `Max retries exceeded (${attemptCount}): ${errorMessage.substring(0, 300)}`, _workerId);
     return;
   }
@@ -262,7 +265,7 @@ export async function markCacheFailed(
       attemptCount,
     },
   });
-  console.log(`[TranscriptCache] Marked ${cacheId} as FAILED (attempt ${attemptCount}/${MAX_RETRY_ATTEMPTS}), retry at ${nextRetry.toISOString()}`);
+  log.info({ cacheId, attemptCount, maxRetries: MAX_RETRY_ATTEMPTS, nextRetryAt: nextRetry.toISOString() }, 'Cache marked as FAILED');
 }
 
 /**
@@ -301,7 +304,7 @@ export async function linkCacheToContent(
   });
 
   if (result.count > 0) {
-    console.log(`[TranscriptCache] Linked ${result.count} Content records to cache ${cacheId}`);
+    log.debug({ cacheId, contentCount: result.count }, 'Linked Content records to cache');
   }
 
   return result.count;
@@ -398,7 +401,7 @@ export async function cleanupExpiredLocks(): Promise<number> {
   });
 
   if (result.count > 0) {
-    console.log(`[TranscriptCache] Cleaned up ${result.count} expired locks`);
+    log.info({ count: result.count }, 'Cleaned up expired locks');
   }
 
   return result.count;
