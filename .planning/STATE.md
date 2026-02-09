@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-09)
 ## Current Position
 
 Phase: 1 of 4 (ESM Migration & Logging Foundation)
-Plan: None (phase not yet planned)
-Status: Ready to plan
-Last activity: 2026-02-09 — Roadmap created
+Plan: 2 of 4 (next: route/middleware logging migration)
+Status: In progress
+Last activity: 2026-02-09 — Completed plan 01-01 (ESM + Pino foundation)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██░░░░░░░░] 25%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: N/A
-- Total execution time: 0.0 hours
+- Total plans completed: 1
+- Average duration: 5 minutes
+- Total execution time: 0.08 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01 | 1 | 5 min | 5 min |
 
 **Recent Trend:**
-- Last 5 plans: N/A
-- Trend: N/A (no data yet)
+- Last 5 plans: 01-01 (5 min)
+- Trend: Baseline established
 
 *Updated after each plan completion*
 
@@ -47,6 +47,11 @@ Recent decisions affecting current work:
 - Phase 2: JobExecution model in Supabase for persistent job history (survives PM2 restarts)
 - Phase 3: Hardcoded admin credentials for single-user access (solo dev, sufficient for now)
 
+**From plan 01-01:**
+- Keep console.error in env.ts for bootstrap validation (avoids circular dependency with logger)
+- Use pino-http named export instead of default (ESM/TypeScript compatibility)
+- Skip /health endpoint in HTTP logging (noise reduction)
+
 ### Pending Todos
 
 None yet.
@@ -60,5 +65,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-09
-Stopped at: Roadmap and STATE.md created
-Resume file: None
+Stopped at: Completed 01-01-PLAN.md (ESM Migration & Pino Logger Foundation)
+Resume file: .planning/phases/01-esm-migration-logging-foundation/01-01-SUMMARY.md
