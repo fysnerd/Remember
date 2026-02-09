@@ -2,6 +2,9 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { triggerJob, getSchedulerStatus, runAllSyncsNow } from '../workers/scheduler.js';
+import { logger } from '../config/logger.js';
+
+const log = logger.child({ route: 'admin' });
 
 export const adminRouter = Router();
 
@@ -128,7 +131,7 @@ adminRouter.post('/sync/auto-tagging', async (_req: Request, res: Response, next
 adminRouter.post('/sync/all', async (_req: Request, res: Response, next: NextFunction) => {
   try {
     // Start sync in background, don't await
-    runAllSyncsNow().catch(err => console.error('[Admin] Background sync error:', err));
+    runAllSyncsNow().catch(err => log.error({ err }, 'Manual sync-all failed'));
     // Return immediately
     res.json({ success: true, message: 'All sync jobs started in background' });
   } catch (error) {

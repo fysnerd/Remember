@@ -3,6 +3,9 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { exportContentAsMarkdown, exportBulkAsMarkdown, generateExportManifest } from '../services/export.js';
 import archiver from 'archiver';
+import { logger } from '../config/logger.js';
+
+const log = logger.child({ route: 'export' });
 
 export const exportRouter = Router();
 
@@ -61,7 +64,7 @@ exportRouter.post('/bulk', async (req: Request, res: Response, next: NextFunctio
 
     // Handle archive errors
     archive.on('error', (err: Error) => {
-      console.error('[Export] Archive error:', err);
+      log.error({ err, userId: req.user!.id }, 'Archive creation failed');
       if (!res.headersSent) {
         res.status(500).json({ error: 'Failed to create archive' });
       }

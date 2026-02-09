@@ -10,6 +10,9 @@ import { syncUserYouTube } from '../workers/youtubeSync.js';
 import { syncUserSpotify } from '../workers/spotifySync.js';
 import { syncTikTokForUser } from '../workers/tiktokSync.js';
 import { syncInstagramForUser } from '../workers/instagramSync.js';
+import { logger } from '../config/logger.js';
+
+const log = logger.child({ route: 'oauth' });
 
 // Helper to get required config value or throw
 function requireConfig<T>(value: T | undefined, name: string): T {
@@ -93,7 +96,7 @@ oauthRouter.get('/youtube/callback', async (req: Request, res: Response, next: N
       if (isIOS && appRedirectUri) {
         // Use the app-provided redirect URI (works with exp:// in dev and ankora:// in prod)
         const separator = appRedirectUri.includes('?') ? '&' : '?';
-        console.log(`[OAuth] Redirecting to iOS app: ${appRedirectUri}${separator}${queryString}`);
+        log.debug({ appRedirectUri, platform: 'youtube', userId }, 'Redirecting to iOS app');
         return res.redirect(`${appRedirectUri}${separator}${queryString}`);
       } else if (isIOS) {
         // Fallback for iOS without appRedirectUri (legacy)
@@ -126,7 +129,7 @@ oauthRouter.get('/youtube/callback', async (req: Request, res: Response, next: N
 
     if (!tokenResponse.ok) {
       const errorData = await tokenResponse.text();
-      console.error('YouTube token error:', errorData);
+      log.error({ platform: 'youtube', errorData, userId }, 'OAuth token exchange failed');
       throw new AppError(500, 'Failed to exchange code for tokens');
     }
 
@@ -160,7 +163,7 @@ oauthRouter.get('/youtube/callback', async (req: Request, res: Response, next: N
 
     // Trigger immediate sync in background (non-blocking)
     syncUserYouTube(userId, connection.id).catch((error) => {
-      console.error(`[OAuth] Background YouTube sync failed for user ${userId}:`, error);
+      log.error({ err: error, userId, platform: 'youtube' }, 'Background sync failed after OAuth');
     });
 
     // Redirect back to client (iOS app or web frontend)
@@ -241,7 +244,7 @@ oauthRouter.get('/spotify/callback', async (req: Request, res: Response, next: N
       const queryString = new URLSearchParams(params).toString();
       if (isIOS && appRedirectUri) {
         const separator = appRedirectUri.includes('?') ? '&' : '?';
-        console.log(`[OAuth] Redirecting to iOS app: ${appRedirectUri}${separator}${queryString}`);
+        log.debug({ appRedirectUri, platform: 'spotify', userId }, 'Redirecting to iOS app');
         return res.redirect(`${appRedirectUri}${separator}${queryString}`);
       } else if (isIOS) {
         // Fallback for iOS without appRedirectUri (legacy)
@@ -278,7 +281,7 @@ oauthRouter.get('/spotify/callback', async (req: Request, res: Response, next: N
 
     if (!tokenResponse.ok) {
       const errorData = await tokenResponse.text();
-      console.error('Spotify token error:', errorData);
+      log.error({ platform: 'spotify', errorData, userId }, 'OAuth token exchange failed');
       throw new AppError(500, 'Failed to exchange code for tokens');
     }
 
@@ -312,7 +315,7 @@ oauthRouter.get('/spotify/callback', async (req: Request, res: Response, next: N
 
     // Trigger immediate sync in background (non-blocking)
     syncUserSpotify(userId, connection.id).catch((error) => {
-      console.error(`[OAuth] Background Spotify sync failed for user ${userId}:`, error);
+      log.error({ err: error, userId, platform: 'spotify' }, 'Background sync failed after OAuth');
     });
 
     // Redirect back to client (iOS app or web frontend)
@@ -392,14 +395,14 @@ oauthRouter.post('/tiktok/connect', authenticateToken, async (req: Request, res:
 
       // Trigger immediate sync in background (non-blocking)
       syncTikTokForUser(req.user!.id).catch((error) => {
-        console.error(`[OAuth] Background TikTok sync failed for user ${req.user!.id}:`, error);
+        log.error({ err: error, userId: req.user!.id, platform: 'tiktok' }, 'Background sync failed after OAuth');
       });
 
       return res.json({ message: 'TikTok connected successfully' });
     }
 
     // Auto mode: launch browser for user to login
-    console.log(`[TikTok] Starting browser auth for user ${req.user!.id}`);
+    log.info({ userId: req.user!.id, platform: 'tiktok' }, 'Cookie-based auth initiated');
 
     const result = await startTikTokAuth(req.user!.id);
 
@@ -434,7 +437,7 @@ oauthRouter.post('/tiktok/connect', authenticateToken, async (req: Request, res:
 
     // Trigger immediate sync in background (non-blocking)
     syncTikTokForUser(req.user!.id).catch((error) => {
-      console.error(`[OAuth] Background TikTok sync failed for user ${req.user!.id}:`, error);
+      log.error({ err: error, userId: req.user!.id, platform: 'tiktok' }, 'Background sync failed after OAuth');
     });
 
     return res.json({ message: 'TikTok connected successfully' });
@@ -577,7 +580,7 @@ oauthRouter.post('/instagram/connect', authenticateToken, async (req: Request, r
 
       // Trigger immediate sync in background (non-blocking)
       syncInstagramForUser(req.user!.id).catch((error) => {
-        console.error(`[OAuth] Background Instagram sync failed for user ${req.user!.id}:`, error);
+        log.error({ err: error, userId: req.user!.id, platform: 'instagram' }, 'Background sync failed after OAuth');
       });
 
       return res.json({ message: 'Instagram connected successfully' });
@@ -589,7 +592,7 @@ oauthRouter.post('/instagram/connect', authenticateToken, async (req: Request, r
     }
 
     // Auto mode: launch browser for user to login
-    console.log(`[Instagram] Starting browser auth for user ${req.user!.id}`);
+    log.info({ userId: req.user!.id, platform: 'instagram' }, 'Cookie-based auth initiated');
 
     const result = await startInstagramAuth(req.user!.id);
 
@@ -624,7 +627,7 @@ oauthRouter.post('/instagram/connect', authenticateToken, async (req: Request, r
 
     // Trigger immediate sync in background (non-blocking)
     syncInstagramForUser(req.user!.id).catch((error) => {
-      console.error(`[OAuth] Background Instagram sync failed for user ${req.user!.id}:`, error);
+      log.error({ err: error, userId: req.user!.id, platform: 'instagram' }, 'Background sync failed after OAuth');
     });
 
     return res.json({ message: 'Instagram connected successfully' });
@@ -989,25 +992,25 @@ oauthRouter.get('/desktop/page/:token', async (req: Request, res: Response) => {
 oauthRouter.post('/desktop/execute/:token', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const token = asString(req.params.token);
-    console.log(`[Desktop Auth] Execute request for token: ${token.substring(0, 20)}...`);
+    log.debug({ tokenPrefix: token.substring(0, 20) }, 'Desktop auth execute request');
 
     const session = pendingDesktopAuth.get(token);
 
     if (!session) {
-      console.log('[Desktop Auth] Session not found');
+      log.warn({ tokenPrefix: token.substring(0, 20) }, 'Desktop auth session not found');
       return res.json({ success: false, error: 'Session expired' });
     }
 
-    console.log(`[Desktop Auth] Session found: platform=${session.platform}, status=${session.status}`);
+    log.debug({ platform: session.platform, status: session.status, userId: session.userId }, 'Desktop auth session found');
 
     if (session.status !== 'pending') {
-      console.log('[Desktop Auth] Session already used');
+      log.warn({ platform: session.platform, status: session.status }, 'Desktop auth session already used');
       return res.json({ success: false, error: 'Session already used' });
     }
 
     // Mark as in progress
     session.status = 'in_progress';
-    console.log(`[Desktop Auth] Starting ${session.platform} auth for user ${session.userId}`);
+    log.info({ platform: session.platform, userId: session.userId }, 'Starting desktop auth');
 
     let result;
     if (session.platform === 'tiktok') {

@@ -11,6 +11,9 @@ import { syncUserSpotify } from '../workers/spotifySync.js';
 import { syncTikTokForUser } from '../workers/tiktokSync.js';
 import { syncInstagramForUser } from '../workers/instagramSync.js';
 import { generateText } from '../services/llm.js';
+import { logger } from '../config/logger.js';
+
+const log = logger.child({ route: 'content' });
 
 // Helper to safely extract string param (handles string | string[] | undefined)
 function asString(value: string | string[] | undefined): string {
@@ -56,7 +59,7 @@ contentRouter.post('/refresh', async (req: Request, res: Response, next: NextFun
           syncUserYouTube(userId, connection.id)
             .then((newItems) => ({ platform: 'youtube', newItems }))
             .catch((error) => {
-              console.error(`[Content Refresh] YouTube sync failed:`, error);
+              log.error({ err: error, userId, platform: 'youtube' }, 'Manual refresh sync failed');
               return { platform: 'youtube', newItems: 0 };
             })
         );
@@ -66,7 +69,7 @@ contentRouter.post('/refresh', async (req: Request, res: Response, next: NextFun
           syncUserSpotify(userId, connection.id)
             .then((newItems) => ({ platform: 'spotify', newItems }))
             .catch((error) => {
-              console.error(`[Content Refresh] Spotify sync failed:`, error);
+              log.error({ err: error, userId, platform: 'spotify' }, 'Manual refresh sync failed');
               return { platform: 'spotify', newItems: 0 };
             })
         );
@@ -76,7 +79,7 @@ contentRouter.post('/refresh', async (req: Request, res: Response, next: NextFun
           syncTikTokForUser(userId)
             .then((newItems) => ({ platform: 'tiktok', newItems }))
             .catch((error) => {
-              console.error(`[Content Refresh] TikTok sync failed:`, error);
+              log.error({ err: error, userId, platform: 'tiktok' }, 'Manual refresh sync failed');
               return { platform: 'tiktok', newItems: 0 };
             })
         );
@@ -86,7 +89,7 @@ contentRouter.post('/refresh', async (req: Request, res: Response, next: NextFun
           syncInstagramForUser(userId)
             .then((newItems) => ({ platform: 'instagram', newItems }))
             .catch((error) => {
-              console.error(`[Content Refresh] Instagram sync failed:`, error);
+              log.error({ err: error, userId, platform: 'instagram' }, 'Manual refresh sync failed');
               return { platform: 'instagram', newItems: 0 };
             })
         );
@@ -99,7 +102,7 @@ contentRouter.post('/refresh', async (req: Request, res: Response, next: NextFun
     // Calculate totals
     const totalNewItems = results.reduce((sum, r) => sum + r.newItems, 0);
 
-    console.log(`[Content Refresh] User ${userId}: synced ${syncingPlatforms.join(', ')} - ${totalNewItems} new items`);
+    log.info({ userId, platforms: syncingPlatforms, totalNewItems }, 'Manual refresh completed');
 
     return res.json({
       message: totalNewItems > 0
@@ -600,9 +603,9 @@ contentRouter.post('/triage/bulk', async (req: Request, res: Response, next: Nex
         for (const content of ownedContent) {
           if (content.transcript && content.quizzes.length === 0) {
             // Has transcript, no quiz yet - generate immediately
-            console.log(`[BulkTriage] Transcript exists for ${content.id}, triggering immediate quiz`);
+            log.debug({ contentId: content.id, userId }, 'Bulk triage: triggering immediate quiz for transcribed content');
             processContentQuiz(content.id).catch((error) => {
-              console.error(`[BulkTriage] Failed to generate quiz for ${content.id}:`, error);
+              log.error({ err: error, contentId: content.id, userId }, 'Bulk triage quiz generation failed');
             });
             processingStarted++;
           } else if (!content.transcript) {
@@ -612,14 +615,14 @@ contentRouter.post('/triage/bulk', async (req: Request, res: Response, next: Nex
                 .then(async (success) => {
                   if (success) await processContentQuiz(content.id);
                 })
-                .catch(console.error);
+                .catch((err) => log.error({ err, contentId: content.id }, 'Bulk triage transcription failed'));
               processingStarted++;
             } else if (content.platform === Platform.SPOTIFY) {
               processPodcastTranscript(content.id)
                 .then(async (success) => {
                   if (success) await processContentQuiz(content.id);
                 })
-                .catch(console.error);
+                .catch((err) => log.error({ err, contentId: content.id }, 'Bulk triage podcast transcription failed'));
               processingStarted++;
             }
           }
@@ -707,7 +710,7 @@ contentRouter.post('/bulk-generate-quiz', async (req: Request, res: Response, ne
 
       // Fire and forget - process in background
       processContentQuiz(content.id).catch(err => {
-        console.error(`[BulkQuiz] Failed for ${content.id}:`, err);
+        log.error({ err, contentId: content.id, userId }, 'Bulk quiz generation failed');
       });
 
       results.queued.push(content.id);
@@ -808,12 +811,12 @@ contentRouter.post('/:id/generate-quiz', async (req: Request, res: Response, nex
             }
           })
           .catch((error) => {
-            console.error(`[Content] Failed to process YouTube ${content.id}:`, error);
+            log.error({ err: error, contentId: content.id }, 'YouTube processing failed');
           });
       } else if (content.quizzes.length === 0) {
         // Already has transcript, just generate quiz
         processContentQuiz(content.id).catch((error) => {
-          console.error(`[Content] Failed to generate quiz for ${content.id}:`, error);
+          log.error({ err: error, contentId: content.id }, 'Quiz generation failed');
         });
       }
     } else if (content.platform === Platform.SPOTIFY) {
@@ -826,11 +829,11 @@ contentRouter.post('/:id/generate-quiz', async (req: Request, res: Response, nex
             }
           })
           .catch((error) => {
-            console.error(`[Content] Failed to process podcast ${content.id}:`, error);
+            log.error({ err: error, contentId: content.id }, 'Podcast processing failed');
           });
       } else if (content.quizzes.length === 0) {
         processContentQuiz(content.id).catch((error) => {
-          console.error(`[Content] Failed to generate quiz for ${content.id}:`, error);
+          log.error({ err: error, contentId: content.id }, 'Quiz generation failed');
         });
       }
     }
@@ -874,7 +877,7 @@ contentRouter.post('/:id/regenerate-quiz', async (req: Request, res: Response, n
 
     // Regenerate quiz in background
     regenerateQuiz(content.id).catch((error) => {
-      console.error(`[Content] Failed to regenerate quiz for ${content.id}:`, error);
+      log.error({ err: error, contentId: content.id }, 'Quiz regeneration failed');
     });
 
     return res.json({
@@ -917,11 +920,11 @@ contentRouter.post('/:id/retry', async (req: Request, res: Response, next: NextF
     // Process immediately based on platform
     if (content.platform === Platform.YOUTUBE) {
       processContentTranscript(content.id).catch((error) => {
-        console.error(`[Content] Failed to retry transcript for ${content.id}:`, error);
+        log.error({ err: error, contentId: content.id }, 'Retry transcript failed');
       });
     } else if (content.platform === Platform.SPOTIFY) {
       processPodcastTranscript(content.id).catch((error) => {
-        console.error(`[Content] Failed to retry podcast transcript for ${content.id}:`, error);
+        log.error({ err: error, contentId: content.id }, 'Retry podcast transcript failed');
       });
     }
 
@@ -966,16 +969,16 @@ contentRouter.post('/bulk-retry', async (req: Request, res: Response, next: Next
     for (const content of contents) {
       if (content.platform === Platform.YOUTUBE) {
         processContentTranscript(content.id).catch((error) => {
-          console.error(`[Content] Failed to retry transcript for ${content.id}:`, error);
+          log.error({ err: error, contentId: content.id }, 'Bulk retry transcript failed');
         });
       } else if (content.platform === Platform.SPOTIFY) {
         processPodcastTranscript(content.id).catch((error) => {
-          console.error(`[Content] Failed to retry podcast transcript for ${content.id}:`, error);
+          log.error({ err: error, contentId: content.id }, 'Bulk retry podcast transcript failed');
         });
       } else if (content.platform === Platform.TIKTOK) {
         // TikTok uses same transcription service as YouTube
         processContentTranscript(content.id).catch((error) => {
-          console.error(`[Content] Failed to retry TikTok transcript for ${content.id}:`, error);
+          log.error({ err: error, contentId: content.id }, 'Bulk retry TikTok transcript failed');
         });
       }
       retried.push(content.id);
@@ -1400,9 +1403,9 @@ contentRouter.patch('/:id/triage', async (req: Request, res: Response, next: Nex
     // trigger quiz generation immediately instead of waiting for cron
     let processingStarted = false;
     if (action === 'learn' && content.transcript && content.quizzes.length === 0) {
-      console.log(`[Triage] Transcript already exists for ${id}, triggering immediate quiz generation`);
+      log.debug({ contentId: id, userId: req.user!.id }, 'Triage: triggering immediate quiz for transcribed content');
       processContentQuiz(id).catch((error) => {
-        console.error(`[Triage] Failed to generate quiz for ${id}:`, error);
+        log.error({ err: error, contentId: id }, 'Triage quiz generation failed');
       });
       processingStarted = true;
     } else if (action === 'learn' && !content.transcript) {
@@ -1415,7 +1418,7 @@ contentRouter.patch('/:id/triage', async (req: Request, res: Response, next: Nex
             }
           })
           .catch((error) => {
-            console.error(`[Triage] Failed to process ${id}:`, error);
+            log.error({ err: error, contentId: id }, 'Triage processing failed');
           });
         processingStarted = true;
       } else if (content.platform === Platform.SPOTIFY) {
@@ -1426,7 +1429,7 @@ contentRouter.patch('/:id/triage', async (req: Request, res: Response, next: Nex
             }
           })
           .catch((error) => {
-            console.error(`[Triage] Failed to process podcast ${id}:`, error);
+            log.error({ err: error, contentId: id }, 'Triage podcast processing failed');
           });
         processingStarted = true;
       }

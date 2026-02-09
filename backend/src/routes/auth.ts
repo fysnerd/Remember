@@ -10,6 +10,9 @@ import { Platform } from '@prisma/client';
 import { syncUserYouTube } from '../workers/youtubeSync.js';
 import { syncUserSpotify } from '../workers/spotifySync.js';
 import { syncTikTokForUser } from '../workers/tiktokSync.js';
+import { logger } from '../config/logger.js';
+
+const log = logger.child({ route: 'auth' });
 
 export const authRouter = Router();
 
@@ -25,24 +28,24 @@ async function syncUserPlatforms(userId: string): Promise<void> {
     for (const connection of connections) {
       if (connection.platform === Platform.YOUTUBE) {
         syncUserYouTube(userId, connection.id).catch((error) => {
-          console.error(`[Auth] Background YouTube sync failed for user ${userId}:`, error);
+          log.error({ err: error, userId, platform: 'youtube' }, 'Background sync failed on login');
         });
       } else if (connection.platform === Platform.SPOTIFY) {
         syncUserSpotify(userId, connection.id).catch((error) => {
-          console.error(`[Auth] Background Spotify sync failed for user ${userId}:`, error);
+          log.error({ err: error, userId, platform: 'spotify' }, 'Background sync failed on login');
         });
       } else if (connection.platform === Platform.TIKTOK) {
         syncTikTokForUser(userId).catch((error) => {
-          console.error(`[Auth] Background TikTok sync failed for user ${userId}:`, error);
+          log.error({ err: error, userId, platform: 'tiktok' }, 'Background sync failed on login');
         });
       }
     }
 
     if (connections.length > 0) {
-      console.log(`[Auth] Triggered background sync for ${connections.length} platforms (user ${userId})`);
+      log.info({ userId, platformCount: connections.length }, 'Background sync triggered on login');
     }
   } catch (error) {
-    console.error(`[Auth] Failed to trigger platform sync for user ${userId}:`, error);
+    log.error({ err: error, userId }, 'Failed to trigger platform sync on login');
   }
 }
 
