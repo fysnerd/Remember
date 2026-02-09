@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-09)
 ## Current Position
 
 Phase: 1 of 4 (ESM Migration & Logging Foundation)
-Plan: 2 of 4 (next: route/middleware logging migration)
+Plan: 3 of 4 (next: service logging migration)
 Status: In progress
-Last activity: 2026-02-09 — Completed plan 01-01 (ESM + Pino foundation)
+Last activity: 2026-02-09 — Completed plan 01-02 (Worker structured logging)
 
-Progress: [██░░░░░░░░] 25%
+Progress: [████░░░░░░] 50%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 5 minutes
-- Total execution time: 0.08 hours
+- Total plans completed: 2
+- Average duration: 10 minutes
+- Total execution time: 0.32 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 1 | 5 min | 5 min |
+| 01 | 2 | 19 min | 10 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (5 min)
-- Trend: Baseline established
+- Last 5 plans: 01-01 (5 min), 01-02 (14 min)
+- Trend: Worker migration took longer due to 127 statements across 6 files
 
 *Updated after each plan completion*
 
@@ -52,6 +52,11 @@ Recent decisions affecting current work:
 - Use pino-http named export instead of default (ESM/TypeScript compatibility)
 - Skip /health endpoint in HTTP logging (noise reduction)
 
+**From plan 01-02:**
+- Use debug level for browser automation logs (Playwright operations in TikTok/Instagram syncs)
+- Use info level for incremental sync detection (business event, not debug detail)
+- Include structured context (userId, videoCount, durationMs) in all log calls for Phase 4 dashboard queries
+
 ### Pending Todos
 
 None yet.
@@ -65,5 +70,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-09
-Stopped at: Completed 01-01-PLAN.md (ESM Migration & Pino Logger Foundation)
-Resume file: .planning/phases/01-esm-migration-logging-foundation/01-01-SUMMARY.md
+Stopped at: Completed 01-02-PLAN.md (Worker Structured Logging Migration)
+Resume file: .planning/phases/01-esm-migration-logging-foundation/01-02-SUMMARY.md
