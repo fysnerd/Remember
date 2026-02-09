@@ -1,5 +1,6 @@
 // Cron Job Scheduler - Manages all background workers
 import cron from 'node-cron';
+import { logger } from '../config/logger.js';
 import { runYouTubeSync } from './youtubeSync.js';
 import { runSpotifySync } from './spotifySync.js';
 import { runTikTokSync } from './tiktokSync.js';
@@ -12,6 +13,8 @@ import { runQuizGenerationWorker } from '../services/quizGeneration.js';
 import { runReminderWorker } from './reminderWorker.js';
 import { runAutoTaggingWorker } from '../services/tagging.js';
 
+const log = logger.child({ component: 'scheduler' });
+
 // Track if scheduler is already running
 let isSchedulerRunning = false;
 
@@ -23,15 +26,18 @@ const runningJobs = new Set<string>();
  */
 async function runJob(jobName: string, job: () => Promise<void>): Promise<void> {
   if (runningJobs.has(jobName)) {
-    console.log(`[Scheduler] Skipping ${jobName} - previous run still in progress`);
+    log.warn({ job: jobName }, 'Skipping job - previous run still in progress');
     return;
   }
 
   runningJobs.add(jobName);
+  const startTime = Date.now();
   try {
     await job();
+    const duration = Date.now() - startTime;
+    log.info({ job: jobName, durationMs: duration }, 'Job completed');
   } catch (error) {
-    console.error(`[Scheduler] Error in ${jobName}:`, error);
+    log.error({ job: jobName, err: error }, 'Job execution failed');
   } finally {
     runningJobs.delete(jobName);
   }
@@ -42,28 +48,28 @@ async function runJob(jobName: string, job: () => Promise<void>): Promise<void> 
  */
 export function startScheduler(): void {
   if (isSchedulerRunning) {
-    console.log('[Scheduler] Already running, skipping initialization');
+    log.warn('Scheduler already running, skipping initialization');
     return;
   }
 
-  console.log('[Scheduler] Initializing cron jobs...');
+  log.info('Initializing cron jobs');
 
   // YouTube Sync - Every 15 minutes
   // Cron format: minute hour day-of-month month day-of-week
   cron.schedule('*/15 * * * *', async () => {
-    console.log('[Scheduler] Running YouTube sync...');
+    log.info({ job: 'youtube-sync' }, 'Triggering scheduled job');
     await runJob('youtube-sync', runYouTubeSync);
   });
 
   // Spotify Sync - Every 30 minutes
   cron.schedule('*/30 * * * *', async () => {
-    console.log('[Scheduler] Running Spotify sync...');
+    log.info({ job: 'spotify-sync' }, 'Triggering scheduled job');
     await runJob('spotify-sync', runSpotifySync);
   });
 
   // TikTok Sync - Every 30 minutes
   cron.schedule('*/30 * * * *', async () => {
-    console.log('[Scheduler] Running TikTok sync...');
+    log.info({ job: 'tiktok-sync' }, 'Triggering scheduled job');
     await runJob('tiktok-sync', runTikTokSync);
   });
 
@@ -71,78 +77,81 @@ export function startScheduler(): void {
   // Processes pending YouTube transcription requests (free via subtitles)
   // Also handles INBOX pre-transcription for faster UX when user clicks "Learn"
   cron.schedule('*/2 * * * *', async () => {
-    console.log('[Scheduler] Running YouTube transcription worker...');
+    log.info({ job: 'youtube-transcription' }, 'Triggering scheduled job');
     await runJob('youtube-transcription', runTranscriptionWorker);
   });
 
   // Podcast Transcription Worker - Every 5 minutes (optimized from 10)
   // Processes pending Spotify podcast transcriptions (paid via Whisper)
   cron.schedule('*/5 * * * *', async () => {
-    console.log('[Scheduler] Running podcast transcription worker...');
+    log.info({ job: 'podcast-transcription' }, 'Triggering scheduled job');
     await runJob('podcast-transcription', runPodcastTranscriptionWorker);
   });
 
   // TikTok Transcription Worker - Every 2 minutes (optimized)
   // Processes pending TikTok transcriptions (via yt-dlp + Whisper)
   cron.schedule('*/2 * * * *', async () => {
-    console.log('[Scheduler] Running TikTok transcription worker...');
+    log.info({ job: 'tiktok-transcription' }, 'Triggering scheduled job');
     await runJob('tiktok-transcription', runTikTokTranscriptionWorker);
   });
 
   // Instagram Sync - Every 30 minutes (Playwright browser automation)
   cron.schedule('*/30 * * * *', async () => {
-    console.log('[Scheduler] Running Instagram sync...');
+    log.info({ job: 'instagram-sync' }, 'Triggering scheduled job');
     await runJob('instagram-sync', runInstagramSync);
   });
 
   // Instagram Transcription Worker - Every 2 minutes (optimized)
   // Processes pending Instagram transcriptions (via yt-dlp + Whisper)
   cron.schedule('*/2 * * * *', async () => {
-    console.log('[Scheduler] Running Instagram transcription worker...');
+    log.info({ job: 'instagram-transcription' }, 'Triggering scheduled job');
     await runJob('instagram-transcription', runInstagramTranscriptionWorker);
   });
 
   // Quiz Generation Worker - Every 2 minutes (optimized)
   // Generates quizzes from transcribed content
   cron.schedule('*/2 * * * *', async () => {
-    console.log('[Scheduler] Running quiz generation worker...');
+    log.info({ job: 'quiz-generation' }, 'Triggering scheduled job');
     await runJob('quiz-generation', runQuizGenerationWorker);
   });
 
   // Daily Reminder Worker - Every 5 minutes
   // Sends email reminders to users at their configured time
   cron.schedule('*/5 * * * *', async () => {
-    console.log('[Scheduler] Running reminder worker...');
+    log.info({ job: 'reminder' }, 'Triggering scheduled job');
     await runJob('reminder', runReminderWorker);
   });
 
   // Auto-Tagging Worker - Every 15 minutes
   // Tags content that has transcripts but no tags
   cron.schedule('*/15 * * * *', async () => {
-    console.log('[Scheduler] Running auto-tagging worker...');
+    log.info({ job: 'auto-tagging' }, 'Triggering scheduled job');
     await runJob('auto-tagging', runAutoTaggingWorker);
   });
 
   isSchedulerRunning = true;
-  console.log('[Scheduler] All cron jobs scheduled (optimized intervals):');
-  console.log('  - YouTube Sync: every 15 minutes');
-  console.log('  - Spotify Sync: every 30 minutes');
-  console.log('  - TikTok Sync: every 30 minutes');
-  console.log('  - Instagram Sync: every 30 minutes (Playwright)');
-  console.log('  - YouTube Transcription: every 2 minutes (+ INBOX pre-transcription)');
-  console.log('  - Podcast Transcription: every 5 minutes');
-  console.log('  - TikTok Transcription: every 2 minutes');
-  console.log('  - Instagram Transcription: every 2 minutes');
-  console.log('  - Quiz Generation: every 2 minutes');
-  console.log('  - Daily Reminders: every 5 minutes');
-  console.log('  - Auto-Tagging: every 15 minutes');
+  log.info({
+    jobs: [
+      { name: 'youtube-sync', schedule: '*/15 * * * *' },
+      { name: 'spotify-sync', schedule: '*/30 * * * *' },
+      { name: 'tiktok-sync', schedule: '*/30 * * * *' },
+      { name: 'instagram-sync', schedule: '*/30 * * * *' },
+      { name: 'youtube-transcription', schedule: '*/2 * * * *' },
+      { name: 'podcast-transcription', schedule: '*/5 * * * *' },
+      { name: 'tiktok-transcription', schedule: '*/2 * * * *' },
+      { name: 'instagram-transcription', schedule: '*/2 * * * *' },
+      { name: 'quiz-generation', schedule: '*/2 * * * *' },
+      { name: 'reminder', schedule: '*/5 * * * *' },
+      { name: 'auto-tagging', schedule: '*/15 * * * *' },
+    ]
+  }, 'All cron jobs scheduled');
 }
 
 /**
  * Run all sync jobs immediately (useful for testing or manual trigger)
  */
 export async function runAllSyncsNow(): Promise<void> {
-  console.log('[Scheduler] Running all syncs now...');
+  log.info('Running all syncs now (manual trigger)');
 
   // Phase 1: Sync content from platforms
   await Promise.allSettled([
@@ -163,7 +172,7 @@ export async function runAllSyncsNow(): Promise<void> {
   // Phase 3: Generate quizzes
   await runJob('quiz-generation', runQuizGenerationWorker);
 
-  console.log('[Scheduler] All syncs completed');
+  log.info('All syncs completed');
 }
 
 /**
