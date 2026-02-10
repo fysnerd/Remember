@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-10)
 
 **Core value:** L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans effort supplementaire de curation.
-**Current focus:** v2.0 Themes-first UX -- Phase 7 complete, ready for Phase 8
+**Current focus:** v2.0 Themes-first UX -- Phase 8 complete, ready for Phase 9
 
 ## Current Position
 
-Phase: 7 of 11 (iOS Theme Management) -- COMPLETE
-Plan: 2 of 2 in current phase (all done)
-Status: Phase 7 complete, ready for Phase 8
-Last activity: 2026-02-10 -- Completed 07-02 (Theme management screens)
+Phase: 8 of 11 (Theme Quiz - Existing Cards) -- COMPLETE
+Plan: 1 of 1 in current phase (all done)
+Status: Phase 8 complete, ready for Phase 9
+Last activity: 2026-02-10 -- Completed 08-01 (Theme quiz endpoint + iOS screen)
 
-Progress: [################░░░░] 16/22 plans (v1.0 complete, v2.0 phases 5-7 complete)
+Progress: [#################░░░] 17/22 plans (v1.0 complete, v2.0 phases 5-8 complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 16 (10 v1.0 + 6 v2.0)
-- Average duration: ~16 min (improving with simpler integration plans)
-- Total execution time: ~4 hours 20 min
+- Total plans completed: 17 (10 v1.0 + 7 v2.0)
+- Average duration: ~15 min (improving with simpler integration plans)
+- Total execution time: ~4 hours 23 min
 
 **By Phase:**
 
@@ -34,13 +34,15 @@ Progress: [################░░░░] 16/22 plans (v1.0 complete, v2.0 phases
 | 5. Theme Data Model & API | 2 | ~7 min | ~3.5 min |
 | 6. Theme Classification Worker | 2/2 | ~5 min | ~2.5 min |
 | 7. iOS Theme Screens | 2/2 | ~7 min | ~3.5 min |
+| 8. Theme Quiz (Existing Cards) | 1/1 | ~3 min | ~3 min |
 
 **Recent Trend:**
 - v1.0 completed in 2 days (10 plans, 4 phases)
 - v2.0 phase 5 completed in ~7 min (2 plans: schema + API)
 - v2.0 phase 6 completed in ~5 min (2 plans: service + scheduler/admin integration)
 - v2.0 phase 7 completed in ~7 min (2 plans: navigation layer + management screens)
-- Trend: Accelerating (UI plans as fast as backend service plans)
+- v2.0 phase 8 completed in ~3 min (1 plan: theme quiz API + iOS screen)
+- Trend: Accelerating (single-plan phases completing in ~3 min)
 
 ## Accumulated Context
 
@@ -73,6 +75,10 @@ Recent decisions affecting current work:
 - Combined name, emoji, and color into single save action on theme manage screen (one API call)
 - Used inline Modal in content detail for add-to-theme (simpler than separate component, single-use)
 - Emoji/color palettes shared between manage and create screens (20 emojis, 12 colors matching AI worker palette)
+- Theme quiz capped at 20 questions to prevent overwhelming sessions
+- Theme quiz updates SM-2 stats (not practice mode) consistent with topic quiz
+- View memo button on theme quiz summary routes to theme detail (theme memos come in Phase 9)
+- Quiz button always visible on theme detail screen (moved outside content list conditional)
 
 ### Pending Todos
 
@@ -87,6 +93,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-10
-Stopped at: Completed 07-02-PLAN.md (Theme management screens) -- Phase 7 complete
-Next step: Plan and execute Phase 8 (Theme-based quiz flow)
+Stopped at: Completed 08-01-PLAN.md (Theme quiz existing cards) -- Phase 8 complete
+Next step: Plan and execute Phase 9 (Theme memos)
 Resume file: None
