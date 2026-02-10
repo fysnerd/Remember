@@ -20,8 +20,8 @@ export const spotifyLimiter = pLimit(10);
 /** Instagram private API — max 5 concurrent user syncs */
 export const instagramLimiter = pLimit(5);
 
-/** TikTok Playwright — max 2 concurrent browsers */
-export const tiktokLimiter = pLimit(2);
+/** TikTok Playwright — max 5 concurrent browsers (API direct = lighter) */
+export const tiktokLimiter = pLimit(5);
 
 // --- Retry with exponential backoff ---
 

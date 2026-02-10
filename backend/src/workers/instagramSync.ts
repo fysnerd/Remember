@@ -5,6 +5,7 @@
 import { logger } from '../config/logger.js';
 import { prisma } from '../config/database.js';
 import { Platform, ContentStatus } from '@prisma/client';
+import { instagramLimiter } from '../utils/rateLimiter.js';
 
 const log = logger.child({ job: 'instagram-sync' });
 
@@ -276,17 +277,31 @@ export async function runInstagramSync(): Promise<void> {
   let successCount = 0;
   let errorCount = 0;
 
-  for (const connection of connections) {
-    try {
-      const newReels = await syncUserInstagram(connection.userId, connection.id);
-      totalNewReels += newReels;
+  const TIMEOUT_MS = 45000;
+
+  const results = await Promise.allSettled(
+    connections.map(connection =>
+      instagramLimiter(async () => {
+        // Small staggered delay to avoid all requests hitting at once
+        await new Promise(resolve => setTimeout(resolve, Math.random() * 2000));
+        return Promise.race([
+          syncUserInstagram(connection.userId, connection.id),
+          new Promise<number>((_, reject) =>
+            setTimeout(() => reject(new Error(`Instagram sync timeout for user ${connection.userId}`)), TIMEOUT_MS)
+          ),
+        ]);
+      })
+    )
+  );
+
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      totalNewReels += result.value;
       successCount++;
-    } catch (error) {
-      log.error({ err: error, userId: connection.userId }, 'Sync failed for user');
+    } else {
+      log.error({ err: result.reason }, 'User sync failed');
       errorCount++;
     }
-    // Human-like delay between users
-    await new Promise(resolve => setTimeout(resolve, 3000 + Math.random() * 2000));
   }
 
   const duration = Date.now() - startTime;
