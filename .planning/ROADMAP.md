@@ -25,7 +25,7 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 
 - [x] **Phase 5: Theme Data Model & API** -- Database schema, CRUD endpoints, and content-theme relations (completed 2026-02-10)
 - [x] **Phase 6: Theme Classification Worker** -- AI-powered auto-generation and classification of themes from tags (completed 2026-02-10)
-- [ ] **Phase 7: iOS Theme Screens & Management** -- Theme-first home screen, detail views, and user management
+- [x] **Phase 7: iOS Theme Screens & Management** -- Theme-first home screen, detail views, and user management (completed 2026-02-10)
 - [ ] **Phase 8: Theme Quiz (Existing Cards)** -- Quiz scoped to a theme using existing per-content questions
 - [ ] **Phase 9: Theme Memo** -- AI-generated synthesis memos aggregating knowledge per theme
 - [ ] **Phase 10: Cross-Content Synthesis Quiz** -- New AI-generated questions connecting concepts across multiple content items
@@ -78,8 +78,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 07-01-PLAN.md -- Theme types, hooks, ThemeCard component, home screen redesign, theme detail screen, route registration
-- [ ] 07-02-PLAN.md -- Theme management screen (rename, delete, content removal), theme creation screen, content detail theme integration
+- [x] 07-01-PLAN.md -- Theme types, hooks, ThemeCard component, home screen redesign, theme detail screen, route registration
+- [x] 07-02-PLAN.md -- Theme management screen (rename, delete, content removal), theme creation screen, content detail theme integration
 
 ### Phase 8: Theme Quiz (Existing Cards)
 **Goal**: Users can practice quiz questions scoped to a specific theme, mixing existing per-content questions from all content within that theme
@@ -148,7 +148,7 @@ Phases execute in numeric order: 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11
 | 4. Observability Dashboard | v1.0 | 2/2 | Complete | 2026-02-10 |
 | 5. Theme Data Model & API | v2.0 | 2/2 | Complete | 2026-02-10 |
 | 6. Theme Classification Worker | v2.0 | 2/2 | Complete | 2026-02-10 |
-| 7. iOS Theme Screens & Management | v2.0 | 0/2 | Planned | - |
+| 7. iOS Theme Screens & Management | v2.0 | 2/2 | Complete | 2026-02-10 |
 | 8. Theme Quiz (Existing Cards) | v2.0 | 0/1 | Not started | - |
 | 9. Theme Memo | v2.0 | 0/1 | Not started | - |
 | 10. Cross-Content Synthesis Quiz | v2.0 | 0/2 | Not started | - |
