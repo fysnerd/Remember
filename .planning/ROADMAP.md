@@ -59,11 +59,11 @@ Plans:
   3. Existing content with tags is backfilled into themes via a one-time migration job (all tagged content has theme assignments after backfill completes)
   4. Running the classification worker twice for the same user does not create duplicate or near-duplicate themes (e.g., "IA", "Intelligence Artificielle", "Machine Learning" collapse into one)
   5. No user has more than 25 themes after any worker run
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 06-01: Theme generation logic (tag clustering via Mistral AI, deduplication, cap enforcement)
-- [ ] 06-02: Classification worker + scheduler integration + backfill migration job
+- [ ] 06-01-PLAN.md -- Theme generation service (slug utility extraction, LLM tag clustering, deterministic classification, backfill logic)
+- [ ] 06-02-PLAN.md -- Scheduler integration + admin triggers (cron entry, REST API endpoints, AdminJS panel buttons)
 
 ### Phase 7: iOS Theme Screens & Management
 **Goal**: Users navigate their library through theme sections on the home screen and can manage theme organization (rename, delete, move content, create)
