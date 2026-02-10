@@ -13,7 +13,7 @@ Transform backend visibility from console log spam to structured observability. 
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: ESM Migration & Logging Foundation** - Migrate to ESM and replace console.log with Pino (completed 2026-02-09)
-- [ ] **Phase 2: Job Execution Tracking** - Persist cron job history to database
+- [x] **Phase 2: Job Execution Tracking** - Persist cron job history to database (completed 2026-02-10)
 - [ ] **Phase 3: AdminJS Panel & Manual Triggers** - Deploy admin panel with data exploration
 - [ ] **Phase 4: Observability Dashboard** - Build custom dashboard for system health
 
@@ -51,8 +51,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md -- Prisma JobExecution model + migration + tracker wrapper + cleanup worker
-- [ ] 02-02-PLAN.md -- Wire tracking into scheduler.ts + register cleanup cron + deploy to VPS
+- [x] 02-01-PLAN.md -- Prisma JobExecution model + migration + tracker wrapper + cleanup worker
+- [x] 02-02-PLAN.md -- Wire tracking into scheduler.ts + register cleanup cron + deploy to VPS
 
 ### Phase 3: AdminJS Panel & Manual Triggers
 **Goal**: Admin can browse all database models and manually trigger sync jobs
@@ -95,6 +95,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. ESM Migration & Logging Foundation | 4/4 | ✅ Complete | 2026-02-09 |
-| 2. Job Execution Tracking | 0/2 | In progress | - |
+| 2. Job Execution Tracking | 2/2 | ✅ Complete | 2026-02-10 |
 | 3. AdminJS Panel & Manual Triggers | 0/TBD | Not started | - |
 | 4. Observability Dashboard | 0/TBD | Not started | - |
