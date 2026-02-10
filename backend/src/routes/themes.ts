@@ -4,27 +4,13 @@ import { authenticateToken } from '../middleware/auth.js';
 import { logger } from '../config/logger.js';
 import { Platform } from '@prisma/client';
 import { z } from 'zod';
+import { generateSlug } from '../utils/slug.js';
 
 const log = logger.child({ route: 'themes' });
 export const themeRouter = Router();
 themeRouter.use(authenticateToken);
 
 const MAX_THEMES_PER_USER = 25;
-
-// ============================================================================
-// Slug Utility
-// ============================================================================
-
-function generateSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
-}
 
 // ============================================================================
 // Zod Validation Schemas
