@@ -75,11 +75,11 @@ Plans:
   3. User can pull-to-refresh on the home screen and theme detail screen to get updated theme data
   4. User can rename a theme, delete a theme (content preserved), and create a new theme manually from the management UI
   5. User can add or remove content from a theme (move content between themes) through the theme detail or content detail screen
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 07-01: Theme list and detail screens (home screen redesign, theme cards, theme detail with content list)
-- [ ] 07-02: Theme management screens (rename, delete, create, content reassignment)
+- [ ] 07-01-PLAN.md -- Theme types, hooks, ThemeCard component, home screen redesign, theme detail screen, route registration
+- [ ] 07-02-PLAN.md -- Theme management screen (rename, delete, content removal), theme creation screen, content detail theme integration
 
 ### Phase 8: Theme Quiz (Existing Cards)
 **Goal**: Users can practice quiz questions scoped to a specific theme, mixing existing per-content questions from all content within that theme
@@ -148,7 +148,7 @@ Phases execute in numeric order: 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11
 | 4. Observability Dashboard | v1.0 | 2/2 | Complete | 2026-02-10 |
 | 5. Theme Data Model & API | v2.0 | 2/2 | Complete | 2026-02-10 |
 | 6. Theme Classification Worker | v2.0 | 2/2 | Complete | 2026-02-10 |
-| 7. iOS Theme Screens & Management | v2.0 | 0/2 | Not started | - |
+| 7. iOS Theme Screens & Management | v2.0 | 0/2 | Planned | - |
 | 8. Theme Quiz (Existing Cards) | v2.0 | 0/1 | Not started | - |
 | 9. Theme Memo | v2.0 | 0/1 | Not started | - |
 | 10. Cross-Content Synthesis Quiz | v2.0 | 0/2 | Not started | - |
