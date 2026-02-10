@@ -121,6 +121,27 @@ export function useTopicQuiz(topicName: string) {
   });
 }
 
+interface ThemePracticeResponse {
+  cards: BackendCard[];
+  count: number;
+  theme: { id: string; name: string; emoji: string };
+  contentCount: number;
+}
+
+// Get quiz for a theme (mixed questions from all contents in that theme)
+export function useThemeQuiz(themeId: string) {
+  return useQuery({
+    queryKey: ['quiz', 'theme', themeId],
+    queryFn: async () => {
+      const { data } = await api.post<ThemePracticeResponse>('/reviews/practice/theme', { themeId });
+      console.log('[useThemeQuiz] Got', data.count, 'cards from', data.contentCount, 'contents');
+      const quiz = transformCardsToQuiz(data.cards, `theme:${themeId}`);
+      return { ...quiz, theme: data.theme, contentCount: data.contentCount };
+    },
+    enabled: !!themeId,
+  });
+}
+
 interface CreateSessionParams {
   contentId?: string;
   topicName?: string;

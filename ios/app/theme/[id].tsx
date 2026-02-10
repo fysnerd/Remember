@@ -41,10 +41,10 @@ export default function ThemeDetailScreen() {
   };
 
   const handleStartQuiz = () => {
-    if (data?.theme?.name) {
+    if (id) {
       router.push({
-        pathname: '/quiz/topic/[name]',
-        params: { name: encodeURIComponent(data.theme.name) },
+        pathname: '/quiz/theme/[id]' as any,
+        params: { id },
       });
     }
   };
@@ -55,6 +55,8 @@ export default function ThemeDetailScreen() {
 
   const theme = data?.theme;
   const contents = data?.contents ?? [];
+  const canQuiz = theme?.canQuiz ?? false;
+  const quizReadyCount = theme?.quizReadyCount ?? 0;
 
   return (
     <>
@@ -91,42 +93,52 @@ export default function ThemeDetailScreen() {
         {contents.length === 0 ? (
           <EmptyState message="Aucun contenu dans ce theme" icon="📭" />
         ) : (
-          <>
-            <View style={styles.list}>
-              {contents.map((item) => (
-                <Card
-                  key={item.id}
-                  padding="md"
-                  onPress={() => handleContentPress(item.id)}
-                  style={styles.card}
-                >
-                  <View style={styles.row}>
-                    <Text variant="h2" style={styles.emoji}>
-                      {sourceEmoji[item.source] || '📄'}
+          <View style={styles.list}>
+            {contents.map((item) => (
+              <Card
+                key={item.id}
+                padding="md"
+                onPress={() => handleContentPress(item.id)}
+                style={styles.card}
+              >
+                <View style={styles.row}>
+                  <Text variant="h2" style={styles.emoji}>
+                    {sourceEmoji[item.source] || '📄'}
+                  </Text>
+                  <View style={styles.info}>
+                    <Text variant="body" weight="medium" numberOfLines={2}>
+                      {item.title}
                     </Text>
-                    <View style={styles.info}>
-                      <Text variant="body" weight="medium" numberOfLines={2}>
-                        {item.title}
+                    {item.channelName && (
+                      <Text variant="caption" color="secondary">
+                        {item.channelName}
                       </Text>
-                      {item.channelName && (
-                        <Text variant="caption" color="secondary">
-                          {item.channelName}
-                        </Text>
-                      )}
-                    </View>
+                    )}
                   </View>
-                </Card>
-              ))}
-            </View>
-
-            {/* Quiz button */}
-            <View style={styles.quizButton}>
-              <Button variant="primary" fullWidth onPress={handleStartQuiz}>
-                Quiz {theme?.name}
-              </Button>
-            </View>
-          </>
+                </View>
+              </Card>
+            ))}
+          </View>
         )}
+
+        {/* Quiz button - always visible */}
+        <View style={styles.quizButton}>
+          <Button
+            variant="primary"
+            fullWidth
+            onPress={handleStartQuiz}
+            disabled={!canQuiz}
+          >
+            {canQuiz
+              ? `Quiz ${theme?.name}`
+              : `Quiz (${quizReadyCount}/3 contenus)`}
+          </Button>
+          {!canQuiz && (
+            <Text variant="caption" color="secondary" style={styles.quizHint}>
+              Il faut au moins 3 contenus avec quiz pour lancer un quiz theme.
+            </Text>
+          )}
+        </View>
       </ScrollView>
     </>
   );
@@ -174,5 +186,9 @@ const styles = StyleSheet.create({
   },
   quizButton: {
     marginTop: spacing.xl,
+  },
+  quizHint: {
+    marginTop: spacing.xs,
+    textAlign: 'center',
   },
 });

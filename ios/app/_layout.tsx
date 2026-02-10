@@ -96,6 +96,13 @@ export default function RootLayout() {
           }}
         />
         <Stack.Screen
+          name="quiz/theme/[id]"
+          options={{
+            headerShown: false,
+            presentation: 'card',
+          }}
+        />
+        <Stack.Screen
           name="memo/topic/[name]"
           options={{
             headerShown: true,

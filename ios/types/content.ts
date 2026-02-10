@@ -92,6 +92,8 @@ export interface ThemeListItem {
   color: string;       // hex e.g. "#6366F1"
   emoji: string;       // e.g. "📚"
   contentCount: number;
+  quizReadyCount: number; // content items with generated quizzes
+  canQuiz: boolean;       // quizReadyCount >= 3
   tags: { id: string; name: string }[];
   createdAt: string;
   updatedAt: string;
