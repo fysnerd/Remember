@@ -30,10 +30,14 @@ contentRouter.use(authenticateToken);
 // Refresh / Sync Endpoint (User-accessible)
 // ============================================================================
 
-// POST /api/content/refresh - Manually trigger sync for all connected platforms
+// POST /api/content/refresh - Trigger sync for all connected platforms
+// Fire-and-forget: returns 202 immediately, syncs in background
+// Cooldown: skips platforms synced less than 5 minutes ago
 contentRouter.post('/refresh', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.id;
+    const COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+    const now = new Date();
 
     // Get all connected platforms for this user
     const connections = await prisma.connectedPlatform.findMany({
@@ -48,68 +52,85 @@ contentRouter.post('/refresh', async (req: Request, res: Response, next: NextFun
       });
     }
 
-    // Track which platforms are being synced
-    const syncingPlatforms: string[] = [];
-    const syncPromises: Promise<{ platform: string; newItems: number }>[] = [];
+    // Filter out platforms that were synced recently (cooldown)
+    const eligibleConnections = connections.filter((c) => {
+      if (!c.lastSyncAt) return true; // Never synced → eligible
+      return now.getTime() - c.lastSyncAt.getTime() >= COOLDOWN_MS;
+    });
 
-    for (const connection of connections) {
+    const skippedPlatforms = connections
+      .filter((c) => !eligibleConnections.includes(c))
+      .map((c) => c.platform.toLowerCase());
+
+    if (eligibleConnections.length === 0) {
+      return res.json({
+        message: 'All platforms synced recently. Try again in a few minutes.',
+        platforms: [],
+        skipped: skippedPlatforms,
+        syncing: false,
+      });
+    }
+
+    // Track which platforms will be synced
+    const syncingPlatforms: string[] = [];
+
+    for (const connection of eligibleConnections) {
       if (connection.platform === Platform.YOUTUBE) {
         syncingPlatforms.push('youtube');
-        syncPromises.push(
-          syncUserYouTube(userId, connection.id)
-            .then((newItems) => ({ platform: 'youtube', newItems }))
-            .catch((error) => {
-              log.error({ err: error, userId, platform: 'youtube' }, 'Manual refresh sync failed');
-              return { platform: 'youtube', newItems: 0 };
-            })
-        );
       } else if (connection.platform === Platform.SPOTIFY) {
         syncingPlatforms.push('spotify');
-        syncPromises.push(
-          syncUserSpotify(userId, connection.id)
-            .then((newItems) => ({ platform: 'spotify', newItems }))
-            .catch((error) => {
-              log.error({ err: error, userId, platform: 'spotify' }, 'Manual refresh sync failed');
-              return { platform: 'spotify', newItems: 0 };
-            })
-        );
       } else if (connection.platform === Platform.TIKTOK) {
         syncingPlatforms.push('tiktok');
-        syncPromises.push(
-          syncTikTokForUser(userId)
-            .then((newItems) => ({ platform: 'tiktok', newItems }))
-            .catch((error) => {
-              log.error({ err: error, userId, platform: 'tiktok' }, 'Manual refresh sync failed');
-              return { platform: 'tiktok', newItems: 0 };
-            })
-        );
       } else if (connection.platform === Platform.INSTAGRAM) {
         syncingPlatforms.push('instagram');
+      }
+    }
+
+    log.info({ userId, platforms: syncingPlatforms, skipped: skippedPlatforms }, 'Background refresh started');
+
+    // Return 202 immediately — sync runs in background
+    res.status(202).json({
+      message: 'Sync started',
+      syncing: syncingPlatforms,
+      skipped: skippedPlatforms,
+    });
+
+    // Fire-and-forget: run syncs in background
+    const syncPromises: Promise<void>[] = [];
+
+    for (const connection of eligibleConnections) {
+      if (connection.platform === Platform.YOUTUBE) {
+        syncPromises.push(
+          syncUserYouTube(userId, connection.id)
+            .then((n) => { log.info({ userId, platform: 'youtube', newItems: n }, 'Background sync done'); })
+            .catch((err) => { log.error({ err, userId, platform: 'youtube' }, 'Background sync failed'); })
+        );
+      } else if (connection.platform === Platform.SPOTIFY) {
+        syncPromises.push(
+          syncUserSpotify(userId, connection.id)
+            .then((n) => { log.info({ userId, platform: 'spotify', newItems: n }, 'Background sync done'); })
+            .catch((err) => { log.error({ err, userId, platform: 'spotify' }, 'Background sync failed'); })
+        );
+      } else if (connection.platform === Platform.TIKTOK) {
+        syncPromises.push(
+          syncTikTokForUser(userId)
+            .then((n) => { log.info({ userId, platform: 'tiktok', newItems: n }, 'Background sync done'); })
+            .catch((err) => { log.error({ err, userId, platform: 'tiktok' }, 'Background sync failed'); })
+        );
+      } else if (connection.platform === Platform.INSTAGRAM) {
         syncPromises.push(
           syncInstagramForUser(userId)
-            .then((newItems) => ({ platform: 'instagram', newItems }))
-            .catch((error) => {
-              log.error({ err: error, userId, platform: 'instagram' }, 'Manual refresh sync failed');
-              return { platform: 'instagram', newItems: 0 };
-            })
+            .then((n) => { log.info({ userId, platform: 'instagram', newItems: n }, 'Background sync done'); })
+            .catch((err) => { log.error({ err, userId, platform: 'instagram' }, 'Background sync failed'); })
         );
       }
     }
 
-    // Wait for all syncs to complete
-    const results = await Promise.all(syncPromises);
-
-    // Calculate totals
-    const totalNewItems = results.reduce((sum, r) => sum + r.newItems, 0);
-
-    log.info({ userId, platforms: syncingPlatforms, totalNewItems }, 'Manual refresh completed');
-
-    return res.json({
-      message: totalNewItems > 0
-        ? `Sync complete! ${totalNewItems} new items found.`
-        : 'Sync complete. No new items found.',
-      platforms: results,
-      totalNewItems,
+    // Don't await — this runs after response is sent
+    Promise.allSettled(syncPromises).then((results) => {
+      const fulfilled = results.filter((r) => r.status === 'fulfilled').length;
+      const rejected = results.filter((r) => r.status === 'rejected').length;
+      log.info({ userId, fulfilled, rejected, platforms: syncingPlatforms }, 'Background refresh completed');
     });
   } catch (error) {
     return next(error);

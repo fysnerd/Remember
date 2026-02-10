@@ -8,6 +8,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '../lib/queryClient';
 import { useAuthStore } from '../stores/authStore';
 import { useNotifications } from '../hooks/useNotifications';
+import { useBackgroundSync } from '../hooks/useBackgroundSync';
 import { LoadingScreen } from '../components/LoadingScreen';
 
 // Public routes that don't require auth
@@ -20,6 +21,9 @@ export default function RootLayout() {
 
   // Register push notifications (after auth)
   useNotifications(isAuthenticated);
+
+  // Trigger background sync on launch / foreground (cooldown enforced server-side)
+  useBackgroundSync(isAuthenticated);
 
   // Check auth on mount
   useEffect(() => {
