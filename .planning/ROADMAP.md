@@ -83,10 +83,11 @@ Plans:
   5. Timeline view shows chronological feed of all job executions
   6. Success rate visualization shows per-job success percentage
   7. Dashboard updates in real-time via Server-Sent Events (SSE)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] TBD during planning
+- [ ] 04-01-PLAN.md -- Dashboard handler (metrics aggregation), SSE endpoint, broadcast wiring into job tracker
+- [ ] 04-02-PLAN.md -- Custom React dashboard component (6 panels + Recharts chart + SSE auto-refresh), VPS deploy
 
 ## Progress
 
