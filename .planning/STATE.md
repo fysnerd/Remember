@@ -10,28 +10,29 @@ See: .planning/PROJECT.md (updated 2026-02-09)
 ## Current Position
 
 Phase: 2 of 4 (Job Execution Tracking)
-Plan: None (phase not yet planned)
-Status: Ready to plan
-Last activity: 2026-02-09 — Phase 1 complete, deployed to VPS
+Plan: 01 of 02 (Job Execution Foundation)
+Status: Plan 01 complete, ready for Plan 02
+Last activity: 2026-02-10 — Plan 02-01 complete (JobExecution model, tracking wrapper, cleanup worker)
 
-Progress: [██░░░░░░░░] 25%
+Progress: [███░░░░░░░] 33%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 22 minutes
-- Total execution time: 2.03 hours
+- Total plans completed: 5
+- Average duration: 18 minutes
+- Total execution time: 2.05 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 4 | 122 min | 30 min |
+| 02 | 1 | 1 min | 1 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (5 min), 01-02 (14 min), 01-04 (59 min), 01-03 (9 min)
-- Trend: Service logging completed quickly (8 files, clean structure)
+- Last 5 plans: 01-02 (14 min), 01-04 (59 min), 01-03 (9 min), 02-01 (1 min)
+- Trend: Phase 02-01 extremely fast (2 tasks, 3 new files, no integration complexity)
 
 *Updated after each plan completion*
 
@@ -55,6 +56,13 @@ Recent decisions affecting current work:
 - Stripe service NEVER logs payment amounts, card details, or tokens (PCI compliance)
 - Leave client-side console.log in OAuth HTML page (browser console output, not server logs)
 
+**From Phase 2 Plan 01 execution:**
+- jobName as String (not enum) for flexibility - new jobs don't require schema migration
+- Separate error and errorStack fields (display vs debugging)
+- Use prisma db push for production schema sync when migration drift detected
+- Two composite indexes: [jobName, startedAt] for job queries, [status, startedAt] for failure analysis
+- Non-blocking tracking pattern: all Prisma calls wrapped in try/catch, failures logged but never crash jobs
+
 ### Pending Todos
 
 None yet.
@@ -65,6 +73,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-09
-Stopped at: Phase 1 complete. VPS deployed and verified (PM2 online, 11 cron jobs, health OK).
-Resume file: .planning/phases/01-esm-migration-logging-foundation/01-VERIFICATION.md
+Last session: 2026-02-10
+Stopped at: Phase 2 Plan 01 complete. JobExecution model and tracking utilities ready for scheduler integration.
+Resume file: .planning/phases/02-job-execution-tracking/02-01-SUMMARY.md
