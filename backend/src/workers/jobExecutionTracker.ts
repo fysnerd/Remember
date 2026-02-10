@@ -1,6 +1,7 @@
 // Job Execution Tracker - Persists cron job execution history to database
 import { prisma } from '../config/database.js';
 import { logger } from '../config/logger.js';
+import { broadcastJobEvent } from '../admin/dashboard.sse.js';
 
 const log = logger.child({ component: 'job-tracker' });
 
@@ -27,6 +28,9 @@ export async function trackJobExecution(
       },
     });
     executionId = execution.id;
+    try {
+      broadcastJobEvent({ type: 'job_started', jobName, status: 'RUNNING', triggerSource });
+    } catch { /* SSE broadcast failure must never affect job execution */ }
   } catch (createError) {
     log.error({ err: createError, job: jobName }, 'Failed to create job execution record - job will still run');
   }
@@ -47,6 +51,9 @@ export async function trackJobExecution(
             duration,
           },
         });
+        try {
+          broadcastJobEvent({ type: 'job_completed', jobName, status: 'SUCCESS', triggerSource, duration });
+        } catch { /* SSE broadcast failure must never affect job execution */ }
       } catch (updateError) {
         log.error({ err: updateError, executionId, job: jobName }, 'Failed to update job execution to SUCCESS');
       }
@@ -69,6 +76,9 @@ export async function trackJobExecution(
             errorStack: errorStack ?? null,
           },
         });
+        try {
+          broadcastJobEvent({ type: 'job_failed', jobName, status: 'FAILED', triggerSource, duration, error: errorMessage });
+        } catch { /* SSE broadcast failure must never affect job execution */ }
       } catch (updateError) {
         log.error({ err: updateError, executionId, job: jobName }, 'Failed to update job execution to FAILED');
       }

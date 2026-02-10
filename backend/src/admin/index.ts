@@ -1,4 +1,4 @@
-import AdminJS from 'adminjs';
+import AdminJS, { ComponentLoader } from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
 import { Database, Resource } from '@adminjs/prisma';
 import session from 'express-session';
@@ -6,15 +6,27 @@ import Connect from 'connect-pg-simple';
 import { config } from '../config/env.js';
 import { logger } from '../config/logger.js';
 import { resources } from './resources.js';
+import { dashboardHandler } from './dashboard.handler.js';
+import { sseHandler } from './dashboard.sse.js';
 
 const log = logger.child({ component: 'admin' });
 
 AdminJS.registerAdapter({ Database, Resource });
 
 export function setupAdminJS() {
+  const componentLoader = new ComponentLoader();
+  const Components = {
+    Dashboard: componentLoader.add('Dashboard', './components/dashboard'),
+  };
+
   const admin = new AdminJS({
     resources,
     rootPath: '/admin',
+    dashboard: {
+      component: Components.Dashboard,
+      handler: dashboardHandler,
+    },
+    componentLoader,
     branding: {
       companyName: 'Ankora Admin',
       withMadeWithLove: false,
@@ -57,6 +69,9 @@ export function setupAdminJS() {
       name: 'adminjs',
     }
   );
+
+  // Mount SSE endpoint with session auth (inherits session middleware from adminRouter)
+  adminRouter.get('/api/sse', sseHandler);
 
   log.info({ rootPath: '/admin' }, 'AdminJS panel initialized');
   return { admin, adminRouter };
