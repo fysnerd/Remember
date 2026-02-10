@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-10)
 
 **Core value:** L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans effort supplementaire de curation.
-**Current focus:** v2.0 Themes-first UX -- Phase 6 (Theme Classification Worker)
+**Current focus:** v2.0 Themes-first UX -- Phase 7 (iOS Theme Management)
 
 ## Current Position
 
-Phase: 6 of 11 (Theme Classification Worker)
-Plan: 1 of 2 in current phase
-Status: In Progress
-Last activity: 2026-02-10 -- Completed 06-01 (Theme classification service)
+Phase: 7 of 11 (iOS Theme Management)
+Plan: 0 of ? in current phase
+Status: Phase 6 Complete
+Last activity: 2026-02-10 -- Completed 06-02 (Scheduler + Admin integration)
 
-Progress: [#############░░░░░░░] 13/22 plans (v1.0 complete, v2.0 phase 6 plan 1 complete)
+Progress: [##############░░░░░░] 14/22 plans (v1.0 complete, v2.0 phase 6 complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 13 (10 v1.0 + 3 v2.0)
-- Average duration: ~19 min (improving with simpler schema/API/service plans)
-- Total execution time: ~4 hours 11 min
+- Total plans completed: 14 (10 v1.0 + 4 v2.0)
+- Average duration: ~18 min (improving with simpler integration plans)
+- Total execution time: ~4 hours 13 min
 
 **By Phase:**
 
@@ -32,13 +32,13 @@ Progress: [#############░░░░░░░] 13/22 plans (v1.0 complete, v2.0 
 | 3. AdminJS Panel | 2 | ~50 min | ~25 min |
 | 4. Observability | 2 | ~50 min | ~25 min |
 | 5. Theme Data Model & API | 2 | ~7 min | ~3.5 min |
-| 6. Theme Classification Worker | 1/2 | ~3 min | ~3 min |
+| 6. Theme Classification Worker | 2/2 | ~5 min | ~2.5 min |
 
 **Recent Trend:**
 - v1.0 completed in 2 days (10 plans, 4 phases)
 - v2.0 phase 5 completed in ~7 min (2 plans: schema + API)
-- v2.0 phase 6 plan 1 completed in ~3 min (service creation)
-- Trend: Accelerating (schema, API, and service plans are quick)
+- v2.0 phase 6 completed in ~5 min (2 plans: service + scheduler/admin integration)
+- Trend: Accelerating (service and integration plans are very quick)
 
 ## Accumulated Context
 
@@ -63,6 +63,8 @@ Recent decisions affecting current work:
 - Deterministic tag-overlap matching before LLM fallback for content classification
 - Theme generation gated on 10+ tagged content items per user (minimum signal threshold)
 - generateSlug extracted to shared utils/slug.ts (imported by both route and service)
+- Theme classification cron placed after auto-tagging (themes depend on tags existing)
+- theme-backfill is manual-only (no cron) -- one-time operation via admin triggers
 
 ### Pending Todos
 
@@ -77,6 +79,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-10
-Stopped at: Completed 06-01-PLAN.md (Theme classification service)
-Next step: Execute 06-02-PLAN.md (Scheduler + Admin integration for theme classification worker)
+Stopped at: Completed 06-02-PLAN.md (Scheduler + Admin integration) -- Phase 6 complete
+Next step: Research and plan Phase 7 (iOS Theme Management)
 Resume file: None
