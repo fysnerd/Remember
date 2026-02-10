@@ -11,7 +11,8 @@ import { oauthRouter } from './routes/oauth.js';
 import { userRouter } from './routes/user.js';
 import { contentRouter } from './routes/content.js';
 import { reviewRouter } from './routes/review.js';
-import { adminRouter } from './routes/admin.js';
+import { adminRouter as adminApiRouter } from './routes/admin.js';
+import { setupAdminJS } from './admin/index.js';
 import { subscriptionRouter } from './routes/subscription.js';
 import { exportRouter } from './routes/export.js';
 import { startScheduler } from './workers/scheduler.js';
@@ -48,13 +49,17 @@ app.use(cors({
 // Trust proxy (Caddy reverse proxy sends X-Forwarded-For)
 app.set('trust proxy', 1);
 
-// Rate limiting
+// AdminJS panel (mount BEFORE rate limiter - ADM-05)
+const { admin, adminRouter: adminPanelRouter } = setupAdminJS();
+app.use(admin.options.rootPath, adminPanelRouter);
+
+// Rate limiting (scoped to /api only, excludes /admin)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs
   message: { error: 'Too many requests, please try again later.' },
 });
-app.use(limiter);
+app.use('/api', limiter);
 
 // Stripe webhook needs raw body - must be before express.json()
 app.use('/api/subscription/webhook', express.raw({ type: 'application/json' }), (req, _res, next) => {
@@ -79,7 +84,7 @@ app.use('/api/oauth', oauthRouter);
 app.use('/api/users', userRouter);
 app.use('/api/content', contentRouter);
 app.use('/api/reviews', reviewRouter);
-app.use('/api/admin', adminRouter);
+app.use('/api/admin', adminApiRouter);
 app.use('/api/subscription', subscriptionRouter);
 app.use('/api/export', exportRouter);
 
