@@ -23,7 +23,7 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 
 **Milestone Goal:** Transform Ankora from content-centric navigation to theme-centric navigation, with AI-generated themes, theme-scoped quizzes, cross-content synthesis, and theme memos.
 
-- [ ] **Phase 5: Theme Data Model & API** -- Database schema, CRUD endpoints, and content-theme relations
+- [x] **Phase 5: Theme Data Model & API** -- Database schema, CRUD endpoints, and content-theme relations (completed 2026-02-10)
 - [ ] **Phase 6: Theme Classification Worker** -- AI-powered auto-generation and classification of themes from tags
 - [ ] **Phase 7: iOS Theme Screens & Management** -- Theme-first home screen, detail views, and user management
 - [ ] **Phase 8: Theme Quiz (Existing Cards)** -- Quiz scoped to a theme using existing per-content questions
@@ -46,8 +46,8 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 **Plans:** 2 plans
 
 Plans:
-- [ ] 05-01-PLAN.md -- Prisma schema migration (Theme, ContentTheme, ThemeTag models + DB push)
-- [ ] 05-02-PLAN.md -- Theme CRUD API routes, content association endpoints, content API theme enrichment
+- [x] 05-01-PLAN.md -- Prisma schema migration (Theme, ContentTheme, ThemeTag models + DB push)
+- [x] 05-02-PLAN.md -- Theme CRUD API routes, content association endpoints, content API theme enrichment
 
 ### Phase 6: Theme Classification Worker
 **Goal**: Themes are automatically generated from a user's tag history and new content is auto-classified into existing themes without manual intervention
@@ -146,7 +146,7 @@ Phases execute in numeric order: 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11
 | 2. Job Execution Tracking | v1.0 | 2/2 | Complete | 2026-02-10 |
 | 3. AdminJS Panel & Triggers | v1.0 | 2/2 | Complete | 2026-02-10 |
 | 4. Observability Dashboard | v1.0 | 2/2 | Complete | 2026-02-10 |
-| 5. Theme Data Model & API | v2.0 | 0/2 | Planned | - |
+| 5. Theme Data Model & API | v2.0 | 2/2 | Complete | 2026-02-10 |
 | 6. Theme Classification Worker | v2.0 | 0/2 | Not started | - |
 | 7. iOS Theme Screens & Management | v2.0 | 0/2 | Not started | - |
 | 8. Theme Quiz (Existing Cards) | v2.0 | 0/1 | Not started | - |
