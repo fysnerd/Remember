@@ -15,6 +15,7 @@ import { adminRouter as adminApiRouter } from './routes/admin.js';
 import { setupAdminJS } from './admin/index.js';
 import { subscriptionRouter } from './routes/subscription.js';
 import { exportRouter } from './routes/export.js';
+import { notificationRouter } from './routes/notifications.js';
 import { startScheduler } from './workers/scheduler.js';
 
 const app = express();
@@ -33,8 +34,8 @@ const allowedOrigins = [
 ];
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (same-origin, mobile apps, etc.)
-    if (!origin) return callback(null, true);
+    // Allow requests with no origin (same-origin, mobile apps, form submits with origin:"null")
+    if (!origin || origin === 'null') return callback(null, true);
     if (allowedOrigins.some(allowed => origin.startsWith(allowed.replace(/\/$/, '')))) {
       return callback(null, true);
     }
@@ -88,6 +89,7 @@ app.use('/api/reviews', reviewRouter);
 app.use('/api/admin', adminApiRouter);
 app.use('/api/subscription', subscriptionRouter);
 app.use('/api/export', exportRouter);
+app.use('/api/notifications', notificationRouter);
 
 // Error handling
 app.use(errorHandler);
