@@ -1,11 +1,10 @@
-// TikTok Sync Worker - Fetches liked videos using browser automation
-// Uses Playwright with stored session cookies to access private likes
+// TikTok Sync Worker - Direct API approach via page.evaluate(fetch(...))
+// Uses Playwright browser context for TikTok's auto-signing (X-Bogus),
+// but eliminates all DOM interaction (no tab clicking, no scrolling).
+// The browser's patched window.fetch automatically signs API requests.
 import { logger } from '../config/logger.js';
 import { prisma } from '../config/database.js';
 import { Platform, ContentStatus } from '@prisma/client';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
 import { tiktokLimiter } from '../utils/rateLimiter.js';
 
 const log = logger.child({ job: 'tiktok-sync' });
@@ -44,8 +43,122 @@ interface TikTokVideo {
   createTime: number;
 }
 
+interface FavoriteListResponse {
+  itemList?: TikTokVideo[];
+  hasMore?: boolean;
+  cursor?: number | string;
+  error?: string;
+  statusCode?: number;
+  status_code?: number;
+}
+
 /**
- * Fetch liked videos from TikTok for a specific user using browser automation
+ * Extract secUid from TikTok profile page.
+ * TikTok embeds user data in __UNIVERSAL_DATA_FOR_REHYDRATION__ script tag.
+ */
+async function extractSecUid(page: any): Promise<string | null> {
+  return page.evaluate(() => {
+    // Method 1: From __UNIVERSAL_DATA_FOR_REHYDRATION__ script tag
+    const scriptEl = document.getElementById('__UNIVERSAL_DATA_FOR_REHYDRATION__');
+    if (scriptEl) {
+      try {
+        const data = JSON.parse(scriptEl.textContent || '{}');
+        // Try multiple known paths
+        const userDetail = data?.__DEFAULT_SCOPE__?.['webapp.user-detail'];
+        if (userDetail?.userInfo?.user?.secUid) {
+          return userDetail.userInfo.user.secUid;
+        }
+      } catch {}
+    }
+
+    // Method 2: From SIGI_STATE (older TikTok versions)
+    const sigiEl = document.getElementById('SIGI_STATE');
+    if (sigiEl) {
+      try {
+        const data = JSON.parse(sigiEl.textContent || '{}');
+        const userModule = data?.UserModule?.users;
+        if (userModule) {
+          const firstUser = Object.values(userModule)[0] as any;
+          if (firstUser?.secUid) return firstUser.secUid;
+        }
+      } catch {}
+    }
+
+    // Method 3: From any script tag containing secUid
+    const scripts = document.querySelectorAll('script');
+    for (const script of scripts) {
+      const text = script.textContent || '';
+      const match = text.match(/"secUid"\s*:\s*"([^"]+)"/);
+      if (match) return match[1];
+    }
+
+    return null;
+  });
+}
+
+/**
+ * Fetch liked videos via page.evaluate(fetch(...)) — uses TikTok's own
+ * patched fetch which auto-signs requests with X-Bogus.
+ */
+async function fetchLikedViaEvaluate(
+  page: any,
+  secUid: string,
+  maxVideos: number = 35,
+): Promise<TikTokVideo[]> {
+  const allVideos: TikTokVideo[] = [];
+  let cursor: number | string = 0;
+  let hasMore = true;
+  let pageNum = 0;
+  const maxPages = 3; // Safety limit
+
+  while (hasMore && allVideos.length < maxVideos && pageNum < maxPages) {
+    pageNum++;
+    log.debug({ secUid, cursor, pageNum, collected: allVideos.length }, 'Fetching page via evaluate');
+
+    const result: FavoriteListResponse = await page.evaluate(
+      async (params: { secUid: string; cursor: number | string; count: number }) => {
+        const url = `https://www.tiktok.com/api/favorite/item_list?secUid=${params.secUid}&count=${params.count}&cursor=${params.cursor}`;
+        try {
+          const resp = await fetch(url);
+          if (!resp.ok) {
+            return { error: `HTTP ${resp.status}`, statusCode: resp.status, itemList: [], hasMore: false };
+          }
+          return await resp.json();
+        } catch (e: any) {
+          return { error: String(e), itemList: [], hasMore: false };
+        }
+      },
+      { secUid, cursor, count: 35 },
+    );
+
+    if (result.error) {
+      log.warn({ error: result.error, statusCode: result.statusCode }, 'API call returned error');
+      break;
+    }
+
+    if (result.itemList && result.itemList.length > 0) {
+      allVideos.push(...result.itemList);
+      log.debug({ pageNum, newItems: result.itemList.length, total: allVideos.length }, 'Got items');
+    } else {
+      log.debug({ pageNum }, 'No items in response');
+      break;
+    }
+
+    hasMore = result.hasMore === true;
+    cursor = result.cursor || 0;
+
+    // Small delay between pagination requests to avoid rate limiting
+    if (hasMore && allVideos.length < maxVideos) {
+      await new Promise(r => setTimeout(r, 500));
+    }
+  }
+
+  return allVideos;
+}
+
+/**
+ * Fetch liked videos from TikTok for a specific user using direct API approach.
+ * Falls back to scroll-based approach if API direct fails.
  */
 async function syncUserTikTok(userId: string, connectionId: string): Promise<number> {
   const connection = await prisma.connectedPlatform.findUnique({
@@ -80,10 +193,8 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
   }
 
   let newVideosCount = 0;
-  let foundExisting = false; // Flag to stop when we find existing content (incremental sync)
 
   try {
-    // Dynamic import of playwright to avoid issues if not installed
     const { chromium } = await import('playwright');
 
     // Convert cookies to Playwright format
@@ -94,205 +205,71 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
       path: '/',
     }));
 
-    const likedVideos: TikTokVideo[] = [];
-
-    // Launch headless browser with larger viewport
     const browser = await chromium.launch({ headless: true });
     try {
-    const context = await browser.newContext({
-      viewport: { width: 1920, height: 1080 },
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      locale: 'en-US',
-    });
-
-    // Inject cookies
-    await context.addCookies(playwrightCookies);
-
-    const page = await context.newPage();
-
-    // Intercept API responses to capture liked videos
-    page.on('response', async (response) => {
-      const url = response.url();
-
-      // Capture liked videos - ONLY from favorite/item_list endpoint (not post/item_list)
-      if (url.includes('favorite/item_list') || url.includes('api/favorite/')) {
-        try {
-          const data = await response.json();
-          if (data.itemList && Array.isArray(data.itemList)) {
-            log.debug({ userId, videoCount: data.itemList.length }, 'Found liked videos in API response');
-            likedVideos.push(...data.itemList);
-          }
-        } catch (e) {
-          log.debug({ userId }, 'Failed to parse favorite response');
-        }
-      }
-    });
-
-    // Navigate to profile and wait for full load
-    log.debug({ userId }, 'Navigating to profile');
-    await page.goto('https://www.tiktok.com/profile', { waitUntil: 'networkidle' });
-    log.debug({ userId }, 'Page loaded, waiting for dynamic content');
-    await page.waitForTimeout(5000);
-
-    // Close cookie popup if present
-    try {
-      const declineBtn = await page.$('button:has-text("Decline")');
-      if (declineBtn) {
-        await declineBtn.click();
-        await page.waitForTimeout(1000);
-      }
-    } catch {
-      // Ignore if popup not found
-    }
-
-    // Wait for tabs to appear (they load dynamically)
-    log.debug({ userId }, 'Waiting for Liked tab to appear');
-    try {
-      await page.waitForSelector('text=Liked', { timeout: 10000 });
-      log.debug({ userId }, 'Found "Liked" text on page');
-    } catch {
-      log.debug({ userId }, 'Liked text not found, trying A aimé');
-      try {
-        await page.waitForSelector('text=A aimé', { timeout: 5000 });
-        log.debug({ userId }, 'Found "A aimé" text on page');
-      } catch {
-        log.debug({ userId }, 'Neither Liked nor A aimé found - tabs may not be rendered');
-      }
-    }
-
-    // Check current URL after navigation
-    const currentUrl = page.url();
-    log.debug({ userId, currentUrl }, 'Current URL after navigation');
-
-    // Take screenshot for debug
-    const debugDir = path.join(os.tmpdir(), 'tiktok-debug');
-    if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir, { recursive: true });
-    const screenshotPath = path.join(debugDir, `profile-${Date.now()}.png`);
-    await page.screenshot({ path: screenshotPath });
-    log.debug({ userId, screenshotPath }, 'Debug screenshot saved');
-
-    // Extract username from current URL for direct navigation
-    const usernameMatch = currentUrl.match(/@([^/?]+)/);
-    const username = usernameMatch ? usernameMatch[1] : null;
-    log.debug({ userId, username: username || 'NOT FOUND' }, 'Detected username');
-
-    // List all available tabs using JavaScript
-    const tabsInfo = await page.evaluate(() => {
-      const results: string[] = [];
-      // Look for common tab patterns
-      document.querySelectorAll('[role="tab"], [data-e2e*="tab"], [class*="Tab"]').forEach(el => {
-        results.push(`${el.tagName}: ${el.textContent?.trim().substring(0, 30)} | data-e2e=${el.getAttribute('data-e2e')}`);
+      const context = await browser.newContext({
+        viewport: { width: 1920, height: 1080 },
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        locale: 'en-US',
       });
-      return results;
-    });
-    log.debug({ userId, tabCount: tabsInfo.length, tabs: tabsInfo }, 'Available tabs found');
 
-    // Try clicking on "Liked" tab using Playwright's powerful selectors
-    log.debug({ userId }, 'Attempting to click on Liked tab');
+      await context.addCookies(playwrightCookies);
+      const page = await context.newPage();
 
-    let clickedLikedTab = false;
+      // Navigate to profile — this loads TikTok's JS (including byted_acrawler for signing)
+      log.debug({ userId }, 'Navigating to profile for JS loading + secUid extraction');
+      await page.goto('https://www.tiktok.com/profile', { waitUntil: 'networkidle' });
 
-    // Method 1: Click by exact text "Liked" (case-insensitive)
-    try {
-      const likedByText = page.getByText('Liked', { exact: true });
-      if (await likedByText.count() > 0) {
-        await likedByText.first().click();
-        log.debug({ userId, method: 'getByText(Liked)' }, 'Clicked Liked tab');
-        clickedLikedTab = true;
+      // Wait for TikTok's JS to fully initialize (signing infrastructure)
+      await page.waitForTimeout(3000);
+
+      // Check if we're logged in (should redirect to /@username)
+      const currentUrl = page.url();
+      if (currentUrl.includes('/login') || currentUrl.includes('/signup')) {
+        log.warn({ userId, currentUrl }, 'Session expired - redirected to login');
+        await prisma.connectedPlatform.update({
+          where: { id: connectionId },
+          data: { lastSyncError: 'Session expired. Please reconnect TikTok.' },
+        });
+        return 0;
       }
-    } catch (e) {
-      log.debug({ userId }, 'getByText(Liked) failed');
-    }
 
-    // Method 2: Try French "A aimé"
-    if (!clickedLikedTab) {
-      try {
-        const aiméByText = page.getByText('A aimé', { exact: true });
-        if (await aiméByText.count() > 0) {
-          await aiméByText.first().click();
-          log.debug({ userId, method: 'getByText(A aimé)' }, 'Clicked Liked tab');
-          clickedLikedTab = true;
-        }
-      } catch (e) {
-        log.debug({ userId }, 'getByText(A aimé) failed');
+      // Extract secUid from page
+      const secUid = await extractSecUid(page);
+
+      if (!secUid) {
+        log.error({ userId, currentUrl }, 'Failed to extract secUid from profile page');
+        // Fall back to scroll-based approach
+        log.info({ userId }, 'Falling back to scroll-based approach');
+        const fallbackCount = await syncUserTikTokScroll(page, userId, connectionId);
+        return fallbackCount;
       }
-    }
 
-    // Method 3: Click by role tab
-    if (!clickedLikedTab) {
-      try {
-        const tabs = page.getByRole('tab');
-        const count = await tabs.count();
-        log.debug({ userId, tabCount: count }, 'Found tabs by role');
-        for (let i = 0; i < count; i++) {
-          const tabText = await tabs.nth(i).textContent();
-          log.debug({ userId, tabIndex: i, tabText }, 'Checking tab');
-          if (tabText?.toLowerCase().includes('liked') || tabText?.toLowerCase().includes('aimé')) {
-            await tabs.nth(i).click();
-            log.debug({ userId, tabIndex: i, tabText, method: 'role' }, 'Clicked Liked tab');
-            clickedLikedTab = true;
-            break;
-          }
-        }
-      } catch (e) {
-        log.debug({ userId }, 'Role-based tab search failed');
+      log.info({ userId, secUid: secUid.substring(0, 20) + '...' }, 'Extracted secUid, calling API directly');
+
+      // Fetch liked videos via direct API call
+      const likedVideos = await fetchLikedViaEvaluate(page, secUid, 35);
+
+      if (likedVideos.length === 0) {
+        log.warn({ userId }, 'No liked videos from API. Possible: likes private, cookies expired, or API change');
+        // Try fallback
+        log.info({ userId }, 'Trying scroll-based fallback');
+        const fallbackCount = await syncUserTikTokScroll(page, userId, connectionId);
+        if (fallbackCount > 0) return fallbackCount;
       }
-    }
 
-    // Method 4: Use CSS selector with data-e2e
-    if (!clickedLikedTab) {
-      try {
-        const likedTab = await page.$('[data-e2e="liked-tab"], [data-e2e*="liked"]');
-        if (likedTab) {
-          await likedTab.click();
-          log.debug({ userId, method: 'data-e2e' }, 'Clicked Liked tab');
-          clickedLikedTab = true;
-        }
-      } catch (e) {
-        log.debug({ userId }, 'data-e2e selector failed');
-      }
-    }
+      log.info({ userId, videoCount: likedVideos.length }, 'Found liked videos via direct API');
 
-    // Method 5: XPath for any span containing "Liked"
-    if (!clickedLikedTab) {
-      try {
-        const likedSpan = await page.$('xpath=//span[contains(text(), "Liked")]');
-        if (likedSpan) {
-          await likedSpan.click();
-          log.debug({ userId, method: 'xpath' }, 'Clicked Liked tab');
-          clickedLikedTab = true;
-        }
-      } catch (e) {
-        log.debug({ userId }, 'XPath selector failed');
-      }
-    }
+      // Deduplicate
+      const seenIds = new Set<string>();
+      const uniqueVideos = likedVideos.filter((video) => {
+        if (seenIds.has(video.id)) return false;
+        seenIds.add(video.id);
+        return true;
+      });
 
-    if (clickedLikedTab) {
-      log.debug({ userId }, 'Waiting for Liked content to load');
-      await page.waitForTimeout(4000);
-
-      // Take screenshot to confirm we're on Liked tab
-      const likesScreenshot = path.join(debugDir, `liked-tab-${Date.now()}.png`);
-      await page.screenshot({ path: likesScreenshot });
-      log.debug({ userId, likesScreenshot }, 'Liked tab screenshot saved');
-    } else {
-      log.error({ userId }, 'FAILED to click Liked tab with all methods');
-      const errorScreenshot = path.join(debugDir, `failed-click-${Date.now()}.png`);
-      await page.screenshot({ path: errorScreenshot, fullPage: true });
-      log.debug({ userId, errorScreenshot }, 'Error screenshot saved');
-    }
-
-    // Scroll to load videos regardless of how we got here
-    log.debug({ userId }, 'Scrolling to load videos');
-    const maxScrolls = 15;
-    const maxVideos = 15;
-    for (let i = 0; i < maxScrolls && !foundExisting && likedVideos.length < maxVideos; i++) {
-      const prevCount = likedVideos.length;
-      await page.mouse.wheel(0, 800);
-      await page.waitForTimeout(1500);
-
-      // Check if any of the newly captured videos already exist in DB
-      for (const video of likedVideos) {
+      // Save to DB — stop at first existing (incremental sync)
+      for (const video of uniqueVideos) {
         const existing = await prisma.content.findUnique({
           where: {
             userId_platform_externalId: {
@@ -303,98 +280,45 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
           },
           select: { id: true },
         });
+
         if (existing) {
-          log.info({ userId, videoId: video.id }, 'Found existing video - stopping (incremental sync complete)');
-          foundExisting = true;
+          log.info({ userId, videoId: video.id }, 'Found existing video - incremental sync complete');
           break;
         }
-      }
 
-      if (foundExisting) break;
-
-      if (likedVideos.length > 0) {
-        log.debug({ userId, scrollNumber: i + 1, videoCount: likedVideos.length }, 'Scroll progress');
-      }
-
-      // Stop if no new videos loaded after 3 scrolls
-      if (i > 3 && likedVideos.length === prevCount) {
-        log.debug({ userId, scrollCount: i }, 'No more videos to load');
-        break;
-      }
-    }
-
-    // If still no liked videos, check if likes might be private
-    if (likedVideos.length === 0) {
-      log.error({ userId }, 'WARNING: No liked videos found. Possible causes: 1. Likes set to PRIVATE 2. Cookies expired 3. TikTok UI changed');
-      const errorScreenshot = path.join(debugDir, `no-likes-${Date.now()}.png`);
-      await page.screenshot({ path: errorScreenshot, fullPage: true });
-      log.debug({ userId, errorScreenshot }, 'Error screenshot saved');
-    }
-
-    log.info({ userId, videoCount: likedVideos.length }, 'Found liked videos');
-
-    // Deduplicate videos
-    const seenIds = new Set<string>();
-    const uniqueVideos = likedVideos.filter((video) => {
-      if (seenIds.has(video.id)) return false;
-      seenIds.add(video.id);
-      return true;
-    });
-
-    // Process each video - STOP when we find one that already exists (incremental sync)
-    for (const video of uniqueVideos) {
-      // Check if we already have this video for this user
-      const existing = await prisma.content.findUnique({
-        where: {
-          userId_platform_externalId: {
+        const authorUsername = video.author.uniqueId;
+        await prisma.content.create({
+          data: {
             userId,
             platform: Platform.TIKTOK,
             externalId: video.id,
+            url: `https://www.tiktok.com/@${authorUsername}/video/${video.id}`,
+            title: video.desc?.substring(0, 255) || `TikTok by @${authorUsername}`,
+            description: video.desc || null,
+            thumbnailUrl: video.video?.cover || null,
+            duration: video.video?.duration || null,
+            authorUsername,
+            channelName: `@${authorUsername}`,
+            viewCount: video.stats?.playCount || null,
+            capturedAt: new Date(video.createTime * 1000),
+            status: ContentStatus.INBOX,
           },
-        },
-        select: { id: true },
-      });
+        });
 
-      if (existing) {
-        // STOP - we've reached previously synced content
-        log.info({ userId, videoId: video.id }, 'Found existing video during save - stopping');
-        break;
+        newVideosCount++;
       }
 
-      // Create content entry
-      const authorUsername = video.author.uniqueId;
-      await prisma.content.create({
+      // Update last sync time
+      await prisma.connectedPlatform.update({
+        where: { id: connectionId },
         data: {
-          userId,
-          platform: Platform.TIKTOK,
-          externalId: video.id,
-          url: `https://www.tiktok.com/@${authorUsername}/video/${video.id}`,
-          title: video.desc?.substring(0, 255) || `TikTok by @${authorUsername}`,
-          description: video.desc || null,
-          thumbnailUrl: video.video?.cover || null,
-          duration: video.video?.duration || null,
-          authorUsername,
-          channelName: `@${authorUsername}`,  // Unified field for frontend
-          viewCount: video.stats?.playCount || null,
-          capturedAt: new Date(video.createTime * 1000),
-          status: ContentStatus.INBOX,
+          lastSyncAt: new Date(),
+          lastSyncError: null,
         },
       });
 
-      newVideosCount++;
-    }
-
-    // Update last sync time
-    await prisma.connectedPlatform.update({
-      where: { id: connectionId },
-      data: {
-        lastSyncAt: new Date(),
-        lastSyncError: null,
-      },
-    });
-
-    log.info({ userId, videoCount: newVideosCount }, 'New content synced');
-    return newVideosCount;
+      log.info({ userId, videoCount: newVideosCount }, 'New content synced via direct API');
+      return newVideosCount;
 
     } finally {
       await browser.close();
@@ -413,13 +337,175 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
 }
 
 /**
+ * FALLBACK: Scroll-based approach (original method).
+ * Used when secUid extraction or direct API call fails.
+ * Expects a page already navigated to the profile.
+ */
+async function syncUserTikTokScroll(page: any, userId: string, connectionId: string): Promise<number> {
+  log.info({ userId }, 'Using scroll-based fallback');
+
+  const likedVideos: TikTokVideo[] = [];
+  let foundExisting = false;
+
+  // Intercept API responses
+  page.on('response', async (response: any) => {
+    const url = response.url();
+    if (url.includes('favorite/item_list') || url.includes('api/favorite/')) {
+      try {
+        const data = await response.json();
+        if (data.itemList && Array.isArray(data.itemList)) {
+          likedVideos.push(...data.itemList);
+        }
+      } catch {}
+    }
+  });
+
+  // Try clicking "Liked" tab
+  let clickedLikedTab = false;
+
+  // Method 1: English text
+  try {
+    const likedByText = page.getByText('Liked', { exact: true });
+    if (await likedByText.count() > 0) {
+      await likedByText.first().click();
+      clickedLikedTab = true;
+    }
+  } catch {}
+
+  // Method 2: French text
+  if (!clickedLikedTab) {
+    try {
+      const aiméByText = page.getByText('A aimé', { exact: true });
+      if (await aiméByText.count() > 0) {
+        await aiméByText.first().click();
+        clickedLikedTab = true;
+      }
+    } catch {}
+  }
+
+  // Method 3: Role-based
+  if (!clickedLikedTab) {
+    try {
+      const tabs = page.getByRole('tab');
+      const count = await tabs.count();
+      for (let i = 0; i < count; i++) {
+        const tabText = await tabs.nth(i).textContent();
+        if (tabText?.toLowerCase().includes('liked') || tabText?.toLowerCase().includes('aimé')) {
+          await tabs.nth(i).click();
+          clickedLikedTab = true;
+          break;
+        }
+      }
+    } catch {}
+  }
+
+  // Method 4: data-e2e
+  if (!clickedLikedTab) {
+    try {
+      const likedTab = await page.$('[data-e2e="liked-tab"], [data-e2e*="liked"]');
+      if (likedTab) {
+        await likedTab.click();
+        clickedLikedTab = true;
+      }
+    } catch {}
+  }
+
+  if (clickedLikedTab) {
+    await page.waitForTimeout(4000);
+  }
+
+  // Scroll to load videos
+  const maxScrolls = 10;
+  const maxVideos = 15;
+  for (let i = 0; i < maxScrolls && !foundExisting && likedVideos.length < maxVideos; i++) {
+    const prevCount = likedVideos.length;
+    await page.mouse.wheel(0, 800);
+    await page.waitForTimeout(1500);
+
+    for (const video of likedVideos) {
+      const existing = await prisma.content.findUnique({
+        where: {
+          userId_platform_externalId: {
+            userId,
+            platform: Platform.TIKTOK,
+            externalId: video.id,
+          },
+        },
+        select: { id: true },
+      });
+      if (existing) {
+        foundExisting = true;
+        break;
+      }
+    }
+
+    if (foundExisting) break;
+    if (i > 3 && likedVideos.length === prevCount) break;
+  }
+
+  log.info({ userId, videoCount: likedVideos.length, method: 'scroll-fallback' }, 'Found liked videos');
+
+  // Deduplicate and save
+  const seenIds = new Set<string>();
+  const uniqueVideos = likedVideos.filter((video) => {
+    if (seenIds.has(video.id)) return false;
+    seenIds.add(video.id);
+    return true;
+  });
+
+  let newVideosCount = 0;
+  for (const video of uniqueVideos) {
+    const existing = await prisma.content.findUnique({
+      where: {
+        userId_platform_externalId: {
+          userId,
+          platform: Platform.TIKTOK,
+          externalId: video.id,
+        },
+      },
+      select: { id: true },
+    });
+
+    if (existing) break;
+
+    const authorUsername = video.author.uniqueId;
+    await prisma.content.create({
+      data: {
+        userId,
+        platform: Platform.TIKTOK,
+        externalId: video.id,
+        url: `https://www.tiktok.com/@${authorUsername}/video/${video.id}`,
+        title: video.desc?.substring(0, 255) || `TikTok by @${authorUsername}`,
+        description: video.desc || null,
+        thumbnailUrl: video.video?.cover || null,
+        duration: video.video?.duration || null,
+        authorUsername,
+        channelName: `@${authorUsername}`,
+        viewCount: video.stats?.playCount || null,
+        capturedAt: new Date(video.createTime * 1000),
+        status: ContentStatus.INBOX,
+      },
+    });
+    newVideosCount++;
+  }
+
+  if (newVideosCount > 0) {
+    await prisma.connectedPlatform.update({
+      where: { id: connectionId },
+      data: { lastSyncAt: new Date(), lastSyncError: null },
+    });
+  }
+
+  return newVideosCount;
+}
+
+/**
  * Main sync function - syncs all connected TikTok accounts
  */
 export async function runTikTokSync(): Promise<void> {
   log.info('Starting sync');
   const startTime = Date.now();
 
-  // Get all active TikTok connections
   const connections = await prisma.connectedPlatform.findMany({
     where: { platform: Platform.TIKTOK },
     include: { user: true },
@@ -431,7 +517,7 @@ export async function runTikTokSync(): Promise<void> {
   let successCount = 0;
   let errorCount = 0;
 
-  const TIMEOUT_MS = 60000; // 60s timeout per user
+  const TIMEOUT_MS = 30000; // 30s timeout (down from 60s — API approach is faster)
 
   const results = await Promise.allSettled(
     connections.map(connection =>
