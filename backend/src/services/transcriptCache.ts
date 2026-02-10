@@ -32,6 +32,7 @@ interface CacheResult {
     source: TranscriptSource | null;
     attemptCount: number;
     nextRetryAt: Date | null;
+    failureReason: string | null;
   };
   acquired: boolean; // True if we acquired the lock
 }

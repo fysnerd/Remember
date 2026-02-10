@@ -396,8 +396,12 @@ async function processTikTokWithCache(
     return 'failed';
   }
 
-  // If cache is FAILED and waiting for backoff, skip silently
+  // If cache is FAILED and waiting for backoff, check if it's a permanent error
   if (cache.status === TranscriptCacheStatus.FAILED && !acquired) {
+    if (cache.failureReason && PERMANENT_ERROR_PATTERNS.some(p => cache.failureReason!.toLowerCase().includes(p.toLowerCase()))) {
+      log.warn({ externalId: content.externalId }, 'Cache has permanent failure, marking content unsupported');
+      await markTikTokContentUnsupported(content.externalId);
+    }
     return 'failed';
   }
 
