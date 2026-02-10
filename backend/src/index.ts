@@ -15,7 +15,6 @@ import { adminRouter as adminApiRouter } from './routes/admin.js';
 import { setupAdminJS } from './admin/index.js';
 import { subscriptionRouter } from './routes/subscription.js';
 import { exportRouter } from './routes/export.js';
-import { notificationRouter } from './routes/notifications.js';
 import { startScheduler } from './workers/scheduler.js';
 
 const app = express();
@@ -89,7 +88,6 @@ app.use('/api/reviews', reviewRouter);
 app.use('/api/admin', adminApiRouter);
 app.use('/api/subscription', subscriptionRouter);
 app.use('/api/export', exportRouter);
-app.use('/api/notifications', notificationRouter);
 
 // Error handling
 app.use(errorHandler);
