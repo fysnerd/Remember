@@ -26,7 +26,7 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 - [x] **Phase 5: Theme Data Model & API** -- Database schema, CRUD endpoints, and content-theme relations (completed 2026-02-10)
 - [x] **Phase 6: Theme Classification Worker** -- AI-powered auto-generation and classification of themes from tags (completed 2026-02-10)
 - [x] **Phase 7: iOS Theme Screens & Management** -- Theme-first home screen, detail views, and user management (completed 2026-02-10)
-- [ ] **Phase 8: Theme Quiz (Existing Cards)** -- Quiz scoped to a theme using existing per-content questions
+- [x] **Phase 8: Theme Quiz (Existing Cards)** -- Quiz scoped to a theme using existing per-content questions (completed 2026-02-10)
 - [ ] **Phase 9: Theme Memo** -- AI-generated synthesis memos aggregating knowledge per theme
 - [ ] **Phase 10: Cross-Content Synthesis Quiz** -- New AI-generated questions connecting concepts across multiple content items
 - [ ] **Phase 11: Theme Discovery & Onboarding** -- First-time theme review flow and learning progress visibility
@@ -92,7 +92,7 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 08-01-PLAN.md -- Theme quiz API endpoint (POST /reviews/practice/theme), quiz readiness enrichment on GET /themes/:id, iOS theme quiz screen, smart quiz button on theme detail
+- [x] 08-01-PLAN.md -- Theme quiz API endpoint (POST /reviews/practice/theme), quiz readiness enrichment on GET /themes/:id, iOS theme quiz screen, smart quiz button on theme detail
 
 ### Phase 9: Theme Memo
 **Goal**: Users can view an AI-generated synthesis memo that aggregates knowledge from all content in a theme into a coherent summary
@@ -149,7 +149,7 @@ Phases execute in numeric order: 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11
 | 5. Theme Data Model & API | v2.0 | 2/2 | Complete | 2026-02-10 |
 | 6. Theme Classification Worker | v2.0 | 2/2 | Complete | 2026-02-10 |
 | 7. iOS Theme Screens & Management | v2.0 | 2/2 | Complete | 2026-02-10 |
-| 8. Theme Quiz (Existing Cards) | v2.0 | 0/1 | Not started | - |
+| 8. Theme Quiz (Existing Cards) | v2.0 | 1/1 | Complete | 2026-02-10 |
 | 9. Theme Memo | v2.0 | 0/1 | Not started | - |
 | 10. Cross-Content Synthesis Quiz | v2.0 | 0/2 | Not started | - |
 | 11. Theme Discovery & Onboarding | v2.0 | 0/2 | Not started | - |
