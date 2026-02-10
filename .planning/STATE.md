@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-10)
 ## Current Position
 
 Phase: 5 of 11 (Theme Data Model & API)
-Plan: 0 of 2 in current phase
-Status: Ready to plan
-Last activity: 2026-02-10 -- Roadmap created for v2.0 milestone (7 phases, 31 requirements mapped)
+Plan: 1 of 2 in current phase
+Status: Executing
+Last activity: 2026-02-10 -- Completed 05-01 (Theme data model schema + production deployment)
 
-Progress: [##########░░░░░░░░░░] 10/22 plans (v1.0 complete, v2.0 starting)
+Progress: [###########░░░░░░░░░] 11/22 plans (v1.0 complete, v2.0 phase 5 in progress)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 10 (all v1.0)
-- Average duration: ~25 min (v1.0 baseline)
-- Total execution time: ~4 hours (v1.0)
+- Total plans completed: 11 (10 v1.0 + 1 v2.0)
+- Average duration: ~22 min (improving with simpler schema plans)
+- Total execution time: ~4 hours 3 min
 
 **By Phase:**
 
@@ -31,10 +31,12 @@ Progress: [##########░░░░░░░░░░] 10/22 plans (v1.0 complete,
 | 2. Job Tracking | 2 | ~50 min | ~25 min |
 | 3. AdminJS Panel | 2 | ~50 min | ~25 min |
 | 4. Observability | 2 | ~50 min | ~25 min |
+| 5. Theme Data Model (partial) | 1 | ~3 min | ~3 min |
 
 **Recent Trend:**
 - v1.0 completed in 2 days (10 plans, 4 phases)
-- Trend: Stable
+- v2.0 phase 5 plan 1 completed in 3 min (schema-only, fast)
+- Trend: Accelerating (schema plans are quick)
 
 ## Accumulated Context
 
@@ -50,6 +52,8 @@ Recent decisions affecting current work:
 - Use explicit join tables (not Prisma implicit M:N) for performance
 - Use cached memos (not raw transcripts) for synthesis quiz generation
 - Cap themes at 15-25 per user to prevent proliferation
+- Used --accept-data-loss on prisma db push to drop orphaned admin_sessions table (not in schema, safe)
+- Theme ownership scoped via @@unique([userId, slug]) and @@unique([userId, name])
 
 ### Pending Todos
 
@@ -64,6 +68,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-10
-Stopped at: Roadmap created for v2.0 milestone. 7 phases (5-11), 31 requirements mapped.
-Next step: Plan Phase 5 (Theme Data Model & API)
+Stopped at: Completed 05-01-PLAN.md (Theme data model schema + production deployment)
+Next step: Execute 05-02-PLAN.md (Theme CRUD API & classification service)
 Resume file: None
