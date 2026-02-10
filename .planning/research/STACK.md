@@ -1,430 +1,297 @@
 # Technology Stack
 
-**Project:** Ankora - Admin Panel & Observability
-**Researched:** 2026-02-09
+**Project:** Ankora - Theme-Based Content Organization & Cross-Content Quizzes
+**Researched:** 2026-02-10
+**Scope:** NEW additions only. Existing stack (Express, Prisma, Expo SDK 54, Mistral AI, Zustand, TanStack React Query) is validated and not re-researched.
 
-## Recommended Stack
+## Recommended Stack Additions
 
-### Core Admin Panel
+### Data Model (Prisma Schema Extension)
+
 | Technology | Version | Purpose | Why |
 |------------|---------|---------|-----|
-| AdminJS | 7.8.17 | Auto-generated admin panel | Official ESM-only v7 with Prisma adapter, mature React-based UI, comprehensive CRUD, active maintenance |
-| @adminjs/express | 6.1.1 | AdminJS Express adapter | Official Express plugin with auth provider support (v6.1.0+), session-based authentication, production-ready |
-| @adminjs/prisma | 5.0.4 | AdminJS Prisma adapter | Official adapter for Prisma ORM, automatic resource detection from schema, type-safe integration |
+| Prisma (existing) | 6.2.1 | Theme model + many-to-many relations | Already in stack. Prisma handles implicit many-to-many via `@relation` cleanly. No new ORM needed. |
 
-**Rationale:** AdminJS v7+ is the standard solution for Node.js admin panels in 2026. Provides auto-generated CRUD interfaces from Prisma schema with minimal configuration. ESM-only requirement aligns with modern Node.js patterns. The official adapters ensure tight integration and ongoing support.
+**Schema Extension:**
 
-**Confidence:** HIGH - Official packages, recent releases (adminjs: 7 months ago, @adminjs/express: 1 year ago, @adminjs/prisma: 5 months ago), verified from [npm adminjs](https://www.npmjs.com/package/adminjs), [@adminjs/express](https://www.npmjs.com/package/@adminjs/express), [@adminjs/prisma](https://www.npmjs.com/package/@adminjs/prisma)
-
-### Authentication
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| express-session | 1.19.0 | Session management | Required by AdminJS auth, widely adopted Express middleware, active maintenance (published 17 days ago as of 2026-02) |
-
-**Rationale:** AdminJS authentication requires `AdminJSExpress.buildAuthenticatedRouter()` with express-session for session persistence. Hardcoded credentials approach shown in [AdminJS docs](https://docs.adminjs.co/basics/authentication) is sufficient for single admin use case. No need for database-backed user management.
-
-**Confidence:** HIGH - Official requirement, current version verified from [npm express-session](https://www.npmjs.com/package/express-session)
-
-### Logging & Observability
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| pino | 10.3.0 | Structured JSON logging | Industry standard for Node.js, 5x faster than Winston, async I/O prevents event loop blocking, NDJSON format for machine parsing |
-| pino-http | latest | HTTP request/response logging | Official Express middleware, automatic request ID generation, fastest HTTP logger per [pino-http docs](https://github.com/pinojs/pino-http) |
-| pino-pretty | 13.1.3 | Development log formatting | Human-readable colorized output for dev, NOT for production (adds overhead) |
-
-**Rationale:** Pino is the 2026 standard for high-performance logging in Node.js. Async logging prevents cron job delays. NDJSON output enables easy parsing for observability dashboards. Replace all `console.log` calls with structured pino logging.
-
-**Confidence:** HIGH - Current versions verified from [npm pino](https://www.npmjs.com/package/pino) (published 16 days ago), [npm pino-pretty](https://www.npmjs.com/package/pino-pretty) (published 2 months ago), performance claims verified across multiple sources ([Better Stack](https://betterstack.com/community/guides/logging/how-to-install-setup-and-use-pino-to-log-node-js-applications/), [SigNoz](https://signoz.io/guides/pino-logger/))
-
-### Job Execution Tracking
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Prisma ORM | existing | Job execution history schema | Already in stack, type-safe migrations, admin panel auto-generates CRUD from schema |
-
-**Schema Extension Needed:**
 ```prisma
-model JobExecution {
-  id          String   @id @default(cuid())
-  jobName     String   // e.g. "youtube-sync", "quiz-generation"
-  status      String   // "running", "success", "error"
-  startedAt   DateTime @default(now())
-  completedAt DateTime?
-  duration    Int?     // milliseconds
-  itemsProcessed Int?  // e.g. videos synced, quizzes generated
-  errorMessage String? @db.Text
-  errorStack   String? @db.Text
-  metadata    Json?    // job-specific details
+model Theme {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  slug        String    @unique
+  description String?
+  color       String?   // Hex color for UI card/pill
+  icon        String?   // Emoji or icon name
 
-  @@index([jobName, startedAt])
-  @@index([status])
+  // Auto-classification metadata
+  keywords    String[]  // Keywords that map tags to this theme
+  isAutoGenerated Boolean @default(true)
+
+  // Relations
+  contents    Content[] @relation("ContentThemes")
+  tags        Tag[]     @relation("ThemeTags")
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([name])
+  @@index([slug])
 }
 ```
 
-**Rationale:** Persist all job executions to database for historical analysis and debugging. Inspired by [pg_cron's job_run_details pattern](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/PostgreSQL_pg_cron.html). AdminJS will auto-generate CRUD interface. Enable filtering/sorting by job name, status, date ranges.
+**Key design decisions:**
+1. **Theme-Tag relation (many-to-many):** A Theme groups multiple Tags. "Machine Learning" theme contains tags "deep learning", "neural networks", "tensorflow". This is the classification bridge -- classify tags into themes, content inherits themes through its tags.
+2. **Theme-Content relation (many-to-many):** Direct relation for query performance. Denormalized from Tag-based inference. Updated by the classification worker.
+3. **`keywords` array:** Stores classification hints for the LLM. Enables deterministic tag-to-theme mapping without repeated LLM calls for known tags.
+4. **`slug` field:** URL-safe identifier for expo-router navigation (`/theme/machine-learning` instead of `/theme/Machine%20Learning`).
 
-**Cleanup Strategy:** Schedule a daily cleanup job to delete records older than 30 days, similar to [pg_cron best practices](https://postgres.hashnode.dev/project-openinsight-analyze-the-history-of-postgres-pgcron-jobs).
+**Why NOT hierarchical themes:** The codebase has ~50-200 tags per user. One level of Theme grouping is sufficient. Prisma does not support recursive queries natively (confirmed via [Prisma self-relations docs](https://www.prisma.io/docs/orm/prisma-schema/data-model/relations/self-relations)), and hierarchical themes add complexity without proportional value at this scale.
 
-**Confidence:** HIGH - Established pattern from pg_cron, Prisma already in stack
+**Confidence:** HIGH -- Prisma many-to-many is well-documented pattern, verified via [Prisma many-to-many docs](https://www.prisma.io/docs/orm/prisma-schema/data-model/relations/many-to-many-relations). String array (`String[]`) for keywords is supported in PostgreSQL via Prisma.
 
-### Custom Dashboard (Observability)
+### AI Classification (Mistral, existing)
+
 | Technology | Version | Purpose | Why |
 |------------|---------|---------|-----|
-| React | 18.x | AdminJS custom dashboard component | AdminJS uses React, custom dashboard requires React component per [AdminJS dashboard customization docs](https://docs.adminjs.co/ui-customization/dashboard-customization) |
-| Recharts | 2.x | Timeline/stats visualization | Lightweight React-native charting, declarative components, widely adopted in 2026 per [Syncfusion blog](https://www.syncfusion.com/blogs/post/top-5-react-chart-libraries) |
+| Mistral AI (existing) | mistral-medium-latest | Theme auto-classification from tags | Already used for tagging and quiz generation. Same LLM client, new prompt. No new dependency. |
+| Mistral Custom Structured Output | N/A | JSON schema enforcement for classification | More reliable than plain JSON mode. Enforces exact response shape for theme assignments. |
 
-**Custom Dashboard Features:**
-- Real-time job status (running/idle)
-- Last 24h execution timeline (success/error bars)
-- Job success rates (last 100 runs per job)
-- Recent errors (last 10 failures with links to JobExecution records)
+**Classification approach -- two-phase:**
 
-**Rationale:** AdminJS allows custom dashboard pages via `AdminJS.bundle()` and ComponentLoader. React component fetches data from custom API endpoint (`/api/admin/dashboard/stats`). Recharts provides simple timeline/bar charts without heavy dependencies.
+**Phase 1: Theme Discovery (batch, infrequent)**
+Given all tags for a user, ask Mistral to cluster them into 5-15 themes. Run once on first setup, then periodically when new tags accumulate.
 
-**Confidence:** MEDIUM - AdminJS custom dashboard pattern confirmed in [official blog](https://adminjs.co/blog/how-to-build-a-custom-admin-dashboard-interface-with-react-node-js-and-adminjs), but implementation details require trial. Recharts is proven solution.
+```typescript
+// Input: all user tags ["deep learning", "pytorch", "nutrition", "running", ...]
+// Output: { themes: [{ name: "Intelligence Artificielle", tags: ["deep learning", "pytorch", ...] }, ...] }
+```
 
-## Supporting Libraries
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| tsconfig-paths | latest | TypeScript path mapping for ESM | If using `@/*` imports in ESM project, helps resolve paths in compiled .js files |
+**Phase 2: Tag Classification (per-tag, on new content)**
+When auto-tagging worker produces new tags, classify each into existing themes. If no theme fits, flag for next discovery batch.
 
-**Note:** ESM projects require `"type": "module"` in package.json and `.js` extensions in import statements even when importing `.ts` files, per [TypeScript ESM docs](https://www.typescriptlang.org/docs/handbook/esm-node.html).
+```typescript
+// Input: new tag "transformers", existing themes ["Intelligence Artificielle", "Sante", ...]
+// Output: { theme: "Intelligence Artificielle", confidence: 0.95 }
+```
+
+**Why Custom Structured Output over plain JSON mode:** Mistral's custom structured output enforces the exact JSON schema (field names, types, enum values). Plain JSON mode only guarantees valid JSON but not the right shape. For classification, wrong shape = silent failures. Verified via [Mistral Custom Structured Output docs](https://docs.mistral.ai/capabilities/structured_output/custom).
+
+**Why NOT embeddings/vector search:** The tag space is small (50-200 tags per user). LLM classification with structured output is simpler, more interpretable, and avoids adding a vector database dependency. Embedding-based clustering would be overengineering.
+
+**Why NOT a separate classification model:** Mistral already handles tagging and quiz generation. Adding a dedicated classifier (e.g., a fine-tuned model) introduces operational complexity. The general-purpose LLM with good prompts is sufficient for semantic tag clustering.
+
+**Confidence:** HIGH -- Mistral custom structured output verified in [official docs](https://docs.mistral.ai/capabilities/structured_output/custom). All models except codestral-mamba support it. The existing `llm.ts` service already handles Mistral API calls; extending it is straightforward.
+
+### Cross-Content Quiz Generation (Mistral, existing)
+
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| Mistral AI (existing) | mistral-medium-latest | Theme-level synthesis quizzes | Same LLM, new prompt pattern. Aggregates transcripts from multiple content items in a theme. |
+
+**Approach: Memo-based synthesis, NOT raw transcript aggregation.**
+
+The existing codebase already generates per-content memos (cached in `Transcript.segments.memo`). There is also an existing `/api/content/topic/:name/memo` endpoint that synthesizes memos across content. This pattern directly extends to theme-level quiz generation:
+
+1. Collect memos from all content in a theme (already cached, no LLM call needed)
+2. Feed aggregated memos to quiz generation prompt
+3. Generate cross-content synthesis questions
+
+**Why memos over raw transcripts:** Raw transcripts are 4K-12K chars each. Aggregating 10 transcripts = 40K-120K chars, exceeding context windows and wasting tokens. Memos are ~200 words each. 10 memos = ~2K words, well within limits.
+
+**Why NOT a separate quiz model:** Same reasoning as classification. Mistral handles both per-content and cross-content quiz generation. The prompt changes, not the model.
+
+**Token budget estimate:** Theme quiz = 1 assessment call (~500 tokens) + 1 question generation call (~2K tokens) = ~2.5K tokens. At Mistral medium pricing (~$2.7/M input, ~$8.1/M output), a theme quiz costs roughly $0.02. Acceptable.
+
+**Confidence:** HIGH -- The memo aggregation pattern already exists in `content.ts` lines 1257-1328 (`/api/content/topic/:name/memo`). Extending to quiz generation follows the same pattern.
+
+### iOS UI: Theme Navigation
+
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| @shopify/flash-list | 2.x (latest via `npx expo install`) | Performant theme grid/list rendering | Better than FlatList for content lists. Cell recycling vs virtualization. Needed as theme view shows grouped content across sources. |
+| expo-router (existing) | 6.0.22 | File-based routing for theme screens | Already in stack. Add `/theme/[slug].tsx` and `/quiz/theme/[slug].tsx` routes. |
+| react-native-reanimated (existing) | 4.1.1 | Smooth transitions between theme views | Already installed. Use for theme card press animations and tab transitions. |
+
+**Why FlashList:** The theme screen aggregates content from multiple sources into a single list. With 50+ items per theme, FlatList causes jank on Android. FlashList's cell recycling eliminates this. It's an Expo-recommended library (listed in [Expo SDK docs](https://docs.expo.dev/versions/latest/sdk/flash-list/)). FlashList v2 requires New Architecture, which is enabled by default in Expo SDK 54 (this project's SDK).
+
+**Why NOT SectionList:** Theme content is not naturally sectioned (sections imply grouping within a list). A flat list with sticky header per source type achieves the same effect with better performance. FlashList supports `stickyHeaderIndices`.
+
+**Installation:**
+```bash
+cd ios
+npx expo install @shopify/flash-list
+```
+
+**Confidence:** HIGH -- FlashList v2 compatibility with Expo SDK 54 / React Native 0.81 confirmed via [Expo SDK 54 changelog](https://expo.dev/changelog/sdk-54) and [Expo FlashList docs](https://docs.expo.dev/versions/latest/sdk/flash-list/). New Architecture is enabled by default in SDK 54.
+
+### iOS UI: Theme State Management
+
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| Zustand (existing) | 5.0.11 | Theme selection state, active theme filter | Already the app's state management. Add a `themeStore` slice. |
+| TanStack React Query (existing) | 5.90.20 | Theme data fetching and caching | Already handles content/topics queries. Add `useThemes()`, `useThemeContent()` hooks. |
+
+**No new state management libraries needed.** Zustand for local UI state (selected theme, filter state). React Query for server state (theme list, theme content). This matches the existing pattern used for topics/content.
+
+**Confidence:** HIGH -- Existing pattern, no new dependencies.
+
+## What NOT to Add
+
+| Technology | Why Not |
+|------------|---------|
+| Vector database (Pinecone, Qdrant, pgvector) | Tag space too small (50-200) for embedding-based clustering. LLM classification is simpler and sufficient. |
+| LangChain | Project uses direct Mistral API calls via `fetch()`. LangChain adds abstraction overhead with no benefit for simple prompt-response patterns. |
+| Redis/BullMQ for theme worker | Existing `node-cron` + `p-limit` pattern works. Theme classification is a low-frequency batch job (runs on tag changes, not continuously). |
+| react-native-skia / @shopify/react-native-skia | Theme cards and grids do not need custom Canvas rendering. Standard React Native views with Reanimated suffice. |
+| expo-image | Nice-to-have for thumbnails but the existing `Image` component works. Not critical for theme feature. Separate concern. |
+| Separate classification microservice | The classification logic is a single LLM call. Running a separate service adds deployment complexity for no benefit. Keep it in the existing Express backend. |
 
 ## Alternatives Considered
 
 | Category | Recommended | Alternative | Why Not |
 |----------|-------------|-------------|---------|
-| Admin Panel | AdminJS | Strapi Admin, Directus, KeystoneJS | AdminJS is lighter, integrates directly with existing Express app without separate CMS layer. Strapi/Directus are full CMSs (overkill). KeystoneJS less mature for Prisma. |
-| Logging | Pino | Winston | Pino is 5x faster per [SigNoz comparison](https://signoz.io/guides/pino-logger/), async by default. Winston requires manual async config. |
-| Job Persistence | Prisma schema | Agenda (MongoDB), BullMQ | Ankora already uses PostgreSQL + Prisma. Agenda requires MongoDB (new dependency). BullMQ is for queues, not cron history tracking. Keep stack simple. |
-| Charting | Recharts | Chart.js, Victory, Nivo | Recharts has best React integration (declarative components). Chart.js uses Canvas (less React-native). Victory/Nivo heavier. |
-| Auth | Hardcoded credentials | JWT, OAuth, Prisma user table | Single admin user, internal tool, VPS firewall-protected. Hardcoded is simplest. Database users add complexity for no value. |
-
-## Migration Requirements (CJS → ESM)
-
-AdminJS v7 requires full ESM migration. Current Ankora backend uses CommonJS.
-
-### package.json Changes
-```json
-{
-  "type": "module",
-  "scripts": {
-    "start": "node dist/index.js"
-  }
-}
-```
-
-### tsconfig.json Changes
-```json
-{
-  "compilerOptions": {
-    "module": "ESNext",
-    "target": "ESNext",
-    "moduleResolution": "nodenext"
-  }
-}
-```
-
-### Code Changes
-1. Replace all `require()` with `import`
-2. Replace all `module.exports` with `export`
-3. Add `.js` extensions to relative imports: `import { foo } from './utils.js'` (even for `.ts` files)
-4. Use `import.meta.url` instead of `__dirname`
-
-**Rationale:** [AdminJS v7 migration guide](https://docs.adminjs.co/installation/migration-guide-v7) states "AdminJS has fully moved to ESM and will no longer support CJS projects." This is a breaking change. All modules must be ESM-compatible.
-
-**Confidence:** HIGH - Official requirement, migration pattern verified from [TypeScript ESM guide](https://www.typescriptlang.org/docs/handbook/esm-node.html) and [Node.js ESM docs](https://nodejs.org/api/esm.html)
+| Classification | Mistral structured output | OpenAI GPT-4 | Already using Mistral. Switching adds cost and changes nothing functionally. Mistral custom structured output matches OpenAI's JSON schema enforcement. |
+| Classification | LLM clustering | k-means on embeddings | Requires generating embeddings for all tags, storing vectors, running clustering algorithm. 10x more complex for 50-200 tags. LLM does this in one call. |
+| Theme data model | Prisma implicit m2m | Explicit join table | Prisma implicit m2m is simpler for this use case. No extra fields needed on the join (no "weight" or "confidence" stored). If needed later, migration is straightforward. |
+| Theme data model | Flat themes (1 level) | Hierarchical themes | Prisma lacks recursive queries. Hierarchical adds complexity (parent/child navigation, breadcrumbs) with minimal UX benefit. Users have 5-15 themes, not 50+. |
+| List rendering | FlashList v2 | FlatList | FlatList works but janks on Android with 50+ items. FlashList cell recycling solves this with near-identical API. |
+| List rendering | FlashList v2 | @legendapp/list | Less mature than FlashList. Shopify maintains FlashList actively. Expo documents FlashList officially. |
+| Quiz generation | Memo aggregation | RAG over transcripts | RAG requires chunking, embedding, indexing, and retrieval pipeline. Memos are already pre-computed summaries. Using memos skips all RAG complexity. |
+| Theme discovery | Batch LLM clustering | Manual theme creation | Manual is tedious. Users want themes auto-generated. LLM clustering from existing tags is the value proposition. |
 
 ## Installation
 
-### Step 1: Migrate to ESM
-```bash
-# Update package.json
-npm pkg set type=module
+### Backend (no new packages)
 
-# Update tsconfig.json (manually - see above)
-```
+No `npm install` needed. All backend changes use existing Prisma + Mistral infrastructure.
 
-### Step 2: Install Admin Panel
 ```bash
-npm install adminjs@7.8.17 @adminjs/express@6.1.1 @adminjs/prisma@5.0.4 express-session@1.19.0
-```
-
-### Step 3: Install Logging
-```bash
-npm install pino@10.3.0 pino-http
-npm install -D pino-pretty@13.1.3  # dev only
-```
-
-### Step 4: Install Dashboard Dependencies
-```bash
-npm install recharts
-```
-
-### Step 5: Add JobExecution Model
-```bash
-# Add schema to prisma/schema.prisma (see above)
-npx prisma migrate dev --name add_job_execution
+# Schema migration only
+cd backend
+# 1. Add Theme model to prisma/schema.prisma
+# 2. Add ContentThemes and ThemeTags relations
+npx prisma migrate dev --name add_themes
 npx prisma generate
 ```
 
-## Environment Variables
+### iOS (one new package)
 
-Add to `.env`:
-
-```env
-# Admin Panel
-ADMIN_EMAIL=admin@ankora.study
-ADMIN_PASSWORD=<strong-password>
-ADMIN_SESSION_SECRET=<64-char-random-string>
-
-# Logging
-LOG_LEVEL=info  # debug in dev, info in prod
-NODE_ENV=production
+```bash
+cd ios
+npx expo install @shopify/flash-list
 ```
 
-**Security Note:** Store admin password in env var, not hardcoded. Use `process.env.ADMIN_PASSWORD` in authenticate function.
+**That's it.** One new dependency on iOS, zero on backend.
 
 ## Integration Points
 
-### 1. Wrap Cron Jobs with Execution Tracking
+### 1. Backend: Theme Classification Worker
 
-**Before:**
-```typescript
-async function syncYouTube() {
-  console.log('Starting YouTube sync');
-  // sync logic
-  console.log('YouTube sync complete');
-}
+**File:** `backend/src/workers/themeClassification.ts` (new)
+**Trigger:** After auto-tagging worker completes, or on schedule (`*/30 * * * *`)
+**Uses:** Existing `llm.ts` → `getLLMClient()`, existing `rateLimiter.ts` → `llmLimiter`
+
+```
+[auto-tagging worker completes]
+  → [new tags detected]
+  → [themeClassification worker]
+  → [classifies tags into themes via Mistral]
+  → [creates/updates Theme records]
+  → [links Content to Themes via tag mapping]
 ```
 
-**After:**
-```typescript
-import { prisma } from './database.js';
-import { logger } from './logger.js';
+### 2. Backend: Theme API Routes
 
-async function syncYouTube() {
-  const execution = await prisma.jobExecution.create({
-    data: {
-      jobName: 'youtube-sync',
-      status: 'running'
-    }
-  });
+**File:** `backend/src/routes/theme.ts` (new)
+**Mounts at:** `/api/themes`
 
-  const startTime = Date.now();
-  let itemsProcessed = 0;
+| Method | Route | Description |
+|--------|-------|-------------|
+| GET | `/api/themes` | List user's themes with content counts |
+| GET | `/api/themes/:slug` | Theme detail with content list |
+| GET | `/api/themes/:slug/quiz` | Generate cross-content quiz for theme |
+| POST | `/api/themes/regenerate` | Re-run theme discovery from tags |
+| PATCH | `/api/themes/:slug` | Rename/customize theme |
+| DELETE | `/api/themes/:slug` | Delete theme (content remains, tags remain) |
 
-  try {
-    logger.info({ jobName: 'youtube-sync', executionId: execution.id }, 'Starting YouTube sync');
+### 3. Backend: Extend Quiz Generation
 
-    // sync logic
-    itemsProcessed = 42; // track count
+**File:** `backend/src/services/quizGeneration.ts` (extend existing)
+**New function:** `generateThemeQuiz(themeId: string)`
 
-    await prisma.jobExecution.update({
-      where: { id: execution.id },
-      data: {
-        status: 'success',
-        completedAt: new Date(),
-        duration: Date.now() - startTime,
-        itemsProcessed
-      }
-    });
+Uses existing `generateQuizFromTranscript` pattern but with aggregated memos instead of single transcript. Generates synthesis questions that connect concepts across multiple content items.
 
-    logger.info({ jobName: 'youtube-sync', executionId: execution.id, itemsProcessed }, 'YouTube sync complete');
-  } catch (error) {
-    await prisma.jobExecution.update({
-      where: { id: execution.id },
-      data: {
-        status: 'error',
-        completedAt: new Date(),
-        duration: Date.now() - startTime,
-        errorMessage: error.message,
-        errorStack: error.stack
-      }
-    });
+### 4. iOS: Theme Hooks
 
-    logger.error({ err: error, jobName: 'youtube-sync', executionId: execution.id }, 'YouTube sync failed');
-  }
-}
-```
-
-**Rationale:** Every cron job execution is now tracked, logged, and visible in admin panel. Structured logging enables grep/filter in PM2 logs. Error stack traces preserved for debugging.
-
-### 2. AdminJS Setup
+**File:** `ios/hooks/useThemes.ts` (new)
+**Pattern:** Matches existing `useTopics.ts` pattern exactly.
 
 ```typescript
-import AdminJS from 'adminjs';
-import AdminJSExpress from '@adminjs/express';
-import { Database, Resource } from '@adminjs/prisma';
-import { PrismaClient } from '@prisma/client';
-import { DMMFClass } from '@prisma/client/runtime/library.js';
-import express from 'express';
-import session from 'express-session';
-
-AdminJS.registerAdapter({ Database, Resource });
-
-const prisma = new PrismaClient();
-const dmmf = (prisma as any)._dmmf as DMMFClass;
-
-const adminOptions = {
-  resources: [
-    {
-      resource: { model: dmmf.modelMap.JobExecution, client: prisma },
-      options: {
-        navigation: { name: 'Monitoring', icon: 'Activity' },
-        listProperties: ['jobName', 'status', 'startedAt', 'duration', 'itemsProcessed'],
-        sort: { sortBy: 'startedAt', direction: 'desc' as const }
-      }
-    },
-    {
-      resource: { model: dmmf.modelMap.User, client: prisma },
-      options: { navigation: { name: 'Users', icon: 'Users' } }
-    },
-    // ... other Prisma models
-  ],
-  rootPath: '/admin',
-  branding: {
-    companyName: 'Ankora Admin',
-    logo: false
-  }
-};
-
-const admin = new AdminJS(adminOptions);
-
-const authenticate = async (email: string, password: string) => {
-  if (email === process.env.ADMIN_EMAIL && password === process.env.ADMIN_PASSWORD) {
-    return { email };
-  }
-  return null;
-};
-
-const adminRouter = AdminJSExpress.buildAuthenticatedRouter(admin, {
-  authenticate,
-  cookieName: 'adminjs',
-  cookiePassword: process.env.ADMIN_SESSION_SECRET
-}, null, {
-  secret: process.env.ADMIN_SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production', // HTTPS in prod
-    maxAge: 1000 * 60 * 60 * 24 // 24 hours
-  }
-});
-
-app.use(admin.options.rootPath, adminRouter);
+useThemes()           // List themes with counts
+useThemeContent(slug) // Content filtered by theme
+useThemeQuiz(slug)    // Start theme quiz session
 ```
 
-**Access:** `https://api.ankora.study/admin` (behind Caddy HTTPS)
+### 5. iOS: Theme Screens
 
-**Confidence:** HIGH - Pattern from [AdminJS Express docs](https://docs.adminjs.co/installation/plugins/express) and [authentication guide](https://docs.adminjs.co/basics/authentication)
+**Files:**
+- `ios/app/theme/[slug].tsx` -- Theme detail (content list grouped by source)
+- `ios/app/quiz/theme/[slug].tsx` -- Theme quiz session
+- Modify `ios/app/(tabs)/library.tsx` -- Add theme grid/carousel above content list
 
-### 3. Pino Logger Setup
+### 6. Scheduler Integration
 
+**File:** `backend/src/workers/scheduler.ts` (extend existing)
+
+Add theme classification to the cron schedule:
 ```typescript
-// lib/logger.ts
-import pino from 'pino';
-
-export const logger = pino({
-  level: process.env.LOG_LEVEL || 'info',
-  formatters: {
-    level: (label) => ({ level: label })
-  },
-  transport: process.env.NODE_ENV === 'development'
-    ? { target: 'pino-pretty', options: { colorize: true } }
-    : undefined
-});
+cron.schedule('*/30 * * * *', () => runThemeClassificationWorker());
 ```
 
-```typescript
-// index.ts (Express app)
-import pinoHttp from 'pino-http';
-import { logger } from './lib/logger.js';
+Runs every 30 minutes, same as TikTok/Instagram sync. Low frequency because theme classification is only needed when new tags appear.
 
-app.use(pinoHttp({ logger }));
-```
+## Environment Variables
 
-**Rationale:** Structured logging with request ID correlation. pino-pretty only in dev (no production overhead). HTTP requests auto-logged with timing.
+**No new environment variables required.** Theme classification uses the existing `MISTRAL_API_KEY` and `LLM_PROVIDER` configuration.
 
-**Confidence:** HIGH - Standard pattern from [Pino docs](https://github.com/pinojs/pino) and [Better Stack guide](https://betterstack.com/community/guides/logging/how-to-install-setup-and-use-pino-to-log-node-js-applications/)
+## Database Impact
 
-## Deployment Considerations
+### New Tables
+- `Theme` -- ~5-15 rows per user. Negligible.
+- `_ContentThemes` (implicit join) -- ~1-5 rows per content item. At 500 content items: ~1500 rows. Negligible.
+- `_ThemeTags` (implicit join) -- ~3-5 rows per theme. At 15 themes: ~60 rows. Negligible.
 
-### PM2 Logs with Pino
-PM2 captures stdout/stderr. Pino writes JSON to stdout. No conflicts.
+### Indexes
+- `Theme.name` -- Unique + indexed for lookups
+- `Theme.slug` -- Unique + indexed for URL routing
+- Implicit join tables get automatic indexes from Prisma
 
-**View logs:**
-```bash
-ssh root@116.203.17.203 "pm2 logs remember-api --lines 100 --nostream"
-```
+### Migration Safety
+Adding new tables and relations with no required fields on existing models = zero-risk migration. No existing data modified.
 
-**Filter by job:**
-```bash
-ssh root@116.203.17.203 "pm2 logs remember-api --lines 1000 --nostream | grep youtube-sync"
-```
+## Cost Impact
 
-### Caddy Configuration
-No changes needed. Admin panel served at `/admin` on existing `api.ankora.study` domain.
+### Mistral API (theme classification)
+- Theme discovery: ~3K tokens per batch call. Per user, per month: ~1 call = $0.03
+- Per-tag classification: ~500 tokens per tag. At 10 new tags/month: $0.01
+- Theme quiz generation: ~2.5K tokens per quiz. At 5 theme quizzes/month: $0.10
 
-### Database Growth
-JobExecution table will grow ~500 records/day (11 jobs × ~45 runs/day each). At 30 days retention: ~15k records (negligible PostgreSQL impact).
+**Total additional cost per user per month: ~$0.14.** Negligible compared to existing transcription + quiz costs.
 
-**Cleanup job:**
-```typescript
-cron.schedule('0 3 * * *', async () => { // 3 AM daily
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const deleted = await prisma.jobExecution.deleteMany({
-    where: { startedAt: { lt: thirtyDaysAgo } }
-  });
-  logger.info({ deletedCount: deleted.count }, 'Cleaned up old job executions');
-});
-```
-
-## Known Limitations
-
-### AdminJS Custom Dashboard Complexity
-Custom React dashboard requires bundling with AdminJS ComponentLoader. Moderate learning curve. If too complex, fallback: add custom Express endpoint `/admin-stats` with simple HTML/Chart.js page (no AdminJS integration).
-
-**Confidence:** LOW - AdminJS custom dashboard is documented but implementation details sparse. May require experimentation. Fallback strategy mitigates risk.
-
-### ESM Migration Breaking Changes
-Migrating from CJS to ESM touches every file with imports. High risk of runtime errors if any dependency doesn't support ESM. Thorough testing required.
-
-**Mitigation:** Test all cron jobs, OAuth flows, API endpoints after migration. Keep PM2 restart policy (`max_restarts: 10`).
-
-**Confidence:** MEDIUM - ESM migration is well-documented but touches entire codebase. Testing critical.
-
-### No Real-Time Dashboard Updates
-Custom dashboard requires page refresh to see latest job executions. WebSocket/SSE for live updates adds significant complexity.
-
-**Decision:** Page refresh is acceptable for admin tool. Add "Refresh" button. Avoid WebSocket overhead.
-
-**Confidence:** HIGH - Tradeoff decision based on simplicity > real-time
+**Confidence:** MEDIUM -- Cost estimates based on Mistral medium-latest pricing. Actual token usage depends on prompt tuning.
 
 ## Sources
 
-### High Confidence (Official Docs & Package Registries)
-- [AdminJS npm](https://www.npmjs.com/package/adminjs) - v7.8.17 verified
-- [@adminjs/express npm](https://www.npmjs.com/package/@adminjs/express) - v6.1.1 verified
-- [@adminjs/prisma npm](https://www.npmjs.com/package/@adminjs/prisma) - v5.0.4 verified
-- [express-session npm](https://www.npmjs.com/package/express-session) - v1.19.0 verified
-- [pino npm](https://www.npmjs.com/package/pino) - v10.3.0 verified
-- [pino-pretty npm](https://www.npmjs.com/package/pino-pretty) - v13.1.3 verified
-- [AdminJS Migration Guide v7](https://docs.adminjs.co/installation/migration-guide-v7) - ESM requirement
-- [AdminJS Prisma Adapter Docs](https://docs.adminjs.co/installation/adapters/prisma) - Setup pattern
-- [AdminJS Authentication Docs](https://docs.adminjs.co/basics/authentication) - Hardcoded credentials example
-- [TypeScript ESM Handbook](https://www.typescriptlang.org/docs/handbook/esm-node.html) - Import extensions
-- [Node.js ESM Documentation](https://nodejs.org/api/esm.html) - "type": "module" requirement
+### High Confidence (Official Docs)
+- [Prisma Many-to-Many Relations](https://www.prisma.io/docs/orm/prisma-schema/data-model/relations/many-to-many-relations) -- Implicit m2m pattern
+- [Prisma Self-Relations](https://www.prisma.io/docs/orm/prisma-schema/data-model/relations/self-relations) -- Why hierarchical is complex
+- [Mistral Custom Structured Output](https://docs.mistral.ai/capabilities/structured_output/custom) -- JSON schema enforcement
+- [Mistral JSON Mode](https://docs.mistral.ai/capabilities/structured_output/json_mode/) -- All models supported
+- [Expo FlashList Docs](https://docs.expo.dev/versions/latest/sdk/flash-list/) -- Installation via expo install
+- [Expo SDK 54 Changelog](https://expo.dev/changelog/sdk-54) -- New Architecture default, FlashList v2 compat
+- [FlashList Official Docs](https://shopify.github.io/flash-list/) -- Cell recycling architecture
 
-### Medium Confidence (Recent Guides & Comparisons)
-- [Better Stack: Pino Guide 2026](https://betterstack.com/community/guides/logging/how-to-install-setup-and-use-pino-to-log-node-js-applications/) - Performance claims
-- [SigNoz: Pino Logger Complete Guide](https://signoz.io/guides/pino-logger/) - Pino 5x faster than Winston
-- [AdminJS Blog: Custom Dashboard](https://adminjs.co/blog/how-to-build-a-custom-admin-dashboard-interface-with-react-node-js-and-adminjs) - Implementation pattern
-- [AdminJS Dashboard Customization Docs](https://docs.adminjs.co/ui-customization/dashboard-customization) - React component approach
-- [AWS RDS: pg_cron Guide](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/PostgreSQL_pg_cron.html) - job_run_details pattern
-- [Syncfusion: Top React Chart Libraries 2026](https://www.syncfusion.com/blogs/post/top-5-react-chart-libraries) - Recharts recommendation
-- [GitHub: pino-http](https://github.com/pinojs/pino-http) - Express middleware
-
-### Low Confidence (WebSearch Only - Need Verification)
-- [DEV Community: Cron Job Monitoring 2026](https://dev.to/cronmonitor/how-to-monitor-cron-jobs-in-2026-a-complete-guide-28g9) - node-cron lacks persistence
-- [GitHub: node-cron Issue #340](https://github.com/node-cron/node-cron/issues/340) - Job persistence discussion
+### Medium Confidence (Verified Guides)
+- [FlashList vs FlatList Performance](https://medium.com/whitespectre/flashlist-vs-flatlist-understanding-the-key-differences-for-react-native-performance-15f59236a39c) -- JS thread CPU drops from 90% to 10%
+- [Mistral Prompting Guide](https://docs.mistral.ai/guides/prompting_capabilities) -- System prompt best practices
+- [Expo Router Navigation Patterns](https://docs.expo.dev/router/basics/common-navigation-patterns/) -- File-based routing for theme screens

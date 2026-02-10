@@ -1,283 +1,126 @@
-# Feature Landscape: Admin Panel & Backend Observability
+# Feature Landscape
 
-**Domain:** Admin dashboard with cron job monitoring and database management
-**Researched:** 2026-02-09
+**Domain:** Theme-based content organization for active learning platform
+**Researched:** 2026-02-10
+**Context:** Subsequent milestone adding theme-based UX to existing Ankora app. Auto-tagging, quiz generation, SM-2 reviews already in production.
+
+---
 
 ## Table Stakes
 
-Features users expect. Missing = product feels incomplete.
+Features users expect when moving from content-centric to theme-centric navigation. Missing = theme system feels like a cosmetic reskin of tags.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| **CRUD Database Operations** | Core purpose of admin panels—managing data without SQL | Low | AdminJS handles automatically via schema introspection |
-| **Job Execution Status** | Must know if jobs succeeded/failed at a glance | Low | Binary status (success/fail) per job run |
-| **Job Execution History** | Troubleshooting requires reviewing past runs | Medium | PostgreSQL table with automatic cleanup (7-30 day retention) |
-| **Error Message Display** | When jobs fail, need to see why | Low | Display stderr/exception from failed runs |
-| **Authentication/Authorization** | Admin panels contain sensitive data | Low | Single-user case = simple session/JWT auth |
-| **Filtering & Search** | Finding specific records in large datasets | Low | AdminJS provides out-of-box for database models |
-| **Real-time Job Status Updates** | Stale data undermines confidence in monitoring | Medium | SSE (Server-Sent Events) preferred over WebSocket for unidirectional updates |
-| **Job Duration Tracking** | Performance regression detection requires timing | Low | Store `start_time` and `end_time` per execution |
-| **Success/Failure Rate Metrics** | Quick health assessment of each job type | Low | Aggregate query over execution history |
-| **Recent Activity Dashboard** | Landing page should show "what's happening now" | Low | Last 10-20 executions across all jobs |
+| Auto-generated themes from existing tags | Core value prop. Manual theme creation defeats the purpose of an AI-powered learning app. Users have 50-200 tags, cannot manually organize. | Med | Two-phase: batch discovery + incremental classification via Mistral |
+| Theme list with content counts | Users need to see what themes exist and how much content each has. Basic navigation. | Low | Simple Prisma query with `_count`, mirrors existing `/content/tags` endpoint |
+| Theme detail view (content grouped by source) | Users click a theme and see all related content. Must show YouTube/Spotify/TikTok/Instagram sources with existing content cards. | Low | Reuse existing `ContentCard` component from `topic/[name].tsx` |
+| Theme-scoped quiz (single-content questions) | Minimum: serve existing per-content quizzes filtered by theme. Users expect "Quiz me on AI" to work. | Low | Filter existing Quiz/Card records by content IDs in theme. Existing `practice/topic` endpoint pattern. |
+| Theme renaming | Users will disagree with AI-generated names. Must be editable. "Intelligence Artificielle" -> "IA & Machine Learning". | Low | PATCH endpoint, mirrors existing tag rename pattern in `content.ts` |
+| Theme deletion | Users may not want a theme. Deleting removes the grouping only, not the content or tags. | Low | DELETE endpoint, unlink m2m relations only |
+| Theme color/icon | Visual distinction in theme grid. Without this, all themes look identical and the grid is unreadable. | Low | Store hex color + emoji in Theme model. Auto-assign on creation based on name hash. |
+| Content-theme reassignment | Users must be able to move content between themes. Without this, AI classification errors are permanent. | Med | Add theme picker on content detail screen, similar to existing tag editor |
 
 ## Differentiators
 
-Features that set product apart. Not expected, but valued.
+Features that set Ankora apart from simple tag filtering.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| **Job Execution Timeline Visualization** | Quickly spot patterns, overlaps, and gaps in scheduling | High | Event timeline UI showing parallel execution and dependencies |
-| **Resource Usage Per Job** | Identify memory leaks or CPU-heavy operations | High | Requires instrumentation in each worker (memory, CPU snapshots) |
-| **Alerting Integration** | Proactive notification of failures | Medium | Slack/Discord/Email webhooks on job failure threshold |
-| **Automatic Job Retry Logic** | Self-healing system reduces manual intervention | Medium | Exponential backoff with max retry count |
-| **Performance Trend Analysis** | Detect gradual degradation before it becomes critical | Medium | Charts showing duration over time per job type |
-| **Job Dependency Graph** | Visualize which jobs must run before others | High | Useful only if inter-job dependencies exist (likely NO for Ankora) |
-| **Manual Job Trigger** | Run jobs on-demand for testing or recovery | Low | Exposes existing worker functions via admin UI button |
-| **Job Output/Logs Streaming** | Watch jobs execute in real-time like `tail -f` | Medium | SSE stream of stdout/stderr during execution |
-| **Custom Actions on Records** | Bulk operations beyond CRUD (e.g., "Regenerate all quiz for this user") | Medium | AdminJS supports custom actions per resource |
-| **Job Pause/Resume** | Temporarily disable jobs without code changes | Low | Flag in database + scheduler checks before running |
+| Cross-content synthesis quiz | Questions connecting concepts ACROSS multiple content items in a theme. "How does concept from Video A relate to concept from Podcast B?" Based on interleaving research (+50-125% retention). | High | Aggregates cached memos (not raw transcripts). New prompt engineering. THE differentiator -- no competing app does this. |
+| Theme synthesis memo | Aggregated memo across all content in a theme. Shows the "big picture" of what user learned. | Med | Pattern already exists at `/api/content/topic/:name/memo`. Adapt from tag-based to theme-based grouping. |
+| Theme learning progress | Per-theme stats: cards due, mastery level, content coverage. Gives sense of growth per knowledge domain. | Med | Aggregate SM-2 card data by theme. Compute from existing `Card.easeFactor` and `Card.repetitions`. |
+| Theme discovery onboarding | First-time flow: "We found 8 themes in your content." Shows AI-created themes, lets user review/rename/merge before committing. | Med | Critical for trust. Users must feel ownership. One-time screen after initial classification. |
+| AI theme suggestions on new content | When new content arrives (sync), auto-classifies into existing themes. If no theme fits, flags for next discovery batch. | Low | Extend tagging worker to also classify into themes. Low additional LLM cost (~500 tokens per new tag). |
+| Smart theme merging suggestion | Detect when two themes overlap >80% and suggest merging. "Science and Physics share most content." | Med | Tag overlap analysis + user confirmation. Not auto-merge -- user decides. |
 
 ## Anti-Features
 
-Features to explicitly NOT build.
+Features to explicitly NOT build in this milestone.
 
 | Anti-Feature | Why Avoid | What to Do Instead |
 |--------------|-----------|-------------------|
-| **Multi-tenancy/Role-Based Access** | Solo developer = single user, adds complexity for no benefit | Use simple authentication (session or API key) |
-| **Advanced Scheduling UI** | Cron expressions work fine, visual scheduler is overkill | Keep cron strings in code or simple config file |
-| **Data Export in Multiple Formats** | CSV is sufficient for solo dev use case | AdminJS default CSV export |
-| **Custom Dashboard Builder** | Draggable widgets = wasted time for fixed-purpose tool | Hard-code dashboard layout with sensible defaults |
-| **Audit Log for Data Changes** | Solo developer knows what they changed | Skip unless regulatory requirement |
-| **Multi-language Support** | English-only for solo developer | Hard-code UI strings |
-| **Mobile-Responsive Admin Panel** | Admin work happens at desk, mobile admin is rare | Desktop-first, mobile acceptable but not optimized |
-| **Granular Permissions** | "View-only", "Edit-only" modes meaningless for single user | All-or-nothing access after login |
-| **Advanced Query Builder** | Raw SQL in database tool is faster than visual builder | Rely on database client for complex queries |
-| **Job Orchestration/DAGs** | No dependencies between Ankora jobs (all independent) | Keep simple cron-based execution |
+| Hierarchical/nested themes | Prisma lacks recursive queries. UX complexity (breadcrumbs, drill-down). Users have 5-15 themes, not enough for hierarchy. | Flat theme list. One level is sufficient. Tags remain as the finer-grained layer underneath. |
+| Manual theme creation from scratch | Undermines auto-classification value prop. Users will create poorly named, overlapping themes. | AI generates themes. Users can rename/merge/delete but cannot create empty ones. |
+| Theme sharing between users | Social features, privacy concerns, multi-tenant data complexity. Way out of scope. | Themes are personal knowledge maps. Each user has their own. |
+| Real-time theme updates (WebSocket) | Themes change slowly (new content every 15-30 min). WebSocket infrastructure for negligible UX benefit. | React Query polling with 5-min stale time. Pull-to-refresh on theme list. |
+| Theme-based content recommendations | "You might like this because it matches your AI theme." Requires recommendation engine. Out of scope. | Stick to organizing existing synced content. |
+| Drag-and-drop theme reordering | Complex gesture handling, persistence, edge cases. Low value for 5-15 themes. | Sort by content count (desc) or alphabetical. Predictable and automatic. |
+| Theme-specific spaced repetition schedules | SM-2 operates per-card, not per-theme. Overriding intervals fights the algorithm. | SM-2 stays per-card. Theme view aggregates existing card data but never changes scheduling. |
+| Theme colors/icons customization | Design polish that does not improve learning. Bikeshedding risk. | Auto-assign color palette from theme name hash. No user configuration needed. |
 
 ## Feature Dependencies
 
 ```
-Authentication (required)
-  └─> Database CRUD (requires authenticated user)
-  └─> Job History View (requires authenticated user)
+Auto-tagging (existing, in production)
+  |
+  +---> Theme Discovery (batch LLM clustering of all user tags)
+  |       |
+  |       +---> Theme Model + CRUD API
+  |       |       |
+  |       |       +---> Theme List Screen (iOS)
+  |       |       |       |
+  |       |       |       +---> Theme Detail Screen (iOS)
+  |       |       |       |       |
+  |       |       |       |       +---> Theme-Scoped Quiz (reuse existing cards)
+  |       |       |       |
+  |       |       |       +---> Theme Discovery Onboarding (first-time flow)
+  |       |       |
+  |       |       +---> Theme Rename/Delete
+  |       |       +---> Content-Theme Reassignment
+  |       |
+  |       +---> Incremental Tag Classification (on new content sync)
+  |
+  +---> Theme Synthesis Memo (requires memos from multiple content items)
+  |       |
+  |       +---> Cross-Content Synthesis Quiz (requires aggregated knowledge)
+  |
+  +---> Theme Learning Progress (requires quiz data aggregated by theme)
 
-Job Execution History (required)
-  └─> Performance Trend Analysis (requires historical data)
-  └─> Success/Failure Rate Metrics (requires historical data)
-  └─> Job Execution Timeline (requires historical data)
-
-Real-time Updates (optional but highly valuable)
-  └─> Job Status Display (enhances UX but not required)
-  └─> Job Output Streaming (depends on real-time transport layer)
+Critical dependency: Auto-tagging must have already tagged content.
+The auto-tagging worker is in production and operational.
 ```
 
 ## MVP Recommendation
 
-### Prioritize (Phase 1 - Foundation):
-1. **Authentication** — Protect admin panel with simple session/JWT
-2. **AdminJS Integration** — Database CRUD for User, Content, Quiz, Card, Review models
-3. **Job Execution History Table** — PostgreSQL table with jobName, status, startTime, endTime, errorMessage
-4. **Basic Dashboard** — Homepage showing recent 20 job executions (table view)
-5. **Job Status Endpoint** — GET `/api/admin/jobs/recent` returns last N executions
+### Phase 1: Theme Foundation (must-have)
 
-### Prioritize (Phase 2 - Essential Monitoring):
-6. **Success/Failure Rate Metrics** — Dashboard cards showing % success per job type (last 24h)
-7. **Error Message Display** — Click execution to see full error details
-8. **Manual Job Trigger** — POST `/api/admin/jobs/:jobName/trigger` to run on-demand
-9. **Job Duration Tracking** — Display average duration and flag slow executions
+1. **Theme data model** -- Prisma schema with Theme, ThemeContent, ThemeTags many-to-many relations
+2. **Theme discovery worker** -- LLM clusters existing tags into 5-15 themes
+3. **Theme CRUD API** -- GET /themes, GET /themes/:slug, PATCH /themes/:slug, DELETE /themes/:slug
+4. **Theme list screen** -- Replace/augment current library view with theme cards showing name, count, color
+5. **Theme detail screen** -- Adapt existing `/topic/[name].tsx` pattern, re-keyed by theme slug
+6. **Theme-scoped quiz** -- Filter existing per-content quiz cards by theme's content IDs
+7. **Theme rename/delete** -- Adapt existing tag management UI pattern
 
-### Prioritize (Phase 3 - Enhanced Visibility):
-10. **Real-time Job Status Updates** — SSE endpoint streaming job completions to dashboard
-11. **Performance Trend Charts** — Line chart showing duration over time per job
-12. **Job Pause/Resume** — Disable jobs via UI without redeploying
+### Phase 2: Intelligence Layer (the differentiator)
 
-### Defer:
-- **Resource Usage Per Job** — Requires complex instrumentation, defer unless performance issues arise
-- **Job Execution Timeline Visualization** — Nice-to-have, but table view sufficient for solo dev
-- **Alerting Integration** — Add only if developer isn't checking dashboard regularly
-- **Job Output Streaming** — Complex to implement, logs via PM2/SSH sufficient initially
-- **Custom Actions on Records** — Wait for actual use case before building generic framework
-- **Job Dependency Graph** — Ankora jobs are independent, no dependencies to visualize
+8. **Incremental tag classification** -- Auto-assign new content to themes when auto-tagging worker runs
+9. **Cross-content synthesis quiz** -- LLM generates questions connecting concepts from 2-3 content items
+10. **Theme synthesis memo** -- Aggregated memo across all theme content
+11. **Theme learning progress** -- Mastery %, cards due, per theme on home screen cards
+12. **Theme discovery onboarding** -- First-time review/adjust flow for AI-generated themes
+
+### Defer to Later Milestone
+
+- **Smart theme merging** -- Nice-to-have. Users can manually delete redundant themes for now.
+- **Smart quiz mixing (interleaving)** -- Valuable but adds quiz session complexity. Implement after synthesis proves concept.
+- **Theme analytics** -- Future premium feature.
+- **Content-theme reassignment UI** -- Can ship with a simple "change theme" button. Full drag-and-drop is deferred.
 
 ## Complexity Analysis
 
 | Complexity | Features | Estimated Effort |
 |------------|----------|------------------|
-| **Low** | CRUD, authentication, job status, duration tracking, success rate, manual trigger, pause/resume | 1-2 days |
-| **Medium** | Job history table design, real-time SSE updates, error display, trend charts, alerting, retry logic | 3-5 days |
-| **High** | Timeline visualization, resource tracking, job orchestration, output streaming | 1-2 weeks |
+| **Low** | Theme CRUD API, theme list screen (adapt existing), rename/delete, content count stats | 1-2 days |
+| **Medium** | Theme data model + migration, AI theme discovery worker, theme detail screen, incremental classification, theme learning progress, synthesis memo, discovery onboarding | 2-4 days each |
+| **High** | Cross-content synthesis quiz (prompt engineering + memo aggregation + new quiz flow) | 1-2 weeks |
 
-**Recommendation:** Focus on Low + Medium complexity features for MVP. High complexity features offer diminishing returns for solo developer use case.
-
-## Real-time Transport Decision
-
-**Recommendation: Server-Sent Events (SSE) over WebSockets**
-
-| Criterion | SSE | WebSocket |
-|-----------|-----|-----------|
-| **Use Case Fit** | Perfect for unidirectional server→client updates | Overkill for admin dashboard (no client→server real-time needed) |
-| **Implementation** | Native EventSource API in browsers, simple Express endpoint | Requires `ws` library, connection management, reconnection logic |
-| **HTTP/2 Support** | Multiple SSE streams share single TCP connection | Separate protocol, doesn't benefit from HTTP/2 multiplexing |
-| **Mobile Performance** | HTTP/3 + QUIC improves reliability on unreliable networks | More complex over poor connections |
-| **Complexity** | ~20 lines of code | ~100+ lines with proper error handling |
-| **Auto-Reconnect** | Built into EventSource API | Must implement manually |
-
-**Conclusion:** SSE is the 2026 best practice for 95% of real-time dashboard use cases. Reserve WebSockets for bidirectional communication needs (chat, collaborative editing).
-
-## Database Schema Recommendations
-
-### Job Execution History Table
-
-```sql
-CREATE TABLE job_executions (
-  id SERIAL PRIMARY KEY,
-  job_name VARCHAR(100) NOT NULL,
-  status VARCHAR(20) NOT NULL, -- 'success', 'failure', 'running'
-  start_time TIMESTAMPTZ NOT NULL,
-  end_time TIMESTAMPTZ,
-  duration_ms INTEGER, -- Computed: (end_time - start_time) in milliseconds
-  error_message TEXT,
-  metadata JSONB, -- Flexible storage for job-specific data (e.g., records_synced, api_calls_made)
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX idx_job_executions_job_name ON job_executions(job_name);
-CREATE INDEX idx_job_executions_start_time ON job_executions(start_time DESC);
-CREATE INDEX idx_job_executions_status ON job_executions(status);
-```
-
-### Automatic Cleanup (Prevent Unbounded Growth)
-
-**Critical Best Practice:** Schedule daily cleanup to prevent `job_executions` table from growing indefinitely.
-
-```sql
--- Keep 30 days of history (adjust retention period based on needs)
-DELETE FROM job_executions
-WHERE start_time < NOW() - INTERVAL '30 days';
-```
-
-**Implementation Options:**
-1. Add as 12th cron job in `scheduler.ts`
-2. Use PostgreSQL `pg_cron` extension (if available on Supabase)
-3. Manual periodic cleanup via admin panel button
-
-**Recommendation:** Option 1 (cron job in application code) for simplicity and portability.
-
-## Integration with Existing Codebase
-
-### Minimal Changes Required
-
-**Current State:** 11 workers in `backend/src/workers/scheduler.ts` with `runningJobs` Set for overlap protection.
-
-**Required Modifications:**
-
-1. **Wrap Each Worker Function:**
-   ```typescript
-   async function runJobWithTracking(jobName: string, jobFn: () => Promise<void>) {
-     const startTime = new Date();
-     const execution = await prisma.jobExecution.create({
-       data: { jobName, status: 'running', startTime }
-     });
-
-     try {
-       await jobFn();
-       await prisma.jobExecution.update({
-         where: { id: execution.id },
-         data: {
-           status: 'success',
-           endTime: new Date(),
-           durationMs: Date.now() - startTime.getTime()
-         }
-       });
-     } catch (error) {
-       await prisma.jobExecution.update({
-         where: { id: execution.id },
-         data: {
-           status: 'failure',
-           endTime: new Date(),
-           durationMs: Date.now() - startTime.getTime(),
-           errorMessage: error.message
-         }
-       });
-     }
-   }
-   ```
-
-2. **Add SSE Endpoint (Optional but Recommended):**
-   ```typescript
-   app.get('/api/admin/jobs/stream', (req, res) => {
-     res.setHeader('Content-Type', 'text/event-stream');
-     res.setHeader('Cache-Control', 'no-cache');
-     res.setHeader('Connection', 'keep-alive');
-
-     const sendEvent = (data: any) => {
-       res.write(`data: ${JSON.stringify(data)}\n\n`);
-     };
-
-     // Emit job completions in real-time
-     // (Implementation depends on event emitter in worker)
-   });
-   ```
-
-3. **Add AdminJS Route:**
-   ```typescript
-   import AdminJS from 'adminjs';
-   import AdminJSExpress from '@adminjs/express';
-
-   const adminJs = new AdminJS({
-     resources: [
-       { resource: prisma.user },
-       { resource: prisma.content },
-       { resource: prisma.quiz },
-       { resource: prisma.jobExecution, options: {
-         sort: { sortBy: 'startTime', direction: 'desc' }
-       }}
-     ]
-   });
-
-   const adminRouter = AdminJSExpress.buildRouter(adminJs);
-   app.use('/admin', adminRouter);
-   ```
-
-**Estimated Implementation Time:** 4-6 hours for MVP (Phase 1 features).
+**Total estimated effort for Phase 1 (Foundation):** 1.5-2 weeks
+**Total with Phase 2 (Intelligence):** 3-4 weeks
 
 ## Sources
 
-### Admin Panel Best Practices
-- [Admin Dashboard: Ultimate Guide, Templates & Examples (2026)](https://www.weweb.io/blog/admin-dashboard-ultimate-guide-templates-examples)
-- [How to Create a Good Admin Panel: Design Tips & Features List](https://aspirity.com/blog/good-admin-panel-design)
-
-### Cron Job Monitoring
-- [How to Monitor Cron Jobs in 2026: A Complete Guide](https://dev.to/cronmonitor/how-to-monitor-cron-jobs-in-2026-a-complete-guide-28g9)
-- [Cron Monitoring & Scheduled Task Tracking | Simple Observability](https://simpleobservability.com/cron-monitoring)
-- [Dedicated Job Observability in Grafana Cloud Kubernetes Monitoring](https://grafana.com/whats-new/2025-10-22-dedicated-job-observability-in-grafana-cloud-kubernetes-monitoring/)
-
-### AdminJS
-- [AdminJS - the leading open-source admin panel for Node.js apps](https://adminjs.co/)
-- [GitHub - SoftwareBrothers/adminjs](https://github.com/SoftwareBrothers/adminjs)
-- [AdminJS Documentation](https://docs.adminjs.co/)
-
-### Error Tracking
-- [Error Tracking Monitor | Datadog](https://docs.datadoghq.com/monitors/types/error_tracking/)
-- [Track Backend Error Logs | Datadog](https://docs.datadoghq.com/logs/error_tracking/backend/)
-
-### Job Execution History
-- [GitHub - citusdata/pg_cron: Run periodic jobs in PostgreSQL](https://github.com/citusdata/pg_cron)
-- [using and monitoring pg_cron](https://postgres.hashnode.dev/project-openinsight-analyze-the-history-of-postgres-pgcron-jobs)
-
-### MVP Development
-- [Can a Solo Developer Build a SaaS App Successfully?](https://www.softsuave.com/blog/can-a-solo-developer-build-a-saas-app/)
-- [The Software Building Process Solo: What You Should Know As An Indie Developer In 2026](https://nasilemaktech.com/the-software-building-process-solo-what-you-should-know-as-an-indie-developer-in-2026/)
-
-### Anti-Patterns
-- [Top 5 Software Anti Patterns to Avoid for Better Development Outcomes](https://www.bairesdev.com/blog/software-anti-patterns/)
-- [Eight project management anti-patterns and how to avoid them](https://www.catalyte.io/insights/project-management-anti-patterns/)
-
-### Real-Time Updates
-- [Why Server-Sent Events Beat WebSockets for 95% of Real-Time Cloud Applications](https://medium.com/codetodeploy/why-server-sent-events-beat-websockets-for-95-of-real-time-cloud-applications-830eff5a1d7c)
-- [Server-Sent Events vs WebSockets: Key Differences and Use Cases in 2026](https://www.nimbleway.com/blog/server-sent-events-vs-websockets-what-is-the-difference-2026-guide)
-- [Why Server-Sent Events (SSE) are ideal for Real-Time Updates](https://talent500.com/blog/server-sent-events-real-time-updates/)
-
-### Timeline Visualization
-- [Workflow visualization with Temporal's Timeline View](https://temporal.io/blog/lets-visualize-a-workflow)
-- [Curated Dashboard Design Examples for UI Inspiration (2026)](https://muz.li/blog/best-dashboard-design-examples-inspirations-for-2026/)
+- Codebase analysis: existing tag system (`backend/src/services/tagging.ts`), topic memo endpoint (`backend/src/routes/content.ts` lines 1257-1328), quiz generation (`backend/src/services/quizGeneration.ts`), topic screen (`ios/app/topic/[name].tsx`)
+- Existing iOS patterns: `ios/hooks/useTopics.ts`, `ios/hooks/useContent.ts`
+- Interleaving research: 50-125% retention improvement (Roediger & Karpicke, 2006; Kornell & Bjork, 2008)

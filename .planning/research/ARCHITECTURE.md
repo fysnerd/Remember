@@ -1,701 +1,771 @@
-# Architecture Patterns
+# Architecture Patterns: Theme-Based Content Organization
 
-**Domain:** Admin Panel + Observability Dashboard for Express.js Backend
-**Researched:** 2026-02-09
+**Domain:** Active learning platform -- theme-based UX layer for Ankora
+**Researched:** 2026-02-10
+**Overall confidence:** HIGH -- based on direct codebase analysis plus verified Prisma/Expo patterns
 
-## Recommended Architecture
+---
+
+## Executive Summary
+
+Theme-based organization is an **extension layer** on top of the existing Tag system, not a replacement. Tags remain granular (AI-generated per-content labels like "react-hooks", "typescript"), while Themes are broad user-facing groupings ("Web Development", "Finance") that aggregate multiple tags and their content under human-readable categories.
+
+The existing codebase already has a "topic" concept on iOS -- but it is simply a tag filter. The Feed screen shows tags as a 2-column grid, and tapping a tag navigates to `/topic/[name]` which filters content by that tag name. There is no dedicated Topic or Theme model in the database.
+
+This architecture adds a proper Theme model with many-to-many content relations, a classification worker, dedicated API endpoints, and iOS screens -- all built on the existing patterns already proven in the codebase.
+
+---
+
+## Current Architecture (as-is)
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Express.js App                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌────────────┐      ┌──────────────────┐     ┌─────────────┐ │
-│  │  API       │      │  AdminJS         │     │  Job        │ │
-│  │  Routes    │◄────►│  Router          │◄───►│  Execution  │ │
-│  │            │      │  (ESM Module)    │     │  Tracker    │ │
-│  └────────────┘      └──────────────────┘     └─────────────┘ │
-│       │                      │                       │         │
-│       │                      │                       │         │
-│       ▼                      ▼                       ▼         │
-│  ┌────────────┐      ┌──────────────────┐     ┌─────────────┐ │
-│  │  Auth      │      │  Custom          │     │  node-cron  │ │
-│  │  Middleware│      │  Dashboard       │     │  Scheduler  │ │
-│  │            │      │  Component       │     │  (wrapped)  │ │
-│  └────────────┘      └──────────────────┘     └─────────────┘ │
-│                             │                       │         │
-│                             │                       │         │
-│                             ▼                       ▼         │
-│                      ┌──────────────────┐     ┌─────────────┐ │
-│                      │  Dashboard       │     │  Job        │ │
-│                      │  Handler         │     │  Worker     │ │
-│                      │  (API Endpoint)  │     │  Functions  │ │
-│                      └──────────────────┘     └─────────────┘ │
-│                             │                       │         │
-└─────────────────────────────┼───────────────────────┼─────────┘
-                              │                       │
-                              ▼                       ▼
-                      ┌──────────────────────────────────┐
-                      │        Prisma ORM                │
-                      └──────────────────────────────────┘
-                              │
-                              ▼
-                      ┌──────────────────────────────────┐
-                      │   PostgreSQL (Supabase)          │
-                      │                                  │
-                      │   Tables:                        │
-                      │   - User                         │
-                      │   - Content                      │
-                      │   - Quiz                         │
-                      │   - JobExecution (NEW)          │
-                      │   - JobError (NEW)              │
-                      └──────────────────────────────────┘
+[Platforms] --> [Sync Workers] --> Content (INBOX)
+                                      |
+                                      v
+                              [Transcription Workers]
+                                      |
+                                      v
+                                [Quiz Generation] --> Quiz --> Card
+                                      |
+                                      v
+                                 [Auto-Tagging] --> Tag (many-to-many, implicit)
+                                      |
+                                      v
+                              iOS "topic" screens = tag filter
+                              (topic/[name].tsx filters by tag name)
 ```
 
-### Component Boundaries
+**Key observations from codebase analysis:**
 
-| Component | Responsibility | Communicates With | Isolation Level |
-|-----------|---------------|-------------------|-----------------|
-| **AdminJS Router** | CRUD UI for Prisma models, mount at `/admin` | Prisma via @adminjs/prisma adapter, Custom Dashboard Component | ESM-only module, dynamically imported |
-| **Custom Dashboard Component** | React component displaying job metrics/timeline/errors | Dashboard Handler (backend API), AdminJS ApiClient | Bundled via AdminJS.bundle(), no direct DB access |
-| **Dashboard Handler** | REST endpoint returning job statistics/recent executions | JobExecution/JobError models via Prisma | Mounted at AdminJS pages[].handler |
-| **Job Execution Tracker** | Wrapper around node-cron jobs, logs to DB | Prisma (JobExecution/JobError), node-cron scheduler | Decorator pattern, called by scheduler |
-| **node-cron Scheduler** | Triggers jobs on schedule, prevents overlap | Job Worker Functions, Job Execution Tracker | Existing scheduler.ts with runningJobs Set |
-| **Job Worker Functions** | Business logic (sync, transcription, quiz gen) | External APIs, Prisma models | Wrapped by tracker, no direct awareness of logging |
-| **Prisma ORM** | Data access layer | PostgreSQL database | Schema includes new JobExecution/JobError models |
-| **Auth Middleware** | Protects admin routes | AdminJS Router, API Routes | JWT-based, reusable across both admin and API |
+1. **Tag model is global** -- `Tag` has `@@unique([name])`, shared across all users. Content connects to tags via implicit many-to-many `@relation("ContentTags")`.
 
-### Data Flow
+2. **Topics on iOS are just tags** -- `useTopics()` calls `GET /content/tags` which returns tags with content counts. The Feed screen renders them in a grid. Tapping navigates to `/topic/[name]`.
 
-#### 1. Job Execution Flow (Runtime)
-```
-Cron trigger → Scheduler checks runningJobs Set → Job Execution Tracker starts
-→ Creates JobExecution record (status: RUNNING, startTime)
-→ Calls wrapped Worker Function
-→ [Success] Updates JobExecution (status: SUCCESS, endTime, result)
-→ [Failure] Creates JobError record, updates JobExecution (status: FAILED)
-→ Scheduler removes from runningJobs Set
-```
+3. **Topic quiz and memo exist** -- `POST /reviews/practice/topic` and `GET /content/topic/:name/memo` are already implemented, querying by tag name. These patterns are directly reusable for themes.
 
-#### 2. Admin Dashboard View Flow (User Request)
-```
-User opens /admin/dashboard → AdminJS serves Custom Dashboard Component
-→ Component mounts, calls ApiClient.getDashboardData()
-→ Dashboard Handler queries Prisma (JobExecution.findMany, JobError.findMany)
-→ Aggregates stats (success rate, avg duration, recent failures)
-→ Returns JSON → Component renders charts/tables with @adminjs/design-system
-```
+4. **Auto-tagging worker** -- Runs every 15 min, processes 10 items per batch, uses Mistral AI to generate 3-5 French tags per content. Tags are lowercased and upserted.
 
-#### 3. CRUD Operations Flow (AdminJS Auto-generated)
+5. **Quiz session system** -- `QuizSession` model already supports `tagIds` for filtering, with `mode: 'practice' | 'due'`. This needs extension for `themeIds`.
+
+---
+
+## Target Architecture (to-be)
+
 ```
-User clicks "Users" in admin sidebar → AdminJS Prisma adapter generates UI
-→ User edits record → AdminJS sends POST to auto-generated endpoint
-→ @adminjs/prisma adapter calls Prisma ORM → PostgreSQL update
-→ AdminJS returns success → UI updates
+[Platforms] --> [Sync Workers] --> Content (INBOX)
+                                      |
+                                      v
+                              [Transcription Workers]
+                                      |
+                                      v
+                                [Quiz Generation] --> Quiz --> Card
+                                      |
+                                      v
+                                 [Auto-Tagging] --> Tag (granular, global)
+                                      |
+                                      v
+                          [Theme Classification Worker]  <-- NEW (runs after auto-tagging)
+                                      |
+                                      v
+                              Theme (per-user, many-to-many) <-- NEW MODEL
+                                      |
+                                      v
+                          iOS: Theme screens, Theme quizzes,
+                          Theme memos, Theme progress
 ```
 
-#### 4. Manual Job Trigger Flow (Existing)
+---
+
+## Component Boundaries
+
+### New Components
+
+| Component | Responsibility | Communicates With |
+|-----------|---------------|-------------------|
+| **Theme model** (Prisma) | Stores theme definitions per user, many-to-many with Content | Content, User |
+| **Theme classification service** | Assigns content to themes based on tag matching + LLM suggestions | Content, Tag, Theme, LLM service |
+| **Theme API routes** (`/api/themes`) | CRUD, content management, theme memos, suggestions | Theme model, Content, Quiz/Card models |
+| **Theme iOS screens** | Theme list, detail, quiz, memo, manage | Theme API via hooks |
+| **useThemes hook** | Data fetching + cache invalidation for themes | Theme API endpoints |
+
+### Modified Components
+
+| Component | Modification | Impact |
+|-----------|-------------|--------|
+| **schema.prisma** | Add Theme model, update Content + User relations | Low -- additive migration |
+| **scheduler.ts** | Add `theme-classification` cron job entry | Low -- follows existing pattern exactly |
+| **content.ts routes** | Include `themes` in content detail responses | Low -- add to `include` clause |
+| **review.ts routes** | Add `POST /reviews/practice/theme` and `themeIds` to session | Medium -- new endpoints mirroring existing topic pattern |
+| **Content type** (iOS) | Add `themes` field to Content interface | Low -- additive |
+| **Feed screen** (index.tsx) | Show themes as primary grouping, tags as secondary | Medium -- UI restructure of existing screen |
+| **contentStore.ts** | Add `themeFilter` state | Low -- additive |
+| **FilterBar component** | Add theme filter option | Low -- new filter chip |
+| **hooks/index.ts** | Export new theme hooks | Low -- additive |
+
+### Unchanged Components
+
+| Component | Why Unchanged |
+|-----------|--------------|
+| Sync workers (YouTube, Spotify, TikTok, Instagram) | Themes are post-processing, not sync-time |
+| Transcription workers (all 4) | No theme awareness needed at transcription stage |
+| Quiz generation service | Generates per-content, theme quizzes aggregate existing cards |
+| Auto-tagging worker | Continues producing tags; themes layer sits above |
+| Auth/OAuth routes | No relation to themes |
+| SM-2 algorithm (review.ts) | Card-level, theme-agnostic -- works same regardless of grouping |
+| Existing topic screens | Keep functional alongside theme screens during transition |
+
+---
+
+## Data Model Design
+
+### Recommended: Implicit Many-to-Many (matches existing Tag pattern)
+
+Use Prisma's implicit many-to-many for Theme-Content because no metadata is needed on the join itself (no "added date" or "relevance score" on the relationship).
+
+**Confidence: HIGH** -- The existing Tag-Content relation already uses implicit many-to-many (`@relation("ContentTags")`) and works well throughout the codebase.
+
+```prisma
+// ============================================================================
+// Themes (User-scoped content organization)
+// ============================================================================
+
+model Theme {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name        String                // "Web Development", "Finance", "Health"
+  description String?               // Optional AI or user description
+  emoji       String?   @default("folder")  // Emoji identifier for UI
+  color       String?               // Hex color for visual differentiation
+
+  // Classification rules
+  tagPatterns String[]              // Tag names that map to this theme
+                                    // e.g. ["react", "javascript", "typescript"]
+
+  // Metadata
+  isAutoGenerated Boolean @default(false)  // true if AI-created
+  sortOrder       Int     @default(0)      // User-defined display order
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  contents    Content[] @relation("ContentThemes")
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@index([userId, sortOrder])
+}
 ```
-POST /api/admin/sync/all → Auth Middleware validates JWT
-→ Controller imports worker function → Executes directly (bypasses scheduler)
-→ Job Execution Tracker still wraps execution → Logs to JobExecution model
+
+**Content model addition:**
+
+```prisma
+model Content {
+  // ... all existing fields unchanged ...
+
+  tags          Tag[]    @relation("ContentTags")      // existing
+  themes        Theme[]  @relation("ContentThemes")    // NEW
+
+  // ... rest unchanged ...
+}
 ```
+
+**User model addition:**
+
+```prisma
+model User {
+  // ... all existing fields unchanged ...
+
+  themes        Theme[]   // NEW
+
+  // ... rest unchanged ...
+}
+```
+
+### Key Design Decisions
+
+**1. Themes are per-user, Tags are global**
+
+Tags are shared across users (global `Tag` table with `@@unique([name])`). Themes are per-user (`@@unique([userId, name])`). Rationale:
+- Different users consume different content mixes and organize differently
+- A finance YouTuber and a coding student would never share theme structures
+- Theme names can be personalized ("My Side Hustle" vs "Entrepreneuriat")
+- This mirrors how every note-taking app handles folders/categories (per-user)
+
+**2. tagPatterns for automatic classification**
+
+The `tagPatterns String[]` field stores tag names that automatically map content to the theme. When the classification worker runs:
+- Fetch user's themes with their tagPatterns
+- Fetch user's content that has tags but no themes
+- For each content, check if any of its tags match any theme's tagPatterns
+- If match found, connect content to theme
+
+This is deterministic and fast -- no LLM call needed for routine classification. The LLM is only used for initial theme suggestions and edge cases.
+
+**3. Why not a ThemeTag join model?**
+
+Considered a separate `ThemeTag` model, but `tagPatterns String[]` on Theme is simpler:
+- Tag names are already unique strings
+- PostgreSQL supports array containment operators (`@>`, `&&`) for efficient matching
+- Avoids an extra table and join
+- The list is small (5-15 tags per theme) so array storage is appropriate
+
+**4. Why implicit over explicit many-to-many?**
+
+- No metadata needed on the Theme-Content relationship itself
+- Simpler Prisma Client API (one fewer nesting level)
+- Matches the existing Tag-Content pattern exactly
+- Can always migrate to explicit later if metadata needed ([Prisma docs confirm this](https://www.prisma.io/docs/orm/more/help-and-troubleshooting/implicit-to-explicit-conversion))
+
+---
+
+## Data Flow
+
+### Flow 1: Theme Creation
+
+```
+User creates theme manually (name, emoji, optional tagPatterns)
+  OR
+AI suggests themes based on user's unclassified content
+  |
+  v
+POST /api/themes --> Theme record created
+  |
+  v
+If tagPatterns provided:
+  Classification worker runs immediately (or on next cron cycle)
+  Scans user's content for matching tags
+  Connects matching content to theme
+  |
+  v
+iOS invalidates ['themes'] query key --> UI updates
+```
+
+### Flow 2: Automatic Theme Classification (Worker)
+
+```
+1. Cron fires (every 15 min, offset from auto-tagging)
+2. For each user with at least one theme:
+   a. Load themes with tagPatterns
+   b. Load content that has tags but no themes (take 50)
+   c. For each content item:
+      - Get content's tag names
+      - Check intersection with each theme's tagPatterns
+      - If match: prisma.theme.update({ contents: { connect: { id } } })
+   d. If many unclassified items remain after matching:
+      - Consider suggesting a new theme (batch, not per-content)
+3. Log results via existing jobExecutionTracker
+```
+
+**Worker scheduling detail:** Run at offset minutes (e.g., `7,22,37,52 * * * *`) so it runs ~7 minutes AFTER auto-tagging (`0,15,30,45 * * * *`). This gives tags time to be applied before theme classification attempts to match them.
+
+### Flow 3: Theme-Based Quiz
+
+```
+User taps "Quiz" on theme detail screen
+  |
+  v
+POST /api/reviews/practice/theme { themeId }
+  |
+  v
+Backend:
+  1. Find theme, verify userId
+  2. Get all Content IDs in this theme (status: READY)
+  3. Get all Cards for those Contents (via Quiz -> Card)
+  4. Shuffle and return (same as existing topic quiz pattern)
+  |
+  v
+iOS renders quiz using existing QuestionCard, AnswerFeedback, QuizSummary components
+(identical to quiz/topic/[name].tsx flow)
+```
+
+### Flow 4: Theme Memo
+
+```
+User taps "Memo" on theme detail screen
+  |
+  v
+GET /api/themes/:id/memo
+  |
+  v
+Backend:
+  1. Get all theme contents with transcripts
+  2. Collect individual content memos (from transcript.segments.memo)
+  3. If memos exist: synthesize with LLM (same pattern as /content/topic/:name/memo)
+  4. Return aggregated memo
+  |
+  v
+iOS renders memo using existing memo display component
+```
+
+---
+
+## API Structure
+
+### New Routes: `/api/themes`
+
+| Method | Route | Description | Request Body / Params |
+|--------|-------|-------------|----------------------|
+| GET | `/api/themes` | List user's themes with content counts | -- |
+| POST | `/api/themes` | Create theme | `{ name, emoji?, color?, tagPatterns?, description? }` |
+| GET | `/api/themes/:id` | Theme detail with content list | Query: `?page=1&limit=20` |
+| PATCH | `/api/themes/:id` | Update theme | `{ name?, emoji?, color?, tagPatterns?, sortOrder?, description? }` |
+| DELETE | `/api/themes/:id` | Delete theme (NOT content) | -- |
+| POST | `/api/themes/:id/content` | Add content to theme | `{ contentIds: string[] }` |
+| DELETE | `/api/themes/:id/content/:contentId` | Remove content from theme | -- |
+| POST | `/api/themes/:id/reclassify` | Re-run tag matching | -- |
+| GET | `/api/themes/:id/memo` | Get/generate theme memo | -- |
+| GET | `/api/themes/suggestions` | AI-suggested themes | -- |
+| PATCH | `/api/themes/reorder` | Bulk update sortOrder | `{ themeIds: string[] }` (order = new sortOrder) |
+
+### Extended Existing Routes
+
+| Route | Change | Details |
+|-------|--------|---------|
+| `GET /api/content` | Add `themeId` query param | Filter content by theme |
+| `GET /api/content/:id` | Include `themes` in response | Add to Prisma `include` |
+| `POST /api/reviews/practice/theme` | NEW endpoint | Mirror `/practice/topic` but filter by themeId |
+| `POST /api/reviews/session` | Add `themeIds` to schema | Extend createSessionSchema with optional `themeIds` array |
+| `GET /api/reviews` | Include theme info in response | Add themes to content select |
+
+### Route File Structure
+
+```typescript
+// backend/src/routes/theme.ts -- NEW FILE
+
+import { Router } from 'express';
+import { authenticateToken } from '../middleware/auth.js';
+
+export const themeRouter = Router();
+themeRouter.use(authenticateToken);
+
+// GET /api/themes
+themeRouter.get('/', async (req, res, next) => { /* ... */ });
+// POST /api/themes
+themeRouter.post('/', async (req, res, next) => { /* ... */ });
+// etc.
+```
+
+Registration in the main app (alongside existing routers):
+
+```typescript
+// In server.ts / app.ts
+import { themeRouter } from './routes/theme.js';
+app.use('/api/themes', themeRouter);
+```
+
+---
 
 ## Patterns to Follow
 
-### Pattern 1: Job Execution Wrapper (Decorator Pattern)
-**What:** Wrap all node-cron job functions with execution tracking logic
-**When:** Every job scheduled in scheduler.ts
-**Why:** Centralized logging, DRY principle, transparent to worker functions
+### Pattern 1: Worker Pattern (match existing auto-tagging worker exactly)
 
-**Example:**
+The theme classification worker follows the same structure as `runAutoTaggingWorker()` in `services/tagging.ts`.
+
 ```typescript
-// backend/src/services/jobTracker.ts
-import prisma from '../config/database';
+// backend/src/services/themeClassification.ts
 
-export async function trackJobExecution<T>(
-  jobName: string,
-  jobFn: () => Promise<T>
-): Promise<T> {
-  const execution = await prisma.jobExecution.create({
-    data: {
-      jobName,
-      status: 'RUNNING',
-      startTime: new Date(),
-    },
-  });
+import { prisma } from '../config/database.js';
+import pLimit from 'p-limit';
+import { logger } from '../config/logger.js';
+
+const log = logger.child({ service: 'theme-classification' });
+
+export async function runThemeClassificationWorker(): Promise<void> {
+  log.info('Theme classification worker starting');
 
   try {
-    const result = await jobFn();
-
-    await prisma.jobExecution.update({
-      where: { id: execution.id },
-      data: {
-        status: 'SUCCESS',
-        endTime: new Date(),
-        result: JSON.stringify(result),
-      },
+    // Get users who have themes defined
+    const usersWithThemes = await prisma.user.findMany({
+      where: { themes: { some: {} } },
+      select: { id: true },
     });
 
-    return result;
+    log.info({ userCount: usersWithThemes.length }, 'Users with themes found');
+
+    const limit = pLimit(5);
+    const results = await Promise.allSettled(
+      usersWithThemes.map(user =>
+        limit(() => classifyContentForUser(user.id))
+      )
+    );
+
+    const classified = results.filter(r => r.status === 'fulfilled').length;
+    log.info({ classified, total: usersWithThemes.length },
+      'Theme classification worker completed');
   } catch (error) {
-    await prisma.jobError.create({
-      data: {
-        jobExecutionId: execution.id,
-        errorMessage: error.message,
-        stackTrace: error.stack,
-      },
-    });
-
-    await prisma.jobExecution.update({
-      where: { id: execution.id },
-      data: {
-        status: 'FAILED',
-        endTime: new Date(),
-      },
-    });
-
-    throw error;
+    log.error({ err: error }, 'Theme classification worker error');
   }
 }
 
-// backend/src/workers/scheduler.ts (modified)
-import { trackJobExecution } from '../services/jobTracker';
-import { syncYouTube } from './youtubeSync';
-
-cron.schedule('*/15 * * * *', async () => {
-  if (runningJobs.has('youtube-sync')) return;
-  runningJobs.add('youtube-sync');
-
-  try {
-    await trackJobExecution('youtube-sync', syncYouTube);
-  } finally {
-    runningJobs.delete('youtube-sync');
-  }
-});
-```
-
-**Benefits:**
-- Worker functions unchanged (single responsibility)
-- Consistent logging across all jobs
-- Easy to add metrics (duration, retries, etc.)
-- Error context preserved (stack traces)
-
-### Pattern 2: AdminJS ESM Dynamic Import
-**What:** Use dynamic import() to load ESM-only AdminJS in CommonJS Express app
-**When:** Ankora backend is likely CommonJS (tsconfig.json determines this)
-**Why:** AdminJS v7 is ESM-only, cannot use require()
-
-**Example:**
-```typescript
-// backend/src/index.ts (CommonJS)
-const express = require('express');
-const app = express();
-
-// Dynamic import AdminJS (ESM)
-(async () => {
-  const { default: AdminJS } = await import('adminjs');
-  const AdminJSExpress = await import('@adminjs/express');
-  const { Database, Resource } = await import('@adminjs/prisma');
-  const { PrismaClient } = require('@prisma/client');
-
-  AdminJS.registerAdapter({ Database, Resource });
-  const prisma = new PrismaClient();
-
-  const adminJs = new AdminJS({
-    resources: [
-      { resource: { model: prisma.user, client: prisma }, options: {} },
-      { resource: { model: prisma.content, client: prisma }, options: {} },
-      // ... other models
-    ],
-    pages: {
-      dashboard: {
-        component: AdminJS.bundle('./components/Dashboard.tsx'),
-        handler: async (req, res) => {
-          const stats = await getJobStats(); // See Pattern 3
-          res.json(stats);
-        },
-      },
-    },
+async function classifyContentForUser(userId: string): Promise<number> {
+  const themes = await prisma.theme.findMany({
+    where: { userId },
+    select: { id: true, tagPatterns: true },
   });
 
-  const router = AdminJSExpress.buildRouter(adminJs);
-  app.use('/admin', router);
-
-  app.listen(3001);
-})();
-```
-
-**Alternative (if project can migrate to ESM):**
-```typescript
-// backend/src/index.ts (ESM)
-import AdminJS from 'adminjs';
-import AdminJSExpress from '@adminjs/express';
-// ... standard ESM imports
-```
-
-**Migration Decision Point:** Check `package.json` for `"type": "module"` and `tsconfig.json` for `"module": "ES2022"`. If not present, use dynamic imports.
-
-### Pattern 3: Dashboard Handler with Aggregations
-**What:** Backend handler that aggregates job statistics efficiently
-**When:** Custom dashboard page needs metrics (success rate, avg duration, errors)
-**Why:** Avoid sending raw data to frontend, reduce payload size
-
-**Example:**
-```typescript
-// backend/src/routes/admin.ts
-import { subHours } from 'date-fns';
-
-export async function getDashboardStats() {
-  const last24h = subHours(new Date(), 24);
-
-  // Parallel queries for performance
-  const [totalJobs, failedJobs, avgDuration, recentErrors, jobTimeline] =
-    await Promise.all([
-      prisma.jobExecution.count({
-        where: { startTime: { gte: last24h } },
-      }),
-      prisma.jobExecution.count({
-        where: {
-          startTime: { gte: last24h },
-          status: 'FAILED',
-        },
-      }),
-      prisma.jobExecution.aggregate({
-        where: {
-          startTime: { gte: last24h },
-          status: 'SUCCESS',
-        },
-        _avg: {
-          duration: true, // Computed field: endTime - startTime
-        },
-      }),
-      prisma.jobError.findMany({
-        where: {
-          jobExecution: { startTime: { gte: last24h } },
-        },
-        include: { jobExecution: true },
-        orderBy: { createdAt: 'desc' },
-        take: 10,
-      }),
-      prisma.$queryRaw`
-        SELECT
-          DATE_TRUNC('hour', "startTime") as hour,
-          COUNT(*) as total,
-          COUNT(CASE WHEN status = 'SUCCESS' THEN 1 END) as successes,
-          COUNT(CASE WHEN status = 'FAILED' THEN 1 END) as failures
-        FROM "JobExecution"
-        WHERE "startTime" >= ${last24h}
-        GROUP BY hour
-        ORDER BY hour DESC
-      `,
-    ]);
-
-  return {
-    summary: {
-      total: totalJobs,
-      failed: failedJobs,
-      successRate: ((totalJobs - failedJobs) / totalJobs * 100).toFixed(2),
-      avgDuration: avgDuration._avg.duration,
+  const unclassifiedContent = await prisma.content.findMany({
+    where: {
+      userId,
+      tags: { some: {} },
+      themes: { none: {} },
+      status: 'READY',
     },
-    recentErrors: recentErrors.map(e => ({
-      job: e.jobExecution.jobName,
-      time: e.createdAt,
-      message: e.errorMessage,
-    })),
-    timeline: jobTimeline,
-  };
-}
-```
+    include: { tags: true },
+    take: 50,
+  });
 
-**Benefits:**
-- Single database connection for multiple queries (Prisma connection pooling)
-- Aggregations on database side (faster than client-side)
-- Structured response ready for visualization
-- Raw SQL for complex aggregations (hourly breakdown)
+  let classified = 0;
 
-### Pattern 4: AdminJS ApiClient Usage in Custom Component
-**What:** Use AdminJS's built-in ApiClient for backend communication
-**When:** Custom React dashboard needs to fetch data from handler
-**Why:** Automatic auth header injection, consistent error handling
+  for (const content of unclassifiedContent) {
+    const contentTagNames = content.tags.map(t => t.name);
 
-**Example:**
-```typescript
-// backend/src/components/Dashboard.tsx
-import React, { useEffect, useState } from 'react';
-import { ApiClient, useNotice } from 'adminjs';
-import { Box, H3, Table, TableRow, TableCell } from '@adminjs/design-system';
+    for (const theme of themes) {
+      const hasMatch = theme.tagPatterns.some(pattern =>
+        contentTagNames.includes(pattern)
+      );
 
-const Dashboard: React.FC = () => {
-  const [stats, setStats] = useState(null);
-  const addNotice = useNotice();
-  const api = new ApiClient();
-
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const response = await api.getDashboardData();
-        setStats(response.data);
-      } catch (error) {
-        addNotice({
-          message: 'Failed to load dashboard data',
-          type: 'error',
+      if (hasMatch) {
+        await prisma.theme.update({
+          where: { id: theme.id },
+          data: { contents: { connect: { id: content.id } } },
         });
+        classified++;
+        break; // Connect to first matching theme (avoid double-counting)
       }
-    };
-    fetchStats();
-    const interval = setInterval(fetchStats, 30000); // Refresh every 30s
-    return () => clearInterval(interval);
-  }, []);
+    }
+  }
 
-  if (!stats) return <Box>Loading...</Box>;
-
-  return (
-    <Box padding="xxl">
-      <H3>Job Execution Dashboard (Last 24h)</H3>
-
-      <Box display="grid" gridTemplateColumns="1fr 1fr 1fr 1fr" gap="lg">
-        <Box bg="grey20" padding="lg">
-          <div>Total Jobs</div>
-          <H3>{stats.summary.total}</H3>
-        </Box>
-        <Box bg="grey20" padding="lg">
-          <div>Success Rate</div>
-          <H3>{stats.summary.successRate}%</H3>
-        </Box>
-        <Box bg="grey20" padding="lg">
-          <div>Failures</div>
-          <H3>{stats.summary.failed}</H3>
-        </Box>
-        <Box bg="grey20" padding="lg">
-          <div>Avg Duration</div>
-          <H3>{stats.summary.avgDuration}s</H3>
-        </Box>
-      </Box>
-
-      <Box marginTop="xxl">
-        <H3>Recent Errors</H3>
-        <Table>
-          {stats.recentErrors.map((error, idx) => (
-            <TableRow key={idx}>
-              <TableCell>{error.job}</TableCell>
-              <TableCell>{new Date(error.time).toLocaleString()}</TableCell>
-              <TableCell>{error.message}</TableCell>
-            </TableRow>
-          ))}
-        </Table>
-      </Box>
-    </Box>
-  );
-};
-
-export default Dashboard;
-```
-
-**Key Points:**
-- `ApiClient.getDashboardData()` calls the handler defined in pages[].handler
-- Use `@adminjs/design-system` components for consistent styling
-- `useNotice()` hook for user-friendly error messages
-- Auto-refresh with setInterval for real-time monitoring
-
-### Pattern 5: Prisma Schema for Job Tracking
-**What:** Database models for capturing job execution metadata
-**When:** Adding observability to existing schema
-**Why:** Queryable history, relationship with errors, scalable
-
-**Example:**
-```prisma
-// backend/prisma/schema.prisma
-model JobExecution {
-  id          String      @id @default(cuid())
-  jobName     String      // e.g., "youtube-sync", "quiz-generation"
-  status      JobStatus   // RUNNING, SUCCESS, FAILED
-  startTime   DateTime    @default(now())
-  endTime     DateTime?
-  result      Json?       // Serialized result data
-  errors      JobError[]
-
-  @@index([jobName, startTime])
-  @@index([status, startTime])
-  @@map("job_executions")
-}
-
-model JobError {
-  id             String        @id @default(cuid())
-  jobExecutionId String
-  errorMessage   String
-  stackTrace     String?       @db.Text
-  createdAt      DateTime      @default(now())
-
-  jobExecution   JobExecution  @relation(fields: [jobExecutionId], references: [id], onDelete: Cascade)
-
-  @@index([jobExecutionId])
-  @@map("job_errors")
-}
-
-enum JobStatus {
-  RUNNING
-  SUCCESS
-  FAILED
+  return classified;
 }
 ```
 
-**Design Decisions:**
-- `jobName` as String (not enum) → flexible for adding new jobs without migration
-- `result` as Json → store success metadata (e.g., "synced 12 items")
-- Cascading delete on JobError → cleanup when pruning old executions
-- Composite indexes for common queries (job history, failure analysis)
-- `endTime` nullable → detect stuck jobs (RUNNING but endTime is old)
+**Note on the `break`:** A content item CAN belong to multiple themes. The `break` above prevents double-classification in a single worker run. On subsequent runs, if the content still has unmatched tagPatterns for other themes, it will be classified into those too. Alternative: remove the `break` to allow immediate multi-theme assignment. The choice depends on UX preference.
+
+### Pattern 2: Scheduler Registration (match existing cron entries)
+
+```typescript
+// In scheduler.ts -- add to startScheduler() function
+
+import { runThemeClassificationWorker } from '../services/themeClassification.js';
+
+// Theme Classification Worker - Every 15 minutes (offset from auto-tagging)
+cron.schedule('7,22,37,52 * * * *', async () => {
+  log.info({ job: 'theme-classification' }, 'Triggering scheduled job');
+  await runJob('theme-classification', runThemeClassificationWorker);
+});
+
+// Also add to triggerJob() switch statement:
+case 'theme-classification':
+  await runJob('theme-classification', runThemeClassificationWorker, triggerSource);
+  return { success: true, message: 'Theme classification worker completed' };
+```
+
+### Pattern 3: React Query Hook (match existing useTopics pattern)
+
+```typescript
+// ios/hooks/useThemes.ts
+
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import api from '../lib/api';
+
+interface Theme {
+  id: string;
+  name: string;
+  emoji: string;
+  color?: string;
+  description?: string;
+  contentCount: number;
+  isAutoGenerated: boolean;
+}
+
+export function useThemes() {
+  return useQuery({
+    queryKey: ['themes'],
+    queryFn: async () => {
+      const { data } = await api.get<Theme[]>('/themes');
+      return data;
+    },
+  });
+}
+
+export function useThemeDetail(themeId: string) {
+  return useQuery({
+    queryKey: ['themes', themeId],
+    queryFn: async () => {
+      const { data } = await api.get(`/themes/${themeId}`);
+      return data;
+    },
+    enabled: !!themeId,
+  });
+}
+
+export function useCreateTheme() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      name: string;
+      emoji?: string;
+      tagPatterns?: string[];
+    }) => {
+      const { data } = await api.post('/themes', payload);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['themes'] });
+    },
+  });
+}
+
+export function useDeleteTheme() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (themeId: string) => {
+      const { data } = await api.delete(`/themes/${themeId}`);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['themes'] });
+      queryClient.invalidateQueries({ queryKey: ['content'] });
+    },
+  });
+}
+```
+
+### Pattern 4: Expo Router Screen (match existing topic/[name].tsx)
+
+Theme screens live at top-level file routes, pushing onto the root stack -- exactly like existing topic screens.
+
+```
+ios/app/
+  theme/
+    [id].tsx              # Theme detail screen
+    manage/[id].tsx       # Theme settings (rename, edit tags, delete)
+    create.tsx            # Theme creation screen
+  quiz/
+    theme/[id].tsx        # Theme quiz (reuses QuestionCard components)
+  memo/
+    theme/[id].tsx        # Theme memo display
+```
+
+The theme detail screen mirrors `topic/[name].tsx` structure:
+
+```typescript
+// ios/app/theme/[id].tsx -- follows same pattern as topic/[name].tsx
+export default function ThemeDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { data: theme, isLoading } = useThemeDetail(id);
+
+  const handleStartQuiz = () => {
+    router.push({ pathname: '/quiz/theme/[id]', params: { id } });
+  };
+
+  const handleManageTheme = () => {
+    router.push({ pathname: '/theme/manage/[id]', params: { id } });
+  };
+
+  // ... render content list, quiz button, memo button
+  // Same component structure as topic/[name].tsx
+}
+```
+
+---
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Mixing AdminJS Auth with Existing JWT Auth
-**What:** Creating separate auth systems for admin panel vs API
-**Why bad:** User confusion, dual session management, security gaps
-**Instead:** Reuse existing JWT middleware for AdminJS
+### Anti-Pattern 1: Replacing Tags with Themes
 
-```typescript
-// ❌ BAD: Separate AdminJS auth
-const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
-  authenticate: async (email, password) => {
-    // Separate login logic
-  },
-  cookiePassword: 'separate-secret',
-});
+**What:** Removing the Tag model and using only Themes for all classification.
+**Why bad:** Tags serve a different purpose (granular, AI-generated, per-content). The auto-tagging pipeline, the existing topic-based quiz flow, the Library FilterBar, and the `useTopics` hook all depend on tags. Removing them breaks the entire classification pipeline.
+**Instead:** Keep both. Tags = raw AI classification. Themes = user-facing organization. Themes reference tags via `tagPatterns`. Content can have both tags AND themes simultaneously.
 
-// ✅ GOOD: Reuse JWT middleware
-import { authenticateToken } from './middleware/auth';
+### Anti-Pattern 2: Theme Classification at Sync Time
 
-const adminRouter = AdminJSExpress.buildRouter(adminJs);
-app.use('/admin', authenticateToken, adminRouter);
-```
+**What:** Running theme classification inside sync workers right after content import.
+**Why bad:** At sync time, content is in INBOX status with no transcript and no tags. Theme classification depends on tags, which depend on transcription. The pipeline is: sync -> transcribe -> tag -> classify into themes. Short-circuiting this creates empty themes.
+**Instead:** Separate worker with time offset after auto-tagging.
 
-### Anti-Pattern 2: Polling Dashboard Instead of Aggregations
-**What:** Fetching all JobExecution records to frontend, computing stats in React
-**Why bad:** Massive payloads (thousands of records), slow rendering, database overload
-**Instead:** Aggregate on backend, send summary (see Pattern 3)
+### Anti-Pattern 3: Cross-User Theme Sharing (Global Themes)
 
-```typescript
-// ❌ BAD: Send all records
-const allJobs = await prisma.jobExecution.findMany();
-res.json(allJobs); // 10MB response
+**What:** Making themes global like tags, so all users share the same theme definitions.
+**Why bad:** Users have wildly different content mixes. "Finance" for user A means crypto trading; for user B it means personal budgeting. Shared themes would create constant mis-classification and user frustration.
+**Instead:** Themes are per-user (`@@unique([userId, name])`). AI can suggest similar structures, but each user's themes are independent.
 
-// ✅ GOOD: Aggregate first
-const stats = await prisma.jobExecution.groupBy({
-  by: ['jobName', 'status'],
-  _count: true,
-});
-res.json(stats); // 5KB response
-```
+### Anti-Pattern 4: Generating New Quiz Questions for Themes
 
-### Anti-Pattern 3: Directly Modifying Worker Functions for Logging
-**What:** Adding try/catch + Prisma calls inside each worker function
-**Why bad:** Violates single responsibility, duplicated code, hard to maintain
-**Instead:** Wrapper pattern (Pattern 1)
+**What:** Using LLM to create cross-content synthesis questions specifically for themes.
+**Why bad:** Massively increases LLM costs (generating questions for N contents combined), requires complex prompt engineering, creates questions that cannot be attributed to a single content source (breaks the Content -> Quiz -> Card chain), and the SM-2 algorithm operates at card level regardless.
+**Instead:** Theme quizzes aggregate existing per-content quiz cards. The review routes already support filtering cards by content IDs.
 
-```typescript
-// ❌ BAD: Logging inside worker
-export async function syncYouTube() {
-  const execution = await prisma.jobExecution.create({ ... });
-  try {
-    // actual sync logic
-    await prisma.jobExecution.update({ ... });
-  } catch (error) {
-    await prisma.jobError.create({ ... });
-  }
-}
+### Anti-Pattern 5: Deeply Nested Tab Navigation
 
-// ✅ GOOD: Wrapper handles logging
-export async function syncYouTube() {
-  // Pure business logic, no logging
-  const videos = await fetchVideos();
-  await saveVideos(videos);
-}
+**What:** Creating a "Themes" tab and nesting theme detail/quiz/memo screens inside it.
+**Why bad:** expo-router handles file-based routing at the top level. Deep nesting inside tabs creates complex navigation state, URL ambiguity, and back-button confusion.
+**Instead:** Theme screens at top-level routes (`/theme/[id]`, `/quiz/theme/[id]`) pushing onto the root stack, identical to existing `/topic/[name]` and `/quiz/topic/[name]` patterns. The [Expo Router docs](https://docs.expo.dev/router/advanced/nesting-navigators/) confirm this is the recommended approach.
 
-// Wrapper in scheduler.ts
-await trackJobExecution('youtube-sync', syncYouTube);
-```
+### Anti-Pattern 6: Per-Content LLM Calls for Theme Classification
 
-### Anti-Pattern 4: Using require() for AdminJS v7
-**What:** Attempting `const AdminJS = require('adminjs')` in CommonJS project
-**Why bad:** AdminJS v7 is ESM-only, will throw `ERR_REQUIRE_ESM`
-**Instead:** Dynamic import (Pattern 2) or migrate project to ESM
+**What:** Calling Mistral AI for every content item to determine which theme it belongs to.
+**Why bad:** Tags already exist and were generated by Mistral. Running another LLM call per content just to map tags to themes is wasteful. At 50 contents per user, that's 50 additional API calls per classification run.
+**Instead:** Tag-pattern matching is deterministic and instant. Only use LLM for theme SUGGESTIONS (analyzing aggregate tag patterns to suggest new themes), not for per-content classification.
 
-### Anti-Pattern 5: Storing Full Error Objects in Database
-**What:** Serializing entire Error object including all properties
-**Why bad:** Circular references, non-serializable properties, bloated storage
-**Instead:** Extract message and stack only
+---
 
-```typescript
-// ❌ BAD: Full error object
-await prisma.jobError.create({
-  data: {
-    error: JSON.stringify(error), // May fail or store garbage
-  },
-});
+## Integration Points Summary
 
-// ✅ GOOD: Extract relevant fields
-await prisma.jobError.create({
-  data: {
-    errorMessage: error.message,
-    stackTrace: error.stack,
-    errorType: error.constructor.name,
-  },
-});
-```
+### Database Layer
+
+| What | Type | File |
+|------|------|------|
+| Theme model | NEW | `prisma/schema.prisma` |
+| Content themes relation | MODIFY | `prisma/schema.prisma` |
+| User themes relation | MODIFY | `prisma/schema.prisma` |
+| Migration | NEW | `prisma/migrations/[timestamp]_add_themes/` |
+
+### Backend Services
+
+| What | Type | File |
+|------|------|------|
+| Theme classification service | NEW | `src/services/themeClassification.ts` |
+| Theme suggestion service | NEW | `src/services/themeSuggestion.ts` |
+| Theme routes | NEW | `src/routes/theme.ts` |
+| Scheduler cron entry | MODIFY | `src/workers/scheduler.ts` |
+| Admin trigger support | MODIFY | `src/routes/admin.ts` |
+| Content routes (include themes) | MODIFY | `src/routes/content.ts` |
+| Review routes (theme practice) | MODIFY | `src/routes/review.ts` |
+| Server route registration | MODIFY | `src/index.ts` or `src/app.ts` |
+
+### iOS App
+
+| What | Type | File |
+|------|------|------|
+| Theme interface | NEW | `ios/types/content.ts` |
+| useThemes hook | NEW | `ios/hooks/useThemes.ts` |
+| Hook exports | MODIFY | `ios/hooks/index.ts` |
+| Theme detail screen | NEW | `ios/app/theme/[id].tsx` |
+| Theme manage screen | NEW | `ios/app/theme/manage/[id].tsx` |
+| Theme create screen | NEW | `ios/app/theme/create.tsx` |
+| Theme quiz screen | NEW | `ios/app/quiz/theme/[id].tsx` |
+| Theme memo screen | NEW | `ios/app/memo/theme/[id].tsx` |
+| Feed screen | MODIFY | `ios/app/(tabs)/index.tsx` |
+| contentStore | MODIFY | `ios/stores/contentStore.ts` |
+| FilterBar component | MODIFY | `ios/components/content/FilterBar.tsx` |
+
+---
+
+## Feed Screen Transition Strategy
+
+The Feed screen (currently `ios/app/(tabs)/index.tsx`) currently shows:
+1. Tags in a 2-column grid (labeled "Topics")
+2. Recent content suggestions below
+
+**Recommended transition:**
+1. Show themes as the primary grid (larger cards with emoji + name + content count)
+2. Show "Uncategorized" as a special entry if content exists without themes
+3. Keep recent suggestions section below
+4. Add a "Create Theme" card at the end of the grid
+5. Keep existing tag-based topic screens functional (no breaking change)
+6. Gradually phase out raw tag display in Feed as themes become populated
+
+This avoids a breaking change -- users with no themes see the same tag-based view, while users who create themes get the enhanced experience.
+
+---
 
 ## Scalability Considerations
 
 | Concern | At 100 users | At 10K users | At 1M users |
 |---------|--------------|--------------|-------------|
-| **JobExecution Table Size** | ~50K rows/month (11 jobs, mixed intervals) | Same (job count unchanged) | Same, but add partitioning by month |
-| **Dashboard Query Performance** | Direct Prisma queries (<100ms) | Add indexes on jobName+startTime (<200ms) | Materialized views for stats, partition table |
-| **Real-Time Updates** | 30s polling in dashboard (Pattern 4) | Consider WebSocket for live updates | Event-driven with Redis pub/sub |
-| **Error Log Storage** | Keep all errors indefinitely | Prune errors older than 90 days | Archive to cold storage (S3), keep 30 days |
-| **AdminJS CRUD Performance** | Default Prisma pagination (works well) | Ensure foreign key indexes exist | Consider read replicas for heavy admin usage |
-| **Job Overlap Prevention** | In-memory Set (runningJobs) works | Same (single PM2 process) | Distributed lock (Redis) for multi-instance |
+| Theme count per user | 3-10, no concern | Same | Same |
+| Classification worker runtime | <1s/user, <2min total | Batch by user, paginate content | Queue-based, distributed workers |
+| Theme query performance | Direct join, <50ms | Composite index on join table | Materialized view for stats |
+| LLM calls for suggestions | On-demand only, no concern | Rate limit per user | Cache suggestions, daily batch |
+| Join table size (_ContentThemes) | ~500 rows total | ~500K rows | ~50M rows, monitor index size |
 
-### Migration Path for Scale
+### Index Strategy
 
-**Phase 1 (MVP):** Patterns 1-5 as-is, in-memory overlap prevention
-**Phase 2 (10K users):** Add Prisma indexes, dashboard caching (Redis), error pruning cron
-**Phase 3 (100K+ users):** Table partitioning, materialized views, WebSocket updates, distributed locks
+Prisma's implicit many-to-many creates a `_ContentThemes` join table with indexes on both FK columns. The explicit indexes on Theme (`[userId]`, `[userId, sortOrder]`) handle the primary query patterns. At current scale this is more than sufficient.
 
-## Build Order (Dependency Graph)
+---
+
+## Suggested Build Order
+
+Dependencies flow top-to-bottom. Each phase can be deployed independently.
 
 ```
-1. Prisma Schema (JobExecution/JobError models)
-   ├─ Migration: npx prisma migrate dev --name add-job-tracking
-   └─ Generate client: npx prisma generate
+Phase 1: Data Model + Migration
+  - Add Theme model to schema.prisma
+  - Add themes relation to Content and User
+  - Run prisma migrate dev
+  - Run prisma generate
+  Dependencies: None
+  Risk: Low (additive migration, no data changes)
 
-2. Job Execution Tracker (Pattern 1)
-   ├─ Depends on: Prisma models
-   └─ File: backend/src/services/jobTracker.ts
+Phase 2: Backend Theme CRUD API
+  - Create src/routes/theme.ts
+  - Register in server/app
+  - Implement: list, create, get, update, delete
+  - Implement: add/remove content manually
+  - Include themes in GET /api/content/:id response
+  Dependencies: Phase 1
+  Risk: Low (new endpoints only)
 
-3. Modify Scheduler (wrap jobs)
-   ├─ Depends on: Job Execution Tracker
-   └─ File: backend/src/workers/scheduler.ts
+Phase 3: Theme Classification Worker
+  - Create src/services/themeClassification.ts
+  - Register in scheduler.ts (cron + triggerJob)
+  - Add to admin manual trigger list
+  Dependencies: Phase 1
+  Risk: Low (follows existing worker pattern)
 
-4. Dashboard Handler (Pattern 3)
-   ├─ Depends on: Prisma models
-   └─ File: backend/src/routes/admin.ts (or inline in AdminJS setup)
+Phase 4: iOS Theme Screens (Core)
+  - Add Theme type to types/content.ts
+  - Create useThemes hook
+  - Create theme/[id].tsx (detail screen)
+  - Create theme/manage/[id].tsx (settings)
+  - Create theme/create.tsx
+  - Update Feed screen to show themes
+  Dependencies: Phase 2
+  Risk: Medium (UI work, needs design decisions)
 
-5. AdminJS Setup (Pattern 2)
-   ├─ Depends on: Dashboard Handler, Auth Middleware
-   └─ File: backend/src/index.ts (or separate admin.ts)
+Phase 5: Theme Quiz + Memo
+  - Add POST /reviews/practice/theme endpoint
+  - Add themeIds to review session schema
+  - Create quiz/theme/[id].tsx (reuse QuestionCard)
+  - Add GET /themes/:id/memo endpoint
+  - Create memo/theme/[id].tsx
+  Dependencies: Phase 2, Phase 4
+  Risk: Low (mirrors existing topic quiz/memo pattern)
 
-6. Custom Dashboard Component (Pattern 4)
-   ├─ Depends on: AdminJS Setup (for ApiClient), Dashboard Handler
-   └─ File: backend/src/components/Dashboard.tsx
-
-7. Testing & Iteration
-   ├─ Trigger jobs, verify JobExecution records
-   ├─ Access /admin/dashboard, verify stats display
-   └─ Introduce job failure, verify error logging
+Phase 6: AI Theme Suggestions
+  - Create src/services/themeSuggestion.ts
+  - Add GET /themes/suggestions endpoint
+  - iOS suggestion UI (accept/reject/customize)
+  Dependencies: Phase 3, Phase 4
+  Risk: Medium (LLM prompt engineering, UX decisions)
 ```
 
-**Critical Path:** 1 → 2 → 3 (this enables job tracking)
-**Parallel Work:** After step 3, can build 4+5+6 in parallel with testing
-
-**Estimated Timeline:**
-- Schema + Migration: 30 minutes
-- Job Tracker: 1-2 hours
-- Scheduler Integration: 1 hour (11 jobs to wrap)
-- Dashboard Handler: 2-3 hours (aggregations, testing)
-- AdminJS Setup: 2-4 hours (ESM integration, auth, model config)
-- Custom Component: 3-4 hours (React, charts, styling)
-- Testing: 2-3 hours (end-to-end, error scenarios)
-
-**Total: 12-18 hours** (single developer, including breaks and debugging)
-
-## Integration with Existing Ankora Architecture
-
-### Existing Components (Don't Modify Extensively)
-
-| Component | Integration Point | Notes |
-|-----------|-------------------|-------|
-| **PM2 Cluster Mode** | No change needed | AdminJS runs in same Express process, cluster-safe |
-| **Caddy Reverse Proxy** | Add `/admin` route if needed | Likely no change (Express handles routing) |
-| **Supabase PostgreSQL** | Prisma migration adds tables | Connection pooling handles AdminJS queries |
-| **Auth Middleware** | Reuse for `/admin` protection | Extend to check admin role if needed |
-| **Existing Cron Jobs** | Wrap with tracker (Pattern 1) | Minimal changes to worker functions |
-
-### New Components (Add)
-
-| Component | Purpose | Location |
-|-----------|---------|----------|
-| **AdminJS Router** | CRUD UI for all Prisma models | Mounted at `/admin` in Express app |
-| **Job Execution Tracker** | Logging wrapper for cron jobs | `backend/src/services/jobTracker.ts` |
-| **Dashboard Handler** | REST endpoint for job stats | `backend/src/routes/admin.ts` or inline |
-| **Custom Dashboard Component** | React component for observability | `backend/src/components/Dashboard.tsx` |
-| **JobExecution/JobError Models** | Database tables for tracking | Prisma schema, migrated to Supabase |
-
-### Deployment Considerations
-
-**Backend Deploy (after implementation):**
-```bash
-# On VPS
-ssh root@116.203.17.203
-cd /root/Remember/backend
-git pull
-npm install  # Installs AdminJS v7 ESM packages
-npx prisma migrate deploy  # Applies JobExecution/JobError tables
-npm run build  # Compiles TypeScript (handles dynamic imports)
-pm2 restart remember-api  # Restarts with new admin panel
-```
-
-**Environment Variables (add if needed):**
-```env
-# .env
-ADMIN_BASE_PATH="/admin"  # Optional: customize admin URL
-ADMIN_ROLE_REQUIRED="admin"  # Optional: role-based access
-```
-
-**Security Checklist:**
-- [ ] AdminJS routes protected with JWT middleware
-- [ ] Check user role (admin) before allowing access
-- [ ] Rate limit admin endpoints (prevent brute force)
-- [ ] HTTPS enforced (already handled by Caddy)
-- [ ] Audit log for admin actions (optional, AdminJS has built-in)
+---
 
 ## Sources
 
-### AdminJS Integration & Architecture
-- [AdminJS Prisma Adapter Documentation](https://docs.adminjs.co/installation/adapters/prisma)
-- [AdminJS Migration Guide v7](https://docs.adminjs.co/installation/migration-guide-v7) - ESM-only changes
-- [AdminJS Dashboard Customization](https://docs.adminjs.co/ui-customization/dashboard-customization)
-- [AdminJS Custom Components Guide](https://docs.adminjs.co/ui-customization/writing-your-own-components)
-- [Building Custom Admin Dashboard with React, Node.js, and AdminJS](https://medium.com/adminjs/how-to-build-a-custom-admin-dashboard-interface-with-react-node-js-and-adminjs-fba62af55c2a)
-
-### Observability & Monitoring Architecture
-- [Observability Dashboards: How to Build Them](https://openobserve.ai/blog/observability-dashboards/)
-- [10 Observability Tools Platform Engineers Should Evaluate in 2026](https://platformengineering.org/blog/10-observability-tools-platform-engineers-should-evaluate-in-2026)
-- [What is Observability in 2026?](https://clickhouse.com/resources/engineering/what-is-observability)
-
-### Node-Cron Job Monitoring
-- [How to Monitor Cron Jobs in 2026: A Complete Guide](https://dev.to/cronmonitor/how-to-monitor-cron-jobs-in-2026-a-complete-guide-28g9)
-- [10 Best Cron Job Monitoring Tools in 2026](https://betterstack.com/community/comparisons/cronjob-monitoring-tools/)
-- [Job Scheduling in Node.js with Node-cron](https://betterstack.com/community/guides/scaling-nodejs/node-cron-scheduled-tasks/)
-- [Cron Job Monitoring | Cronitor](https://cronitor.io/cron-job-monitoring)
-
-### Express.js Patterns & Performance
-- [Express.js Tutorial 2026: Practical, Scalable Patterns](https://thelinuxcode.com/expressjs-tutorial-2026-practical-scalable-patterns-for-real-projects/)
-- [Monitoring API Performance with Express, Prometheus, and Grafana](https://medium.com/@msveshnikov/monitoring-api-performance-with-express-prometheus-and-grafana-49a4db011246)
-- [Node.js Performance Monitoring: A Complete Guide](https://middleware.io/blog/nodejs-performance-monitoring/)
-- [How to Add OpenTelemetry Middleware to Express.js](https://oneuptime.com/blog/post/2026-02-06-opentelemetry-middleware-expressjs-application/view)
-
-### Database & Schema Design
-- [Design a Distributed Job Scheduler: System Design Guide](https://www.systemdesignhandbook.com/guides/design-a-distributed-job-scheduler/)
-- [Design Distributed Job Scheduler | System Design - GeeksforGeeks](https://www.geeksforgeeks.org/system-design/design-distributed-job-scheduler-system-design/)
-- [Prisma Schema Best Practices](https://planetscale.com/docs/prisma/prisma-best-practices)
-- [Prisma Schema Overview](https://www.prisma.io/docs/orm/prisma-schema/overview)
-
-### ESM/CommonJS Migration
-- [ES Modules Dominates 2026: Why CommonJS Is Being Abandoned](https://jeffbruchado.com.br/en/blog/es-modules-goodbye-commonjs-2026-modern-javascript)
-- [JavaScript Modules in 2026: Practical Patterns with CommonJS and ES Modules](https://thelinuxcode.com/javascript-modules-in-2026-practical-patterns-with-commonjs-and-es-modules/)
-- [AdminJS v7 in NestJS without Tears](https://dev.to/arab0v/adminjs-v7-in-classic-nestjs-without-tears-23en) - Dynamic import workaround
-
-### Job Scheduler Patterns
-- [NestJS Cron Decorator Source](https://github.com/nestjs/schedule/blob/master/lib/decorators/cron.decorator.ts)
-- [cron-decorators npm](https://www.npmjs.com/package/cron-decorators) - Decorator pattern for cron jobs
-- [Cronitor Node SDK](https://cronitor.io/guides/node-cron-jobs) - Wrapper pattern for execution tracking
+- [Prisma Many-to-Many Relations Documentation](https://www.prisma.io/docs/orm/prisma-schema/data-model/relations/many-to-many-relations) -- Implicit vs explicit patterns, when to use each
+- [Prisma Implicit to Explicit Conversion Guide](https://www.prisma.io/docs/orm/more/help-and-troubleshooting/implicit-to-explicit-conversion) -- Migration path if metadata needed later
+- [Expo Router Common Navigation Patterns](https://docs.expo.dev/router/basics/common-navigation-patterns/) -- Tabs + stack nesting best practices
+- [Expo Router Nesting Navigators](https://docs.expo.dev/router/advanced/nesting-navigators/) -- File-based routing with nested layouts
+- Direct codebase analysis of all relevant files:
+  - `backend/prisma/schema.prisma` -- Full data model (473 lines)
+  - `backend/src/workers/scheduler.ts` -- All 12 cron jobs, runJob wrapper, triggerJob dispatcher
+  - `backend/src/services/tagging.ts` -- Auto-tagging worker pattern (generateTags, autoTagContent, runAutoTaggingWorker)
+  - `backend/src/services/quizGeneration.ts` -- Quiz generation pipeline (processContentQuiz, generateQuizFromTranscript)
+  - `backend/src/routes/content.ts` -- Content API (filters, tags, topic memo, triage)
+  - `backend/src/routes/review.ts` -- Review API (due cards, sessions, topic practice, topic quiz, memos)
+  - `ios/app/(tabs)/index.tsx` -- Feed screen (tag-based topics grid)
+  - `ios/app/(tabs)/library.tsx` -- Library with FilterBar
+  - `ios/app/topic/[name].tsx` -- Topic detail screen
+  - `ios/app/quiz/topic/[name].tsx` -- Topic quiz screen
+  - `ios/app/topic/manage/[name].tsx` -- Topic management
+  - `ios/hooks/useTopics.ts` -- Topic hooks (useTopics, useTopicsWithCount, mutations)
+  - `ios/hooks/useContent.ts` -- Content hooks (useContentList, mapContent)
+  - `ios/stores/contentStore.ts` -- Zustand store (filters, tabs)
+  - `ios/types/content.ts` -- TypeScript interfaces
