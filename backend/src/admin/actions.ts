@@ -37,4 +37,6 @@ export const jobTriggerActions = {
   triggerQuizGeneration:          createTriggerAction('quiz-generation', 'Quiz Generation'),
   triggerReminder:                createTriggerAction('reminder', 'Reminder'),
   triggerAutoTagging:             createTriggerAction('auto-tagging', 'Auto-Tagging'),
+  triggerThemeClassification:     createTriggerAction('theme-classification', 'Theme Classification'),
+  triggerThemeBackfill:           createTriggerAction('theme-backfill', 'Theme Backfill'),
 };

@@ -127,6 +127,26 @@ adminRouter.post('/sync/auto-tagging', async (_req: Request, res: Response, next
   }
 });
 
+// POST /api/admin/sync/theme-classification - Trigger theme classification worker manually
+adminRouter.post('/sync/theme-classification', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await triggerJob('theme-classification');
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/sync/theme-backfill - Trigger theme backfill manually (one-time)
+adminRouter.post('/sync/theme-backfill', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await triggerJob('theme-backfill');
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
 // POST /api/admin/sync/all - Trigger all sync jobs (runs in background)
 adminRouter.post('/sync/all', async (_req: Request, res: Response, next: NextFunction) => {
   try {
