@@ -25,9 +25,10 @@ app.use(helmet({
   contentSecurityPolicy: false,
 }));
 
-// CORS - allow frontend and tunnel URLs
+// CORS - allow frontend and tunnel URLs (skip for /admin — same-origin)
 const allowedOrigins = [
   config.frontendUrl,
+  'https://api.ankora.study',
   'https://misc-saver-additionally-podcasts.trycloudflare.com',
 ];
 app.use(cors({
