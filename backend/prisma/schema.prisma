@@ -410,3 +410,37 @@ model Streak {
 
   updatedAt     DateTime @updatedAt
 }
+
+// ============================================================================
+// Job Execution Tracking (Observability)
+// ============================================================================
+
+model JobExecution {
+  id             String    @id @default(cuid())
+
+  // Job identification
+  jobName        String    // e.g., 'youtube-sync', 'quiz-generation'
+
+  // Execution lifecycle
+  status         JobStatus @default(RUNNING)
+  startedAt      DateTime  @default(now())
+  completedAt    DateTime?
+  duration       Int?      // milliseconds
+
+  // Processing metrics
+  itemsProcessed Int?      // count of items processed (videos synced, quizzes generated, etc.)
+
+  // Error tracking
+  error          String?   // Error message if failed
+  errorStack     String?   // Stack trace for debugging
+
+  @@index([jobName, startedAt])
+  @@index([status, startedAt])
+  @@map("job_executions")
+}
+
+enum JobStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
