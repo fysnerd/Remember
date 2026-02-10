@@ -10,6 +10,7 @@ import { dashboardHandler } from './dashboard.handler.js';
 import { sseHandler } from './dashboard.sse.js';
 import { logsSseHandler } from './logs.sse.js';
 import { startTailing } from './logs.tailer.js';
+import { jobsHandler } from './jobs.handler.js';
 
 const log = logger.child({ component: 'admin' });
 
@@ -20,6 +21,7 @@ export function setupAdminJS() {
   const Components = {
     Dashboard: componentLoader.add('Dashboard', './components/dashboard'),
     LogViewer: componentLoader.add('LogViewer', './components/logs'),
+    Jobs: componentLoader.add('Jobs', './components/jobs'),
   };
 
   const admin = new AdminJS({
@@ -31,6 +33,10 @@ export function setupAdminJS() {
     },
     componentLoader,
     pages: {
+      jobs: {
+        component: Components.Jobs,
+        icon: 'Activity',
+      },
       logs: {
         component: Components.LogViewer,
         icon: 'Terminal',
@@ -82,6 +88,7 @@ export function setupAdminJS() {
   // Mount SSE endpoints with session auth (inherits session middleware from adminRouter)
   adminRouter.get('/api/sse', sseHandler);
   adminRouter.get('/api/logs-sse', logsSseHandler);
+  adminRouter.get('/api/jobs', jobsHandler);
 
   // Start log file tailing
   startTailing();
