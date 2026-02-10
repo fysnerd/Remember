@@ -89,10 +89,10 @@ Plans:
   1. User can tap "Quiz" on a theme detail screen and receive questions drawn from all content items within that theme
   2. Questions in a theme quiz come from multiple different content items (not just one), shuffled across the theme's content
   3. Theme quiz button is disabled (with explanation) when the theme has fewer than 3 content items with generated quizzes
-**Plans**: TBD
+**Plans:** 1 plan
 
 Plans:
-- [ ] 08-01: Theme quiz API endpoint and iOS quiz screen
+- [ ] 08-01-PLAN.md -- Theme quiz API endpoint (POST /reviews/practice/theme), quiz readiness enrichment on GET /themes/:id, iOS theme quiz screen, smart quiz button on theme detail
 
 ### Phase 9: Theme Memo
 **Goal**: Users can view an AI-generated synthesis memo that aggregates knowledge from all content in a theme into a coherent summary
