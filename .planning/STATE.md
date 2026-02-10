@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-02-10)
 
 ## Current Position
 
-Phase: 5 of 11 (Theme Data Model & API)
-Plan: 1 of 2 in current phase
-Status: Executing
-Last activity: 2026-02-10 -- Completed 05-01 (Theme data model schema + production deployment)
+Phase: 5 of 11 (Theme Data Model & API) -- COMPLETE
+Plan: 2 of 2 in current phase (all plans complete)
+Status: Phase Complete
+Last activity: 2026-02-10 -- Completed 05-02 (Theme CRUD API + content response enrichment)
 
-Progress: [###########░░░░░░░░░] 11/22 plans (v1.0 complete, v2.0 phase 5 in progress)
+Progress: [############░░░░░░░░] 12/22 plans (v1.0 complete, v2.0 phase 5 complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 11 (10 v1.0 + 1 v2.0)
-- Average duration: ~22 min (improving with simpler schema plans)
-- Total execution time: ~4 hours 3 min
+- Total plans completed: 12 (10 v1.0 + 2 v2.0)
+- Average duration: ~21 min (improving with simpler schema/API plans)
+- Total execution time: ~4 hours 8 min
 
 **By Phase:**
 
@@ -31,12 +31,12 @@ Progress: [###########░░░░░░░░░] 11/22 plans (v1.0 complete, v
 | 2. Job Tracking | 2 | ~50 min | ~25 min |
 | 3. AdminJS Panel | 2 | ~50 min | ~25 min |
 | 4. Observability | 2 | ~50 min | ~25 min |
-| 5. Theme Data Model (partial) | 1 | ~3 min | ~3 min |
+| 5. Theme Data Model & API | 2 | ~7 min | ~3.5 min |
 
 **Recent Trend:**
 - v1.0 completed in 2 days (10 plans, 4 phases)
-- v2.0 phase 5 plan 1 completed in 3 min (schema-only, fast)
-- Trend: Accelerating (schema plans are quick)
+- v2.0 phase 5 completed in ~7 min (2 plans: schema + API)
+- Trend: Accelerating (schema and API plans are quick)
 
 ## Accumulated Context
 
@@ -54,6 +54,9 @@ Recent decisions affecting current work:
 - Cap themes at 15-25 per user to prevent proliferation
 - Used --accept-data-loss on prisma db push to drop orphaned admin_sessions table (not in schema, safe)
 - Theme ownership scoped via @@unique([userId, slug]) and @@unique([userId, name])
+- Used Zod for theme API validation (already a project dependency)
+- Flatten contentThemes join data into themes array on content responses for cleaner API
+- Set assignedBy to 'user' for manual content-theme associations (vs 'system' for AI)
 
 ### Pending Todos
 
@@ -68,6 +71,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-10
-Stopped at: Completed 05-01-PLAN.md (Theme data model schema + production deployment)
-Next step: Execute 05-02-PLAN.md (Theme CRUD API & classification service)
+Stopped at: Completed 05-02-PLAN.md (Theme CRUD API + content response enrichment) -- Phase 5 complete
+Next step: Plan Phase 6 (next v2.0 phase per ROADMAP.md)
 Resume file: None
