@@ -85,9 +85,9 @@ async function extractSecUid(page: any): Promise<string | null> {
     }
 
     // Method 3: From any script tag containing secUid
-    const scripts = document.querySelectorAll('script');
-    for (const script of scripts) {
-      const text = script.textContent || '';
+    const scripts = Array.from(document.querySelectorAll('script'));
+    for (let i = 0; i < scripts.length; i++) {
+      const text = scripts[i].textContent || '';
       const match = text.match(/"secUid"\s*:\s*"([^"]+)"/);
       if (match) return match[1];
     }
