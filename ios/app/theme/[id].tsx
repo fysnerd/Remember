@@ -1,0 +1,178 @@
+/**
+ * Theme Detail Screen - Shows theme info and its content items
+ */
+
+import { useState, useCallback } from 'react';
+import { View, ScrollView, StyleSheet, Pressable, RefreshControl } from 'react-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
+import { Text, Card, Button } from '../../components/ui';
+import { LoadingScreen } from '../../components/LoadingScreen';
+import { EmptyState } from '../../components/EmptyState';
+import { useThemeDetail } from '../../hooks';
+import { colors, spacing } from '../../theme';
+
+const sourceEmoji: Record<string, string> = {
+  youtube: '🎬',
+  spotify: '🎧',
+  tiktok: '📱',
+  instagram: '📷',
+};
+
+export default function ThemeDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
+  const { data, isLoading } = useThemeDetail(id);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await queryClient.invalidateQueries({ queryKey: ['themes', id] });
+    setRefreshing(false);
+  }, [queryClient, id]);
+
+  const handleContentPress = (contentId: string) => {
+    router.push({ pathname: '/content/[id]', params: { id: contentId } });
+  };
+
+  const handleManageTheme = () => {
+    router.push({ pathname: '/theme/manage/[id]' as any, params: { id: id! } });
+  };
+
+  const handleStartQuiz = () => {
+    if (data?.theme?.name) {
+      router.push({
+        pathname: '/quiz/topic/[name]',
+        params: { name: encodeURIComponent(data.theme.name) },
+      });
+    }
+  };
+
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
+
+  const theme = data?.theme;
+  const contents = data?.contents ?? [];
+
+  return (
+    <>
+      <Stack.Screen
+        options={{
+          title: theme?.name ?? '',
+          headerBackTitle: 'Feed',
+          headerRight: () => (
+            <Pressable onPress={handleManageTheme} hitSlop={8} style={styles.settingsButton}>
+              <Text variant="h2">⚙️</Text>
+            </Pressable>
+          ),
+        }}
+      />
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
+        }
+      >
+        {/* Theme Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerEmoji}>{theme?.emoji}</Text>
+          <Text variant="h2" style={styles.headerName}>
+            {theme?.name}
+          </Text>
+          <Text variant="caption" color="secondary">
+            {theme?.contentCount ?? 0} contenu{(theme?.contentCount ?? 0) !== 1 ? 's' : ''}
+          </Text>
+        </View>
+
+        {/* Content List */}
+        {contents.length === 0 ? (
+          <EmptyState message="Aucun contenu dans ce theme" icon="📭" />
+        ) : (
+          <>
+            <View style={styles.list}>
+              {contents.map((item) => (
+                <Card
+                  key={item.id}
+                  padding="md"
+                  onPress={() => handleContentPress(item.id)}
+                  style={styles.card}
+                >
+                  <View style={styles.row}>
+                    <Text variant="h2" style={styles.emoji}>
+                      {sourceEmoji[item.source] || '📄'}
+                    </Text>
+                    <View style={styles.info}>
+                      <Text variant="body" weight="medium" numberOfLines={2}>
+                        {item.title}
+                      </Text>
+                      {item.channelName && (
+                        <Text variant="caption" color="secondary">
+                          {item.channelName}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                </Card>
+              ))}
+            </View>
+
+            {/* Quiz button */}
+            <View style={styles.quizButton}>
+              <Button variant="primary" fullWidth onPress={handleStartQuiz}>
+                Quiz {theme?.name}
+              </Button>
+            </View>
+          </>
+        )}
+      </ScrollView>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  content: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xl,
+  },
+  settingsButton: {
+    paddingHorizontal: spacing.sm,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: spacing.xl,
+  },
+  headerEmoji: {
+    fontSize: 48,
+    marginBottom: spacing.sm,
+  },
+  headerName: {
+    marginBottom: spacing.xs,
+  },
+  list: {
+    gap: spacing.md,
+  },
+  card: {
+    marginBottom: 0,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  emoji: {
+    fontSize: 24,
+    marginRight: spacing.md,
+  },
+  info: {
+    flex: 1,
+  },
+  quizButton: {
+    marginTop: spacing.xl,
+  },
+});

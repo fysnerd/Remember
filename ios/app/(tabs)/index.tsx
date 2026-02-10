@@ -1,15 +1,16 @@
 /**
- * Feed Tab - Topics (2 columns) + Suggestions
+ * Feed Tab - Themes (2 columns) + Suggestions
  */
 
 import { useState, useCallback } from 'react';
-import { View, ScrollView, StyleSheet, Pressable, Dimensions, RefreshControl } from 'react-native';
+import { View, ScrollView, StyleSheet, Dimensions, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Text, Card } from '../../components/ui';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
-import { useTopics, useContentList } from '../../hooks';
+import { ThemeCard } from '../../components/ThemeCard';
+import { useThemes, useContentList } from '../../hooks';
 import { colors, spacing, borderRadius } from '../../theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -28,32 +29,32 @@ export default function FeedScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
-  const { data: topics, isLoading: topicsLoading } = useTopics();
+  const { data: themes, isLoading: themesLoading } = useThemes();
   const { data: contentData, isLoading: contentLoading } = useContentList();
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await queryClient.invalidateQueries({ queryKey: ['topics'] });
+    await queryClient.invalidateQueries({ queryKey: ['themes'] });
     await queryClient.invalidateQueries({ queryKey: ['content'] });
     setRefreshing(false);
   }, [queryClient]);
 
-  const handleTopicPress = (topic: string) => {
-    router.push({ pathname: '/topic/[name]', params: { name: topic } });
+  const handleThemePress = (themeId: string) => {
+    router.push({ pathname: '/theme/[id]' as any, params: { id: themeId } });
   };
 
   const handleContentPress = (id: string) => {
     router.push({ pathname: '/content/[id]', params: { id } });
   };
 
-  if (topicsLoading || contentLoading) {
+  if (themesLoading || contentLoading) {
     return <LoadingScreen />;
   }
 
-  const topicNames = topics ?? [];
+  const themeList = themes ?? [];
   const suggestions = contentData?.items?.slice(0, 5) ?? [];
 
-  if (topicNames.length === 0 && suggestions.length === 0) {
+  if (themeList.length === 0 && suggestions.length === 0) {
     return <EmptyState message="Connectez vos plateformes pour voir du contenu" icon="🔗" hasHeader />;
   }
 
@@ -65,23 +66,24 @@ export default function FeedScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
       }
     >
-      {/* Topics Section - 2 columns grid */}
-      {topicNames.length > 0 && (
+      {/* Themes Section - 2 columns grid */}
+      {themeList.length > 0 && (
         <View style={styles.section}>
           <Text variant="h3" style={styles.sectionTitle}>
-            Topics
+            Themes
           </Text>
-          <View style={styles.topicsGrid}>
-            {topicNames.map((topic) => (
-              <Pressable
-                key={topic}
-                style={({ pressed }) => [styles.topicCard, pressed && styles.topicCardPressed]}
-                onPress={() => handleTopicPress(topic)}
-              >
-                <Text variant="body" weight="medium" numberOfLines={2} style={styles.topicLabel}>
-                  {topic}
-                </Text>
-              </Pressable>
+          <View style={styles.themesGrid}>
+            {themeList.map((theme) => (
+              <View key={theme.id} style={styles.themeCardWrapper}>
+                <ThemeCard
+                  id={theme.id}
+                  name={theme.name}
+                  emoji={theme.emoji}
+                  color={theme.color}
+                  contentCount={theme.contentCount}
+                  onPress={() => handleThemePress(theme.id)}
+                />
+              </View>
             ))}
           </View>
         </View>
@@ -132,26 +134,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     marginBottom: spacing.md,
   },
-  topicsGrid: {
+  themesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: GRID_GAP,
   },
-  topicCard: {
+  themeCardWrapper: {
     width: COLUMN_WIDTH,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  topicCardPressed: {
-    opacity: 0.7,
-    backgroundColor: colors.border,
-  },
-  topicLabel: {
-    textAlign: 'center',
   },
   suggestionsList: {
     gap: spacing.md,

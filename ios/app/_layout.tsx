@@ -110,6 +110,31 @@ export default function RootLayout() {
             presentation: 'modal',
           }}
         />
+        <Stack.Screen
+          name="theme/[id]"
+          options={{
+            headerShown: true,
+            headerBackTitle: 'Feed',
+            presentation: 'card',
+          }}
+        />
+        <Stack.Screen
+          name="theme/manage/[id]"
+          options={{
+            headerShown: true,
+            title: 'Gerer le theme',
+            headerBackTitle: 'Retour',
+            presentation: 'card',
+          }}
+        />
+        <Stack.Screen
+          name="theme-create"
+          options={{
+            headerShown: true,
+            title: 'Nouveau theme',
+            presentation: 'modal',
+          }}
+        />
       </Stack>
     </QueryClientProvider>
   );
