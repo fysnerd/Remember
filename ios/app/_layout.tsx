@@ -7,6 +7,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '../lib/queryClient';
 import { useAuthStore } from '../stores/authStore';
+import { useNotifications } from '../hooks/useNotifications';
 import { LoadingScreen } from '../components/LoadingScreen';
 
 // Public routes that don't require auth
@@ -16,6 +17,9 @@ export default function RootLayout() {
   const { isAuthenticated, isLoading, checkAuth } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
+
+  // Register push notifications (after auth)
+  useNotifications(isAuthenticated);
 
   // Check auth on mount
   useEffect(() => {
