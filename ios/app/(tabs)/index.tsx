@@ -3,7 +3,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { View, ScrollView, StyleSheet, Dimensions, RefreshControl } from 'react-native';
+import { View, ScrollView, StyleSheet, Dimensions, RefreshControl, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Text, Card } from '../../components/ui';
@@ -85,6 +85,18 @@ export default function FeedScreen() {
                 />
               </View>
             ))}
+            {/* New Theme Card */}
+            <View style={styles.themeCardWrapper}>
+              <Pressable
+                onPress={() => router.push('/theme-create' as any)}
+                style={styles.newThemeCard}
+              >
+                <Text style={styles.newThemeIcon}>+</Text>
+                <Text variant="caption" color="secondary">
+                  Nouveau theme
+                </Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       )}
@@ -141,6 +153,20 @@ const styles = StyleSheet.create({
   },
   themeCardWrapper: {
     width: COLUMN_WIDTH,
+  },
+  newThemeCard: {
+    height: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+    gap: spacing.xs,
+  },
+  newThemeIcon: {
+    fontSize: 24,
+    color: colors.textSecondary,
   },
   suggestionsList: {
     gap: spacing.md,
