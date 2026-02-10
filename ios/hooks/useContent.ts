@@ -26,6 +26,7 @@ interface BackendContent {
   url?: string;
   status: string;
   tags?: { name: string }[];
+  themes?: { id: string; name: string; slug: string; color: string; emoji: string }[];
   createdAt: string;
 }
 
@@ -54,6 +55,7 @@ function mapContent(item: BackendContent): Content {
     url: item.url,
     status: item.status as Content['status'],
     topics: item.tags?.map((t) => t.name) ?? [],
+    themes: item.themes ?? [],
     createdAt: item.createdAt,
   };
 }

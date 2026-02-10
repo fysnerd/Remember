@@ -24,6 +24,7 @@ export interface Content {
   url?: string; // Link to original content
   status: ContentStatus;
   topics: string[];
+  themes?: ThemeRef[];
   createdAt: string;
 }
 
