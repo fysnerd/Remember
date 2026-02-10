@@ -43,11 +43,11 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
   3. API GET /themes returns the authenticated user's themes with accurate content counts per theme
   4. API GET /themes/:id returns paginated content list filterable by source (YouTube, Spotify, TikTok, Instagram)
   5. Content API responses (GET /content, GET /content/:id) include associated theme names and IDs in each content object
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 05-01: Prisma schema migration (Theme model, ContentTheme join table, ThemeTag relation)
-- [ ] 05-02: Theme CRUD API routes and content-theme association endpoints
+- [ ] 05-01-PLAN.md -- Prisma schema migration (Theme, ContentTheme, ThemeTag models + DB push)
+- [ ] 05-02-PLAN.md -- Theme CRUD API routes, content association endpoints, content API theme enrichment
 
 ### Phase 6: Theme Classification Worker
 **Goal**: Themes are automatically generated from a user's tag history and new content is auto-classified into existing themes without manual intervention
@@ -146,7 +146,7 @@ Phases execute in numeric order: 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11
 | 2. Job Execution Tracking | v1.0 | 2/2 | Complete | 2026-02-10 |
 | 3. AdminJS Panel & Triggers | v1.0 | 2/2 | Complete | 2026-02-10 |
 | 4. Observability Dashboard | v1.0 | 2/2 | Complete | 2026-02-10 |
-| 5. Theme Data Model & API | v2.0 | 0/2 | Not started | - |
+| 5. Theme Data Model & API | v2.0 | 0/2 | Planned | - |
 | 6. Theme Classification Worker | v2.0 | 0/2 | Not started | - |
 | 7. iOS Theme Screens & Management | v2.0 | 0/2 | Not started | - |
 | 8. Theme Quiz (Existing Cards) | v2.0 | 0/1 | Not started | - |
