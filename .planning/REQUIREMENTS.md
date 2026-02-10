@@ -1,7 +1,7 @@
 # Requirements: Ankora v2.0 Themes-first UX
 
 **Defined:** 2026-02-10
-**Core Value:** L'utilisateur apprend durablement à partir de ce qu'il consomme déjà — sans effort supplémentaire de curation.
+**Core Value:** L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans effort supplementaire de curation.
 
 ## v2.0 Requirements
 
@@ -128,4 +128,4 @@ Requirements for Themes-first UX milestone. Each maps to roadmap phases.
 
 ---
 *Requirements defined: 2026-02-10*
-*Last updated: 2026-02-10 after initial definition*
+*Last updated: 2026-02-10 -- Roadmap created, traceability confirmed*
