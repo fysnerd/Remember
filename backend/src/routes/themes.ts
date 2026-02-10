@@ -109,7 +109,7 @@ themeRouter.get('/:id', async (req: Request, res: Response, next: NextFunction) 
       contentWhere.platform = platform as Platform;
     }
 
-    const [contents, total] = await Promise.all([
+    const [contents, total, quizReadyCount] = await Promise.all([
       prisma.content.findMany({
         where: contentWhere,
         orderBy: { capturedAt: 'desc' },
@@ -123,6 +123,14 @@ themeRouter.get('/:id', async (req: Request, res: Response, next: NextFunction) 
         },
       }),
       prisma.content.count({ where: contentWhere }),
+      prisma.content.count({
+        where: {
+          userId,
+          contentThemes: { some: { themeId } },
+          status: 'READY',
+          quizzes: { some: {} },
+        },
+      }),
     ]);
 
     const { _count, themeTags, ...themeData } = theme;
@@ -131,6 +139,8 @@ themeRouter.get('/:id', async (req: Request, res: Response, next: NextFunction) 
       theme: {
         ...themeData,
         contentCount: _count.contentThemes,
+        quizReadyCount,
+        canQuiz: quizReadyCount >= 3,
         tags: themeTags.map((tt) => ({ id: tt.tag.id, name: tt.tag.name })),
       },
       contents,

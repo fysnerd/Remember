@@ -591,6 +591,97 @@ reviewRouter.post('/practice/topic', async (req: Request, res: Response, next: N
   }
 });
 
+// POST /api/reviews/practice/theme - Get ALL cards for a theme (mixed from all contents)
+reviewRouter.post('/practice/theme', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const schema = z.object({ themeId: z.string() });
+    const { themeId } = schema.parse(req.body);
+
+    const userId = req.user!.id;
+
+    // Verify theme ownership
+    const theme = await prisma.theme.findFirst({
+      where: { id: themeId, userId },
+    });
+
+    if (!theme) {
+      return res.status(404).json({ error: 'Theme not found' });
+    }
+
+    // Find all READY contents in this theme that have quizzes
+    const contents = await prisma.content.findMany({
+      where: {
+        userId,
+        status: 'READY',
+        contentThemes: {
+          some: { themeId },
+        },
+        quizzes: {
+          some: {},
+        },
+      },
+      select: { id: true, title: true },
+    });
+
+    // Enforce minimum threshold
+    if (contents.length < 3) {
+      return res.status(400).json({
+        error: 'Not enough content with quizzes',
+        contentWithQuizzes: contents.length,
+        minimum: 3,
+      });
+    }
+
+    const contentIds = contents.map(c => c.id);
+
+    // Get ALL cards for these contents
+    const cards = await prisma.card.findMany({
+      where: {
+        userId,
+        quiz: {
+          contentId: { in: contentIds },
+        },
+      },
+      include: {
+        quiz: {
+          include: {
+            content: {
+              select: {
+                id: true,
+                title: true,
+                url: true,
+                platform: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Shuffle cards randomly
+    const shuffledCards = cards.sort(() => Math.random() - 0.5);
+
+    // Cap at 20 questions
+    const cappedCards = shuffledCards.slice(0, 20);
+
+    return res.json({
+      cards: cappedCards,
+      count: cappedCards.length,
+      theme: { id: theme.id, name: theme.name, emoji: theme.emoji },
+      contentCount: contents.length,
+      isPractice: true,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        error: 'Validation error',
+        details: error.errors,
+      });
+    }
+    return next(error);
+  }
+});
+
 // ============================================================================
 // Quiz Session Endpoints
 // ============================================================================
