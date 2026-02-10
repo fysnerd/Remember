@@ -24,7 +24,7 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 **Milestone Goal:** Transform Ankora from content-centric navigation to theme-centric navigation, with AI-generated themes, theme-scoped quizzes, cross-content synthesis, and theme memos.
 
 - [x] **Phase 5: Theme Data Model & API** -- Database schema, CRUD endpoints, and content-theme relations (completed 2026-02-10)
-- [ ] **Phase 6: Theme Classification Worker** -- AI-powered auto-generation and classification of themes from tags
+- [x] **Phase 6: Theme Classification Worker** -- AI-powered auto-generation and classification of themes from tags (completed 2026-02-10)
 - [ ] **Phase 7: iOS Theme Screens & Management** -- Theme-first home screen, detail views, and user management
 - [ ] **Phase 8: Theme Quiz (Existing Cards)** -- Quiz scoped to a theme using existing per-content questions
 - [ ] **Phase 9: Theme Memo** -- AI-generated synthesis memos aggregating knowledge per theme
@@ -62,8 +62,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 06-01-PLAN.md -- Theme generation service (slug utility extraction, LLM tag clustering, deterministic classification, backfill logic)
-- [ ] 06-02-PLAN.md -- Scheduler integration + admin triggers (cron entry, REST API endpoints, AdminJS panel buttons)
+- [x] 06-01-PLAN.md -- Theme generation service (slug utility extraction, LLM tag clustering, deterministic classification, backfill logic)
+- [x] 06-02-PLAN.md -- Scheduler integration + admin triggers (cron entry, REST API endpoints, AdminJS panel buttons)
 
 ### Phase 7: iOS Theme Screens & Management
 **Goal**: Users navigate their library through theme sections on the home screen and can manage theme organization (rename, delete, move content, create)
@@ -147,7 +147,7 @@ Phases execute in numeric order: 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11
 | 3. AdminJS Panel & Triggers | v1.0 | 2/2 | Complete | 2026-02-10 |
 | 4. Observability Dashboard | v1.0 | 2/2 | Complete | 2026-02-10 |
 | 5. Theme Data Model & API | v2.0 | 2/2 | Complete | 2026-02-10 |
-| 6. Theme Classification Worker | v2.0 | 0/2 | Not started | - |
+| 6. Theme Classification Worker | v2.0 | 2/2 | Complete | 2026-02-10 |
 | 7. iOS Theme Screens & Management | v2.0 | 0/2 | Not started | - |
 | 8. Theme Quiz (Existing Cards) | v2.0 | 0/1 | Not started | - |
 | 9. Theme Memo | v2.0 | 0/1 | Not started | - |
