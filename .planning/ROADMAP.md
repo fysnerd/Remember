@@ -65,10 +65,11 @@ Plans:
   4. Navigation groups models logically (Users, Content, Learning, Platform, Monitoring)
   5. Admin can manually trigger any of the 11 sync jobs from the panel
   6. Manual triggers create JobExecution records marked as manual (not scheduled)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] TBD during planning
+- [ ] 03-01-PLAN.md -- Install AdminJS packages, add TriggerSource to schema, create admin module with 14 resources, mount on Express
+- [ ] 03-02-PLAN.md -- Add 11 manual trigger actions, wire triggerSource through tracking chain, deploy to VPS
 
 ### Phase 4: Observability Dashboard
 **Goal**: At-a-glance system health dashboard shows job status, errors, and stats
@@ -96,5 +97,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. ESM Migration & Logging Foundation | 4/4 | ✅ Complete | 2026-02-09 |
 | 2. Job Execution Tracking | 2/2 | ✅ Complete | 2026-02-10 |
-| 3. AdminJS Panel & Manual Triggers | 0/TBD | Not started | - |
+| 3. AdminJS Panel & Manual Triggers | 0/2 | Not started | - |
 | 4. Observability Dashboard | 0/TBD | Not started | - |
