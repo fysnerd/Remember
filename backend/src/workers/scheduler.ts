@@ -26,7 +26,7 @@ const runningJobs = new Set<string>();
 /**
  * Wrapper to prevent job overlap
  */
-async function runJob(jobName: string, job: () => Promise<void>): Promise<void> {
+async function runJob(jobName: string, job: () => Promise<void>, triggerSource: 'SCHEDULED' | 'MANUAL' = 'SCHEDULED'): Promise<void> {
   if (runningJobs.has(jobName)) {
     log.warn({ job: jobName }, 'Skipping job - previous run still in progress');
     return;
@@ -34,7 +34,7 @@ async function runJob(jobName: string, job: () => Promise<void>): Promise<void> 
 
   runningJobs.add(jobName);
   try {
-    await trackJobExecution(jobName, job);
+    await trackJobExecution(jobName, job, triggerSource);
   } catch (error) {
     // Error already logged by trackJobExecution and persisted to DB.
     // Log here too for PM2 log visibility.
@@ -188,51 +188,52 @@ export async function runAllSyncsNow(): Promise<void> {
  * Run a specific job manually
  */
 export async function triggerJob(
-  jobName: 'youtube' | 'spotify' | 'tiktok' | 'instagram' | 'transcription' | 'podcast-transcription' | 'tiktok-transcription' | 'instagram-transcription' | 'quiz-generation' | 'reminder' | 'auto-tagging'
+  jobName: 'youtube' | 'spotify' | 'tiktok' | 'instagram' | 'transcription' | 'podcast-transcription' | 'tiktok-transcription' | 'instagram-transcription' | 'quiz-generation' | 'reminder' | 'auto-tagging',
+  triggerSource: 'SCHEDULED' | 'MANUAL' = 'SCHEDULED'
 ): Promise<{ success: boolean; message: string }> {
   switch (jobName) {
     case 'youtube':
-      await runJob('youtube-sync', runYouTubeSync);
+      await runJob('youtube-sync', runYouTubeSync, triggerSource);
       return { success: true, message: 'YouTube sync completed' };
 
     case 'spotify':
-      await runJob('spotify-sync', runSpotifySync);
+      await runJob('spotify-sync', runSpotifySync, triggerSource);
       return { success: true, message: 'Spotify sync completed' };
 
     case 'tiktok':
-      await runJob('tiktok-sync', runTikTokSync);
+      await runJob('tiktok-sync', runTikTokSync, triggerSource);
       return { success: true, message: 'TikTok sync completed' };
 
     case 'instagram':
-      await runJob('instagram-sync', runInstagramSync);
+      await runJob('instagram-sync', runInstagramSync, triggerSource);
       return { success: true, message: 'Instagram sync completed' };
 
     case 'transcription':
-      await runJob('youtube-transcription', runTranscriptionWorker);
+      await runJob('youtube-transcription', runTranscriptionWorker, triggerSource);
       return { success: true, message: 'YouTube transcription worker completed' };
 
     case 'podcast-transcription':
-      await runJob('podcast-transcription', runPodcastTranscriptionWorker);
+      await runJob('podcast-transcription', runPodcastTranscriptionWorker, triggerSource);
       return { success: true, message: 'Podcast transcription worker completed' };
 
     case 'tiktok-transcription':
-      await runJob('tiktok-transcription', runTikTokTranscriptionWorker);
+      await runJob('tiktok-transcription', runTikTokTranscriptionWorker, triggerSource);
       return { success: true, message: 'TikTok transcription worker completed' };
 
     case 'instagram-transcription':
-      await runJob('instagram-transcription', runInstagramTranscriptionWorker);
+      await runJob('instagram-transcription', runInstagramTranscriptionWorker, triggerSource);
       return { success: true, message: 'Instagram transcription worker completed' };
 
     case 'quiz-generation':
-      await runJob('quiz-generation', runQuizGenerationWorker);
+      await runJob('quiz-generation', runQuizGenerationWorker, triggerSource);
       return { success: true, message: 'Quiz generation worker completed' };
 
     case 'reminder':
-      await runJob('reminder', runReminderWorker);
+      await runJob('reminder', runReminderWorker, triggerSource);
       return { success: true, message: 'Reminder worker completed' };
 
     case 'auto-tagging':
-      await runJob('auto-tagging', runAutoTaggingWorker);
+      await runJob('auto-tagging', runAutoTaggingWorker, triggerSource);
       return { success: true, message: 'Auto-tagging worker completed' };
 
     default:

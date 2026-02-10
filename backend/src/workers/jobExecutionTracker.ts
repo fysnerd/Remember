@@ -11,7 +11,8 @@ const log = logger.child({ component: 'job-tracker' });
  */
 export async function trackJobExecution(
   jobName: string,
-  job: () => Promise<void>
+  job: () => Promise<void>,
+  triggerSource: 'SCHEDULED' | 'MANUAL' = 'SCHEDULED'
 ): Promise<void> {
   const startTime = Date.now();
   let executionId: string | null = null;
@@ -22,6 +23,7 @@ export async function trackJobExecution(
       data: {
         jobName,
         status: 'RUNNING',
+        triggerSource,
       },
     });
     executionId = execution.id;

@@ -1,5 +1,6 @@
 import { getModelByName } from '@adminjs/prisma';
 import { prisma } from '../config/database.js';
+import { jobTriggerActions } from './actions.js';
 
 const nav = {
   users:      { name: 'Users',      icon: 'User' },
@@ -88,6 +89,9 @@ export const resources = [
       navigation: nav.monitoring,
       listProperties: ['id', 'jobName', 'status', 'triggerSource', 'startedAt', 'duration'],
       sort: { sortBy: 'startedAt', direction: 'desc' as const },
+      actions: {
+        ...jobTriggerActions,
+      },
     },
   },
 ];
