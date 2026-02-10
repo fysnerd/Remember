@@ -423,6 +423,7 @@ model JobExecution {
 
   // Execution lifecycle
   status         JobStatus @default(RUNNING)
+  triggerSource  TriggerSource @default(SCHEDULED)
   startedAt      DateTime  @default(now())
   completedAt    DateTime?
   duration       Int?      // milliseconds
@@ -443,4 +444,9 @@ enum JobStatus {
   RUNNING
   SUCCESS
   FAILED
+}
+
+enum TriggerSource {
+  SCHEDULED
+  MANUAL
 }

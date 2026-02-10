@@ -69,6 +69,10 @@ const envSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   STRIPE_PRICE_MONTHLY: z.string().optional(),
   STRIPE_PRICE_YEARLY: z.string().optional(),
+
+  // Admin panel
+  ADMIN_EMAIL: z.string().email().optional(),
+  ADMIN_PASSWORD: z.string().min(8).optional(),
 });
 
 // Parse and validate
@@ -158,5 +162,10 @@ export const config = {
     webhookSecret: env.STRIPE_WEBHOOK_SECRET,
     priceMonthly: env.STRIPE_PRICE_MONTHLY,
     priceYearly: env.STRIPE_PRICE_YEARLY,
+  },
+
+  admin: {
+    email: env.ADMIN_EMAIL ?? 'admin@ankora.study',
+    password: env.ADMIN_PASSWORD ?? 'ankora-admin-2026',
   },
 } as const;
