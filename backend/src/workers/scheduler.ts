@@ -12,6 +12,8 @@ import { runInstagramTranscriptionWorker } from '../services/instagramTranscript
 import { runQuizGenerationWorker } from '../services/quizGeneration.js';
 import { runReminderWorker } from './reminderWorker.js';
 import { runAutoTaggingWorker } from '../services/tagging.js';
+import { trackJobExecution } from './jobExecutionTracker.js';
+import { runCleanupJobExecutions } from './cleanupWorker.js';
 
 const log = logger.child({ component: 'scheduler' });
 
@@ -31,12 +33,11 @@ async function runJob(jobName: string, job: () => Promise<void>): Promise<void> 
   }
 
   runningJobs.add(jobName);
-  const startTime = Date.now();
   try {
-    await job();
-    const duration = Date.now() - startTime;
-    log.info({ job: jobName, durationMs: duration }, 'Job completed');
+    await trackJobExecution(jobName, job);
   } catch (error) {
+    // Error already logged by trackJobExecution and persisted to DB.
+    // Log here too for PM2 log visibility.
     log.error({ job: jobName, err: error }, 'Job execution failed');
   } finally {
     runningJobs.delete(jobName);
@@ -129,6 +130,13 @@ export function startScheduler(): void {
     await runJob('auto-tagging', runAutoTaggingWorker);
   });
 
+  // Job Execution Cleanup - Daily at 3:00 AM
+  // Deletes execution records older than 30 days
+  cron.schedule('0 3 * * *', async () => {
+    log.info({ job: 'cleanup-job-executions' }, 'Triggering scheduled job');
+    await runJob('cleanup-job-executions', runCleanupJobExecutions);
+  });
+
   isSchedulerRunning = true;
   log.info({
     jobs: [
@@ -143,6 +151,7 @@ export function startScheduler(): void {
       { name: 'quiz-generation', schedule: '*/2 * * * *' },
       { name: 'reminder', schedule: '*/5 * * * *' },
       { name: 'auto-tagging', schedule: '*/15 * * * *' },
+      { name: 'cleanup-job-executions', schedule: '0 3 * * *' },
     ]
   }, 'All cron jobs scheduled');
 }
@@ -254,6 +263,7 @@ export function getSchedulerStatus(): {
       { name: 'quiz-generation', schedule: '*/2 * * * *' },
       { name: 'reminder', schedule: '*/5 * * * *' },
       { name: 'auto-tagging', schedule: '*/15 * * * *' },
+      { name: 'cleanup-job-executions', schedule: '0 3 * * *' },
     ],
   };
 }
