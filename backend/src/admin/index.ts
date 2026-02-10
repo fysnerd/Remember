@@ -8,6 +8,8 @@ import { logger } from '../config/logger.js';
 import { resources } from './resources.js';
 import { dashboardHandler } from './dashboard.handler.js';
 import { sseHandler } from './dashboard.sse.js';
+import { logsSseHandler } from './logs.sse.js';
+import { startTailing } from './logs.tailer.js';
 
 const log = logger.child({ component: 'admin' });
 
@@ -17,6 +19,7 @@ export function setupAdminJS() {
   const componentLoader = new ComponentLoader();
   const Components = {
     Dashboard: componentLoader.add('Dashboard', './components/dashboard'),
+    LogViewer: componentLoader.add('LogViewer', './components/logs'),
   };
 
   const admin = new AdminJS({
@@ -27,6 +30,12 @@ export function setupAdminJS() {
       handler: dashboardHandler,
     },
     componentLoader,
+    pages: {
+      logs: {
+        component: Components.LogViewer,
+        icon: 'Terminal',
+      },
+    },
     branding: {
       companyName: 'Ankora Admin',
       withMadeWithLove: false,
@@ -70,8 +79,12 @@ export function setupAdminJS() {
     }
   );
 
-  // Mount SSE endpoint with session auth (inherits session middleware from adminRouter)
+  // Mount SSE endpoints with session auth (inherits session middleware from adminRouter)
   adminRouter.get('/api/sse', sseHandler);
+  adminRouter.get('/api/logs-sse', logsSseHandler);
+
+  // Start log file tailing
+  startTailing();
 
   log.info({ rootPath: '/admin' }, 'AdminJS panel initialized');
   return { admin, adminRouter };
