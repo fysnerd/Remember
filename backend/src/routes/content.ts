@@ -252,7 +252,7 @@ contentRouter.get('/', async (req: Request, res: Response, next: NextFunction) =
     // Apply the user's sort preference
     orderBy.push({ [orderByField]: orderByDirection });
 
-    const [contents, total] = await Promise.all([
+    const [rawContents, total] = await Promise.all([
       prisma.content.findMany({
         where,
         orderBy,
@@ -260,6 +260,13 @@ contentRouter.get('/', async (req: Request, res: Response, next: NextFunction) =
         take: parseInt(limit as string),
         include: {
           tags: true,
+          contentThemes: {
+            include: {
+              theme: {
+                select: { id: true, name: true, slug: true, color: true, emoji: true },
+              },
+            },
+          },
           _count: {
             select: { quizzes: true },
           },
@@ -267,6 +274,11 @@ contentRouter.get('/', async (req: Request, res: Response, next: NextFunction) =
       }),
       prisma.content.count({ where }),
     ]);
+
+    const contents = rawContents.map(({ contentThemes, ...rest }) => ({
+      ...rest,
+      themes: contentThemes.map((ct) => ct.theme),
+    }));
 
     return res.json({
       contents,
@@ -778,6 +790,13 @@ contentRouter.get('/:id', async (req: Request, res: Response, next: NextFunction
         transcript: true,
         quizzes: true,
         tags: true,
+        contentThemes: {
+          include: {
+            theme: {
+              select: { id: true, name: true, slug: true, color: true, emoji: true },
+            },
+          },
+        },
       },
     });
 
@@ -785,7 +804,11 @@ contentRouter.get('/:id', async (req: Request, res: Response, next: NextFunction
       return res.status(404).json({ error: 'Content not found' });
     }
 
-    return res.json(content);
+    const { contentThemes, ...contentData } = content;
+    return res.json({
+      ...contentData,
+      themes: contentThemes.map((ct) => ct.theme),
+    });
   } catch (error) {
     return next(error);
   }
