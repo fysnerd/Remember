@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-09)
 
 **Core value:** See at a glance whether the backend is healthy — which syncs ran, what failed, and how much content is flowing through the pipeline.
-**Current focus:** Phase 2 - Job Execution Tracking
+**Current focus:** Phase 3 - AdminJS Panel & Manual Triggers
 
 ## Current Position
 
-Phase: 2 of 4 (Job Execution Tracking)
-Plan: 02 of 02 (Scheduler Integration & Deploy)
-Status: Phase 2 complete — all plans executed, deployed, verified
-Last activity: 2026-02-10 — Plan 02-02 complete (scheduler integration, VPS deploy, DB records verified)
+Phase: 3 of 4 (AdminJS Panel & Manual Triggers)
+Plan: 01 of 02 (AdminJS Panel Foundation)
+Status: Plan 03-01 complete — AdminJS panel installed, 14 resources registered, mounted at /admin
+Last activity: 2026-02-10 — Plan 03-01 complete (AdminJS foundation with session auth)
 
-Progress: [█████░░░░░] 50%
+Progress: [███████░░░] 70%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
-- Average duration: 16 minutes
-- Total execution time: 2.1 hours
+- Total plans completed: 7
+- Average duration: 14 minutes
+- Total execution time: 2.2 hours
 
 **By Phase:**
 
@@ -29,10 +29,11 @@ Progress: [█████░░░░░] 50%
 |-------|-------|-------|----------|
 | 01 | 4 | 122 min | 30 min |
 | 02 | 2 | 6 min | 3 min |
+| 03 | 1 | 5 min | 5 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-02 (14 min), 01-04 (59 min), 01-03 (9 min), 02-01 (1 min)
-- Trend: Phase 02-01 extremely fast (2 tasks, 3 new files, no integration complexity)
+- Last 5 plans: 01-04 (59 min), 01-03 (9 min), 02-01 (1 min), 02-02 (5 min), 03-01 (5 min)
+- Trend: Phase 03-01 fast (2 tasks, package install + module creation)
 
 *Updated after each plan completion*
 
@@ -47,6 +48,8 @@ Recent decisions affecting current work:
 - Phase 1: Pino chosen for structured logging (5x faster than Winston)
 - Phase 2: JobExecution model in Supabase for persistent job history (survives PM2 restarts)
 - Phase 3: Hardcoded admin credentials for single-user access (solo dev, sufficient for now)
+- Phase 3: connect-pg-simple for session store (PM2 cluster-safe, auto-creates admin_sessions table)
+- Phase 3: Rate limiter scoped to /api only so AdminJS assets are never limited
 
 **From Phase 1 execution:**
 - Keep console.error in env.ts for bootstrap validation (avoids circular dependency with logger)
@@ -74,5 +77,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-10
-Stopped at: Phase 2 complete. All 11 jobs tracked, deployed to VPS, records verified in DB.
-Resume file: .planning/phases/02-job-execution-tracking/02-02-SUMMARY.md
+Stopped at: Completed 03-01-PLAN.md (AdminJS panel foundation). Ready for 03-02 (manual triggers + deploy).
+Resume file: .planning/phases/03-adminjs-panel-manual-triggers/03-01-SUMMARY.md
