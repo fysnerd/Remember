@@ -409,14 +409,17 @@ export async function regenerateQuiz(contentId: string): Promise<boolean> {
 export async function runQuizGenerationWorker(): Promise<void> {
   log.info('Quiz generation worker starting');
 
-  // Get content items with transcripts that need quiz generation
+  // Get content items with transcripts that need quiz generation (SELECTED + INBOX)
   const pendingContent = await prisma.content.findMany({
     where: {
-      status: ContentStatus.SELECTED,
+      OR: [
+        { status: ContentStatus.SELECTED },
+        { status: ContentStatus.INBOX },
+      ],
       transcript: { isNot: null },
       quizzes: { none: {} },
     },
-    take: 5, // Process 5 at a time
+    take: 10,
     orderBy: { createdAt: 'asc' },
   });
 

@@ -687,14 +687,17 @@ export async function runPodcastTranscriptionWorker(): Promise<void> {
   // Clean up any expired locks
   await cleanupExpiredLocks();
 
-  // Get Spotify content items that need transcription
+  // Get Spotify content items that need transcription (SELECTED priority, then INBOX)
   const pendingContent = await prisma.content.findMany({
     where: {
-      status: ContentStatus.SELECTED,
+      OR: [
+        { status: ContentStatus.SELECTED },
+        { status: ContentStatus.INBOX },
+      ],
       platform: Platform.SPOTIFY,
       transcript: null,
     },
-    take: 10, // Increased since we deduplicate
+    take: 20,
     orderBy: { createdAt: 'asc' },
   });
 
