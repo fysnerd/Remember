@@ -71,45 +71,42 @@ export async function generateQuizFromTranscript(
   const assessmentChunk = chunks[0];
 
   // Assess content topics (very permissive - almost all content can have quiz questions)
-  const assessmentPrompt = `Analyze this ${contentType} transcript and identify the main topics discussed.
+  const assessmentPrompt = `Analyse cette transcription de ${contentType === 'video' ? 'vidéo' : 'podcast'} et identifie les sujets principaux abordés.
 
-Title: "${contentTitle}"
+Titre: "${contentTitle}"
 
-Transcript excerpt:
+Extrait de la transcription:
 """
 ${assessmentChunk.substring(0, 3000)}
 """
 
-Be VERY permissive. ANY content that contains ideas, concepts, stories, opinions, advice, or information can be used for quiz questions. This includes:
-- Educational/informative content
-- Philosophical discussions
-- Spiritual/personal development
-- Entertainment with ideas
-- Interviews and conversations
-- Stories and narratives
-- Opinion pieces
+Sois TRÈS permissif. TOUT contenu contenant des idées, concepts, histoires, opinions, conseils ou informations peut servir à générer des questions de quiz.
 
-Only reject content that is purely music, pure silence, or completely unintelligible.
+Rejette UNIQUEMENT si le contenu est de la musique pure, du silence, ou complètement inintelligible.
 
-Respond with JSON only:
+Pour chaque sujet identifié, précise le niveau de complexité (basique, intermédiaire, avancé).
+
+Réponds en JSON uniquement:
 {
   "isEducational": true,
-  "reason": "Brief description of what the content is about",
-  "mainTopics": ["topic1", "topic2", "topic3"]
+  "reason": "Brève description du contenu",
+  "mainTopics": ["sujet1", "sujet2", "sujet3"],
+  "complexity": "basique|intermédiaire|avancé",
+  "contentStyle": "explicatif|narratif|conversationnel|argumentatif"
 }`;
 
   const assessmentResponse = await llmLimiter(() => llm.chatCompletion({
     messages: [
       {
         role: 'system',
-        content: 'You are a content analyst. Be very permissive - most content can generate interesting quiz questions. Respond only with valid JSON.',
+        content: 'Tu es un analyste de contenu pédagogique. Sois très permissif - la plupart des contenus peuvent générer des questions de quiz intéressantes. Identifie précisément les sujets et le niveau de complexité. Réponds uniquement en JSON valide.',
       },
       {
         role: 'user',
         content: assessmentPrompt,
       },
     ],
-    temperature: 0.3,
+    temperature: 0.2,
     jsonMode: true,
   }));
 
@@ -132,35 +129,45 @@ Respond with JSON only:
     const chunk = chunks[i];
     const questionsNeeded = i === 0 ? 3 : 2; // 3 from first chunk, 2 from second
 
-    const questionPrompt = `Génère ${questionsNeeded} questions de quiz à choix multiples de haute qualité basées sur cette transcription de ${contentType === 'video' ? 'vidéo' : 'podcast'}.
-
-IMPORTANT: Génère tout le contenu EN FRANÇAIS (questions, options, explications).
+    const questionPrompt = `Génère ${questionsNeeded} questions de quiz à choix multiples basées sur cette transcription de ${contentType === 'video' ? 'vidéo' : 'podcast'}.
 
 Titre: "${contentTitle}"
 Sujets principaux: ${assessment.mainTopics?.join(', ') || 'Culture générale'}
+Style du contenu: ${assessment.contentStyle || 'explicatif'}
 
 Transcription:
 """
 ${chunk}
 """
 
-Exigences:
-1. Les questions doivent tester la compréhension de faits ou concepts spécifiques de la transcription
-2. Chaque question doit avoir exactement 4 options (A, B, C, D)
-3. Une seule option doit être correcte
-4. Inclure une brève explication pour la réponse correcte
-5. Les questions doivent être éducatives et aider à renforcer l'apprentissage
-6. Éviter les questions triviales ou celles qui peuvent être répondues sans comprendre le contenu
-7. TOUTES les questions, options et explications DOIVENT être en FRANÇAIS
+PRINCIPES PÉDAGOGIQUES (taxonomie de Bloom) - Varie les niveaux cognitifs:
+- Comprendre: "Que signifie [concept] selon l'auteur ?" / "Quel est le lien entre X et Y ?"
+- Appliquer: "Dans quelle situation utiliserait-on [concept] ?" / "Comment appliquer [idée] à [contexte] ?"
+- Analyser: "Pourquoi [fait] est-il important ?" / "Quelle est la cause principale de [phénomène] ?"
 
-Réponds uniquement avec du JSON:
+RÈGLES POUR LES DISTRACTEURS (options incorrectes):
+- Chaque distracteur doit être PLAUSIBLE (pas absurde ni évident)
+- Utiliser des erreurs de compréhension courantes comme distracteurs
+- Les distracteurs ne doivent PAS être partiellement corrects
+- Éviter les patterns prévisibles (option la plus longue = correcte, etc.)
+- Varier la position de la bonne réponse (pas toujours A ou B)
+
+RÈGLES POUR LES QUESTIONS:
+1. Chaque question teste UN concept précis issu de la transcription
+2. La question doit être impossible à répondre correctement sans avoir compris le contenu
+3. 4 options exactement (A, B, C, D), une seule correcte
+4. L'explication doit dire POURQUOI la bonne réponse est correcte ET pourquoi les autres ne le sont pas (1-2 phrases)
+5. Tout en FRANÇAIS
+
+Réponds uniquement en JSON:
 {
   "questions": [
     {
-      "question": "Question claire et spécifique en français ?",
-      "options": ["A) Première option", "B) Deuxième option", "C) Troisième option", "D) Quatrième option"],
+      "question": "Question claire et spécifique ?",
+      "options": ["A) Option", "B) Option", "C) Option", "D) Option"],
       "correctAnswer": "A",
-      "explanation": "Brève explication en français de pourquoi c'est correct"
+      "explanation": "Explication: pourquoi c'est correct et pourquoi les autres options ne le sont pas.",
+      "bloomLevel": "comprendre|appliquer|analyser"
     }
   ]
 }`;
@@ -170,14 +177,21 @@ Réponds uniquement avec du JSON:
         messages: [
           {
             role: 'system',
-            content: 'Tu es un éducateur expert créant des questions de quiz. Génère des questions claires et éducatives en FRANÇAIS qui testent la compréhension. Réponds uniquement avec du JSON valide.',
+            content: `Tu es un concepteur pédagogique expert en création de quiz basés sur la taxonomie de Bloom révisée.
+
+Tes questions suivent ces principes scientifiques:
+- Testing effect: les questions renforcent la mémorisation mieux que la relecture
+- Desirable difficulties: un niveau de difficulté optimal stimule l'apprentissage
+- Elaborative interrogation: demander "pourquoi" et "comment" ancre les connaissances
+
+Génère des questions en FRANÇAIS qui testent la compréhension profonde, pas la mémorisation superficielle. Réponds uniquement en JSON valide.`,
           },
           {
             role: 'user',
             content: questionPrompt,
           },
         ],
-        temperature: 0.7,
+        temperature: 0.6,
         jsonMode: true,
       }));
 
@@ -208,13 +222,25 @@ export async function generateMemoFromTranscript(
   const transcriptText = transcript.slice(0, 8000); // Limit for LLM context
   const tagsStr = tags.length > 0 ? tags.join(', ') : '';
 
-  const systemPrompt = `Tu es un assistant d'apprentissage expert. Génère un mémo d'étude concis et actionnable à partir de la transcription fournie.
-Le mémo doit:
-- Résumer les 5-7 concepts clés à retenir
-- Être structuré avec des bullet points
-- Être pratique et mémorisable
-- Faire maximum 200 mots
-- Être entièrement en français`;
+  const systemPrompt = `Tu es un expert en sciences cognitives spécialisé dans l'optimisation de la rétention mémorielle.
+
+Tu crées des mémos d'étude basés sur ces principes scientifiques:
+- Chunking: regrouper l'information en blocs cohérents (Miller, 1956)
+- Elaborative interrogation: inclure des "pourquoi" pour ancrer les connaissances
+- Dual coding: associer concepts abstraits à des exemples concrets
+- Hierarchical organization: du plus important au moins important
+
+Format du mémo:
+1. IDÉE PRINCIPALE (1 phrase résumant l'essentiel)
+2. CONCEPTS CLÉS (4-6 points, chacun = 1 idée + 1 détail/exemple)
+3. CONNEXIONS (1-2 liens avec des connaissances générales ou d'autres domaines)
+
+Contraintes:
+- Maximum 250 mots
+- Entièrement en français
+- Bullet points avec tirets (-)
+- Langage clair et direct, pas de jargon inutile
+- Chaque point doit être auto-suffisant (compréhensible seul)`;
 
   const userPrompt = `Titre: ${contentTitle}
 ${tagsStr ? `Thèmes: ${tagsStr}` : ''}
@@ -222,7 +248,7 @@ ${tagsStr ? `Thèmes: ${tagsStr}` : ''}
 Transcription:
 ${transcriptText}
 
-Génère un mémo d'étude optimisé pour la rétention avec les points clés.`;
+Génère un mémo d'étude structuré optimisé pour la rétention à long terme.`;
 
   return generateText(userPrompt, { system: systemPrompt, temperature: 0.7 });
 }

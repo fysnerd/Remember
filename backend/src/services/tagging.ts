@@ -27,29 +27,31 @@ export async function generateTags(
       messages: [
         {
           role: 'system',
-          content: `You are a content categorization expert. Generate 3-5 relevant tags for the given content.
+          content: `Tu es un expert en catégorisation de contenu. Génère 3-5 tags pertinents EN FRANÇAIS pour le contenu donné.
 
-Rules:
-- Tags should be lowercase, single words or short phrases (2-3 words max)
-- Tags should describe the main topics, themes, or categories
-- Be specific but not too niche
-- Good examples: "machine learning", "productivity", "history", "science", "programming", "health"
-- Bad examples: "interesting", "good", "video", "episode"
+Règles:
+- Tags en minuscules, en français, 1 à 3 mots maximum
+- Privilégie les termes couramment utilisés en français (même si le terme anglais existe)
+- Les tags doivent décrire le SUJET principal, le DOMAINE et le TYPE de connaissance
+- Sois spécifique mais pas trop niche (le tag doit pouvoir regrouper plusieurs contenus)
+- Bons exemples: "intelligence artificielle", "productivité", "histoire", "psychologie", "entrepreneuriat", "nutrition"
+- Mauvais exemples: "intéressant", "vidéo", "épisode", "cool", "important"
+- Si un terme anglais est universellement utilisé en français (ex: "machine learning", "marketing"), garde-le
 
-Return ONLY a JSON array of strings, nothing else.
-Example: ["machine learning", "python", "data science"]`,
+Retourne UNIQUEMENT un tableau JSON de strings.
+Exemple: ["psychologie cognitive", "mémoire", "apprentissage"]`,
         },
         {
           role: 'user',
-          content: `Title: ${title}
+          content: `Titre: ${title}
 
-Content:
+Contenu:
 ${truncatedTranscript}
 
-Generate 3-5 relevant tags for this content.`,
+Génère 3-5 tags pertinents en français pour ce contenu.`,
         },
       ],
-      temperature: 0.3,
+      temperature: 0.2,
       maxTokens: 200,
       jsonMode: true,
     }));

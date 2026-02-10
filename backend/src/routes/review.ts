@@ -829,8 +829,11 @@ reviewRouter.post('/session/:id/memo', async (req: Request, res: Response, next:
       return res.status(400).json({ error: 'No reviews in this session' });
     }
 
-    // Collect unique content and questions reviewed
-    const contentMap = new Map<string, { title: string; platform: string; questions: string[] }>();
+    // Collect unique content, questions, and performance data
+    const contentMap = new Map<string, { title: string; platform: string; correct: string[]; incorrect: string[] }>();
+
+    let correctCount = 0;
+    let incorrectCount = 0;
 
     for (const review of reviews) {
       const content = review.card.quiz.content;
@@ -838,26 +841,54 @@ reviewRouter.post('/session/:id/memo', async (req: Request, res: Response, next:
         contentMap.set(content.id, {
           title: content.title,
           platform: content.platform,
-          questions: [],
+          correct: [],
+          incorrect: [],
         });
       }
-      contentMap.get(content.id)!.questions.push(review.card.quiz.question);
+      const isCorrect = review.rating === 'GOOD' || review.rating === 'EASY';
+      if (isCorrect) {
+        contentMap.get(content.id)!.correct.push(review.card.quiz.question);
+        correctCount++;
+      } else {
+        contentMap.get(content.id)!.incorrect.push(review.card.quiz.question);
+        incorrectCount++;
+      }
     }
 
-    // Build prompt for memo generation
+    // Build prompt with performance-aware context
     const contentSummary = Array.from(contentMap.values())
-      .map(c => `- ${c.title} (${c.platform})\n  Questions: ${c.questions.slice(0, 3).join('; ')}${c.questions.length > 3 ? '...' : ''}`)
+      .map(c => {
+        let summary = `- ${c.title} (${c.platform})`;
+        if (c.correct.length > 0) {
+          summary += `\n  Maîtrisé: ${c.correct.slice(0, 2).join('; ')}`;
+        }
+        if (c.incorrect.length > 0) {
+          summary += `\n  À revoir: ${c.incorrect.slice(0, 2).join('; ')}`;
+        }
+        return summary;
+      })
       .join('\n');
 
-    const systemPrompt = `Tu es un assistant d'apprentissage. Génère un mémo d'étude concis résumant les concepts clés que l'utilisateur vient de réviser. Concentre-toi sur 3-5 points principaux à retenir. Sois pratique et actionnable. Utilise des bullet points. Réponds UNIQUEMENT en français.`;
+    const systemPrompt = `Tu es un expert en sciences cognitives. Tu génères des mémos post-révision basés sur le principe du "retrieval practice" (Roediger & Butler, 2011): renforcer ce qui a été difficile et consolider ce qui est acquis.
 
-    const userPrompt = `L'utilisateur vient de terminer une session de révision avec ${reviews.length} questions sur le contenu suivant :
+Ton mémo doit:
+- Commencer par les concepts que l'utilisateur a eu du mal à retenir (priorité aux lacunes)
+- Puis consolider les points bien maîtrisés avec un rappel synthétique
+- Utiliser des bullet points avec tirets (-)
+- Maximum 200 mots, entièrement en français
+- Être directement actionnable (pas de phrases creuses)`;
 
+    const userPrompt = `Session terminée: ${reviews.length} questions (${correctCount} correctes, ${incorrectCount} incorrectes).
+
+Contenu révisé:
 ${contentSummary}
 
-Génère un bref mémo (max 150 mots) en français avec les points clés à retenir. Format simple avec des tirets (-), pas de markdown complexe.`;
+Génère un mémo post-révision qui:
+1. Identifie les points faibles à retravailler en priorité (basé sur les réponses incorrectes)
+2. Résume les concepts bien acquis pour consolidation
+3. Suggère un angle de révision pour la prochaine session`;
 
-    const memo = await generateText(userPrompt, { system: systemPrompt, temperature: 0.7 });
+    const memo = await generateText(userPrompt, { system: systemPrompt, temperature: 0.5 });
 
     // Save memo to session
     await prisma.quizSession.update({
