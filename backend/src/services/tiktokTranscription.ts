@@ -50,6 +50,22 @@ interface TranscriptSegment {
 // Minimum transcript length to be considered valid (filters music-only videos)
 const MIN_TRANSCRIPT_LENGTH = 50;
 
+// yt-dlp error patterns that are permanent (will never succeed without user action)
+const PERMANENT_ERROR_PATTERNS = [
+  'Log in for access',
+  'login required',
+  'not comfortable for some audiences',
+  'Private video',
+  'Video unavailable',
+  'has been removed',
+  'been deleted',
+  'does not exist',
+  'account is private',
+  'content is not available',
+  'This video is no longer available',
+  'Requested format is not available',
+];
+
 /**
  * Download TikTok video using yt-dlp
  * Uses execFile with args array to prevent command injection
@@ -473,8 +489,19 @@ async function processTikTokWithCache(
     return 'success';
 
   } catch (error: any) {
-    await markCacheFailed(cache.id, error, workerId);
-    log.error({ err: error, externalId: content.externalId }, 'TikTok transcription error');
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const isPermanent = PERMANENT_ERROR_PATTERNS.some(pattern =>
+      errorMessage.toLowerCase().includes(pattern.toLowerCase())
+    );
+
+    if (isPermanent) {
+      log.warn({ externalId: content.externalId, reason: errorMessage.substring(0, 200) }, 'Permanent TikTok error, marking as unavailable');
+      await markCacheUnavailable(cache.id, `Permanent: ${errorMessage.substring(0, 300)}`, workerId);
+      await markTikTokContentUnsupported(content.externalId);
+    } else {
+      await markCacheFailed(cache.id, error, workerId);
+      log.error({ err: error, externalId: content.externalId }, 'TikTok transcription error (transient)');
+    }
     return 'failed';
   } finally {
     // Cleanup in finally block to ensure temp files are always removed
