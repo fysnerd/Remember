@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-09)
 
 **Core value:** See at a glance whether the backend is healthy — which syncs ran, what failed, and how much content is flowing through the pipeline.
-**Current focus:** Phase 3 - AdminJS Panel & Manual Triggers
+**Current focus:** Phase 4 - Observability Dashboard
 
 ## Current Position
 
-Phase: 3 of 4 (AdminJS Panel & Manual Triggers) -- COMPLETE
-Plan: 02 of 02 (Manual Trigger Actions & VPS Deploy) -- COMPLETE
-Status: Phase 3 complete — AdminJS panel with 11 manual triggers deployed to production
-Last activity: 2026-02-10 — Plan 03-02 complete (manual triggers + VPS deploy)
+Phase: 4 of 4 (Observability Dashboard)
+Plan: 01 of 02 (Dashboard Backend Data Layer) -- COMPLETE
+Status: Plan 04-01 complete -- dashboard handler + SSE endpoint + broadcast wiring
+Last activity: 2026-02-10 -- Plan 04-01 complete (backend data layer for observability dashboard)
 
-Progress: [████████░░] 80%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
-- Average duration: 13 minutes
-- Total execution time: 2.3 hours
+- Total plans completed: 9
+- Average duration: 12 minutes
+- Total execution time: 2.4 hours
 
 **By Phase:**
 
@@ -30,10 +30,11 @@ Progress: [████████░░] 80%
 | 01 | 4 | 122 min | 30 min |
 | 02 | 2 | 6 min | 3 min |
 | 03 | 2 | 9 min | 5 min |
+| 04 | 1 | 4 min | 4 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-03 (9 min), 02-01 (1 min), 02-02 (5 min), 03-01 (5 min), 03-02 (4 min)
-- Trend: Phase 03 fast (2 plans, 9 min total)
+- Last 5 plans: 02-01 (1 min), 02-02 (5 min), 03-01 (5 min), 03-02 (4 min), 04-01 (4 min)
+- Trend: Phase 04 continuing fast execution
 
 *Updated after each plan completion*
 
@@ -68,16 +69,23 @@ Recent decisions affecting current work:
 - Two composite indexes: [jobName, startedAt] for job queries, [status, startedAt] for failure analysis
 - Non-blocking tracking pattern: all Prisma calls wrapped in try/catch, failures logged but never crash jobs
 
+**From Phase 4 Plan 01 execution:**
+- Exclude admin/components from tsc -- AdminJS bundles components with its own bundler
+- Placeholder dashboard component prevents AdminJS boot crash before Plan 04-02
+- In-memory SSE client Set per PM2 worker -- acceptable for 1-2 admin connections
+- Raw SQL for DISTINCT ON and FILTER WHERE -- not available in Prisma query builder
+- ::int casts on COUNT to prevent BigInt serialization issues from raw SQL
+
 ### Pending Todos
 
 None yet.
 
 ### Blockers/Concerns
 
-**Phase 4 complexity:** AdminJS custom dashboard pattern (ComponentLoader) has sparse documentation. Fallback option (standalone HTML + Chart.js) available if needed.
+**Phase 4 ComponentLoader:** Resolved -- ComponentLoader pattern works as expected. Placeholder component prevents boot crash while Plan 04-02 creates the real React dashboard.
 
 ## Session Continuity
 
 Last session: 2026-02-10
-Stopped at: Completed 03-02-PLAN.md (manual triggers + VPS deploy). Phase 3 complete. Ready for Phase 4 (custom dashboard).
-Resume file: .planning/phases/03-adminjs-panel-manual-triggers/03-02-SUMMARY.md
+Stopped at: Completed 04-01-PLAN.md (dashboard backend data layer). Ready for Plan 04-02 (React dashboard component).
+Resume file: .planning/phases/04-observability-dashboard/04-01-SUMMARY.md
