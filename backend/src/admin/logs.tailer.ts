@@ -25,9 +25,11 @@ type Listener = (line: LogLine) => void;
 // Config
 // ---------------------------------------------------------------------------
 
-const PM2_LOG_DIR = path.join(process.env.HOME || '/root', '.pm2', 'logs');
-const OUT_PATTERN = /^remember-api-out-\d+\.log$/;
-const ERR_PATTERN = /^remember-api-error-\d+\.log$/;
+// PM2 configured with custom log dir: /root/Remember/backend/logs/
+// Filenames: out-0.log, error-0.log (or remember-api-out-*.log in default config)
+const PM2_LOG_DIR = process.env.PM2_LOG_DIR || path.resolve(process.cwd(), 'logs');
+const OUT_PATTERN = /^(?:remember-api-)?out-\d+\.log$/;
+const ERR_PATTERN = /^(?:remember-api-)?error-\d+\.log$/;
 const RING_SIZE = 500;
 const BACKFILL_BYTES = 64 * 1024; // 64KB for initial backfill
 
