@@ -117,11 +117,42 @@ async function fetchLikedViaEvaluate(
 
     const result: FavoriteListResponse = await page.evaluate(
       async (params: { secUid: string; cursor: number | string; count: number }) => {
-        const url = `https://www.tiktok.com/api/favorite/item_list?secUid=${params.secUid}&count=${params.count}&cursor=${params.cursor}`;
+        // Build URL with all required TikTok params
+        const baseParams = new URLSearchParams({
+          secUid: params.secUid,
+          count: String(params.count),
+          cursor: String(params.cursor),
+          // Standard TikTok web params
+          aid: '1988',
+          app_language: 'en',
+          app_name: 'tiktok_web',
+          browser_language: 'en-US',
+          browser_name: 'Mozilla',
+          browser_platform: 'Win32',
+          browser_version: '5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          channel: 'tiktok_web',
+          cookie_enabled: 'true',
+          device_platform: 'web_pc',
+          os: 'windows',
+          region: 'FR',
+          screen_height: '1080',
+          screen_width: '1920',
+          webcast_language: 'en',
+        });
+        const url = `https://www.tiktok.com/api/favorite/item_list/?${baseParams.toString()}`;
+
         try {
-          const resp = await fetch(url);
+          const resp = await fetch(url, {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+              'Accept': 'application/json, text/plain, */*',
+              'Referer': 'https://www.tiktok.com/',
+            },
+          });
           if (!resp.ok) {
-            return { error: `HTTP ${resp.status}`, statusCode: resp.status, itemList: [], hasMore: false };
+            const text = await resp.text().catch(() => 'no body');
+            return { error: `HTTP ${resp.status}: ${text.substring(0, 200)}`, statusCode: resp.status, itemList: [], hasMore: false };
           }
           return await resp.json();
         } catch (e: any) {
@@ -132,7 +163,80 @@ async function fetchLikedViaEvaluate(
     );
 
     if (result.error) {
-      log.warn({ error: result.error, statusCode: result.statusCode }, 'API call returned error');
+      log.warn({ error: result.error, statusCode: result.statusCode }, 'Direct fetch failed, trying explicit sign');
+
+      // Fallback: try with explicit byted_acrawler signing
+      const signedResult: FavoriteListResponse = await page.evaluate(
+        async (params: { secUid: string; cursor: number | string; count: number }) => {
+          const baseParams = new URLSearchParams({
+            secUid: params.secUid,
+            count: String(params.count),
+            cursor: String(params.cursor),
+            aid: '1988',
+            app_language: 'en',
+            app_name: 'tiktok_web',
+            browser_language: 'en-US',
+            browser_name: 'Mozilla',
+            browser_platform: 'Win32',
+            browser_version: '5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            channel: 'tiktok_web',
+            cookie_enabled: 'true',
+            device_platform: 'web_pc',
+            os: 'windows',
+            region: 'FR',
+            screen_height: '1080',
+            screen_width: '1920',
+            webcast_language: 'en',
+          });
+          let url = `https://www.tiktok.com/api/favorite/item_list/?${baseParams.toString()}`;
+
+          // Try explicit signing if byted_acrawler is available
+          try {
+            const w = window as any;
+            if (w.byted_acrawler && w.byted_acrawler.frontierSign) {
+              const signed = w.byted_acrawler.frontierSign(url);
+              if (signed && signed['X-Bogus']) {
+                url += `&X-Bogus=${signed['X-Bogus']}`;
+              }
+            }
+          } catch {}
+
+          try {
+            const resp = await fetch(url, {
+              method: 'GET',
+              credentials: 'include',
+              headers: {
+                'Accept': 'application/json, text/plain, */*',
+                'Referer': 'https://www.tiktok.com/',
+              },
+            });
+            if (!resp.ok) {
+              const text = await resp.text().catch(() => 'no body');
+              return { error: `Signed HTTP ${resp.status}: ${text.substring(0, 200)}`, statusCode: resp.status, itemList: [], hasMore: false };
+            }
+            return await resp.json();
+          } catch (e: any) {
+            return { error: `Signed: ${String(e)}`, itemList: [], hasMore: false };
+          }
+        },
+        { secUid, cursor, count: 35 },
+      );
+
+      if (signedResult.error) {
+        log.warn({ error: signedResult.error }, 'Signed fetch also failed');
+        break;
+      }
+      // Use signed result if it worked
+      if (signedResult.itemList && signedResult.itemList.length > 0) {
+        allVideos.push(...signedResult.itemList);
+        hasMore = signedResult.hasMore === true;
+        cursor = signedResult.cursor || 0;
+        log.info({ pageNum, items: signedResult.itemList.length }, 'Signed fetch worked!');
+        if (hasMore && allVideos.length < maxVideos) {
+          await new Promise(r => setTimeout(r, 500));
+        }
+        continue;
+      }
       break;
     }
 
@@ -517,7 +621,7 @@ export async function runTikTokSync(): Promise<void> {
   let successCount = 0;
   let errorCount = 0;
 
-  const TIMEOUT_MS = 30000; // 30s timeout (down from 60s — API approach is faster)
+  const TIMEOUT_MS = 45000; // 45s timeout (API ~15s, fallback scroll needs more)
 
   const results = await Promise.allSettled(
     connections.map(connection =>
