@@ -1,79 +1,85 @@
-# Ankora Admin & Observability
+# Ankora
 
 ## What This Is
 
-A unified admin panel and observability layer for the Ankora backend. Provides structured JSON logging (Pino), persistent cron job execution tracking, a full-featured AdminJS panel at `/admin` for data exploration and manual job triggers, and a real-time dashboard with 6 panels showing system health, sync status, errors, success rates, and timeline.
+Ankora est une plateforme d'apprentissage actif qui transforme le contenu consommé sur les réseaux sociaux (YouTube, Spotify, TikTok, Instagram) en connaissances durables via des quiz générés par IA et la répétition espacée. L'app iOS permet de synchroniser, trier, et réviser son contenu.
 
 ## Core Value
 
-See at a glance whether the backend is healthy — which syncs ran, what failed, and how much content is flowing through the pipeline.
+L'utilisateur apprend durablement à partir de ce qu'il consomme déjà — sans effort supplémentaire de curation.
+
+## Current Milestone: v2.0 Themes-first UX
+
+**Goal:** Transformer la navigation de l'app d'une vue centrée contenu vers une vue centrée thèmes, avec quiz cross-contenu par thème.
+
+**Target features:**
+- Thèmes auto-générés par l'IA (couche au-dessus des tags existants)
+- Home screen avec sections par thème + contenus récents
+- Contenu multi-thème (un contenu peut appartenir à plusieurs thèmes)
+- Gestion manuelle des thèmes (créer, modifier, supprimer, déplacer contenu)
+- Quiz par thème : mix de questions existantes + nouvelles questions de synthèse cross-contenu
 
 ## Requirements
 
 ### Validated
 
-- ✓ ESM module system with `"type": "module"` — v1.0
-- ✓ Pino structured JSON logging (replaced 400+ console.log) — v1.0
-- ✓ HTTP request auto-logging with timing via pino-http — v1.0
-- ✓ JobExecution model with persistent job history (status, duration, errors) — v1.0
-- ✓ All 11 cron jobs tracked with non-blocking execution recording — v1.0
-- ✓ 30-day automatic cleanup of job execution records — v1.0
-- ✓ AdminJS panel at `/admin` with 14 Prisma models in 5 navigation groups — v1.0
-- ✓ Session-based admin auth with PostgreSQL store (PM2 cluster-safe) — v1.0
-- ✓ 11 manual trigger actions with fire-and-forget pattern — v1.0
-- ✓ MANUAL/SCHEDULED trigger source tracking — v1.0
-- ✓ Real-time dashboard with 6 panels and SSE auto-refresh — v1.0
-- ✓ Stats, sync status, error log, success rates, timeline views — v1.0
+<!-- Existing app capabilities — shipped and working -->
+
+- ✓ Auth JWT (signup, login, refresh tokens) — pre-v1
+- ✓ OAuth YouTube, Spotify + cookie-based TikTok, Instagram — pre-v1
+- ✓ Content sync from 4 platforms (cron workers) — pre-v1
+- ✓ Transcription pipeline (yt-dlp + Groq Whisper) — pre-v1
+- ✓ Quiz generation per content (Mistral AI) — pre-v1
+- ✓ Spaced repetition review (SM-2 algorithm) — pre-v1
+- ✓ Auto-tagging with Mistral AI — pre-v1
+- ✓ Content inbox + triage flow — pre-v1
+- ✓ Structured logging (Pino) — v1.0
+- ✓ Job execution tracking + AdminJS panel — v1.0
+- ✓ Real-time observability dashboard — v1.0
 
 ### Active
 
-(No active requirements — milestone complete. Define new requirements via `/gsd:new-milestone`.)
+<!-- v2.0 Themes-first UX — to be detailed in REQUIREMENTS.md -->
+
+- [ ] Theme data model and auto-classification
+- [ ] Theme management (CRUD + content assignment)
+- [ ] Theme-based home screen navigation
+- [ ] Theme-based quiz generation (mix + synthesis)
 
 ### Out of Scope
 
-- Grafana/Prometheus/Datadog — overkill for single VPS with 11 jobs, custom dashboard sufficient
-- WebSocket real-time updates — SSE is simpler, unidirectional, sufficient
-- Mobile admin access — desktop browser only, solo dev
-- Alerting/notifications (Slack, email alerts) — deferred to v2
-- Multi-admin with roles — solo dev, single login sufficient
-- IP whitelisting for /admin — deferred to v2
+- Grafana/Prometheus/Datadog — custom dashboard sufficient
+- Multi-admin with roles — solo dev
+- Android app — iOS only for now
+- Social features (sharing, leaderboards) — not the focus
+- Theme collaboration (shared themes between users) — solo learning app
 
 ## Context
 
-Shipped v1.0 with 1,822 lines added across 41 backend files over 2 days.
+Backend: Node.js v22, Express.js, TypeScript, Prisma, PostgreSQL (Supabase), Pino, AdminJS v7. Runs on Hetzner CPX32 VPS with PM2 cluster mode and Caddy reverse proxy.
 
-Tech stack: Node.js v22, Express.js, TypeScript, Prisma, PostgreSQL (Supabase), Pino, AdminJS v7, Recharts, SSE.
+iOS app: Expo SDK 54, expo-router, Zustand, TanStack React Query, Axios.
 
-Backend runs 12 cron jobs (11 sync + 1 cleanup) on Hetzner CPX32 VPS with PM2 cluster mode and Caddy reverse proxy.
+Auto-tagging worker already generates tags via Mistral AI — themes will be a broader categorization layer derived from these tags.
 
-Admin panel accessible at `https://api.ankora.study/admin`.
+Quiz generation currently works per-content — needs extension to support theme-level quiz mixing and cross-content synthesis questions.
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| AdminJS for data exploration | Auto-generates CRUD from Prisma models, no custom UI needed | ✓ Good — 14 models browsable with zero custom code |
-| Custom dashboard page in AdminJS | AdminJS supports custom pages — avoids separate frontend | ✓ Good — 573-line React component with 6 panels |
-| JobExecution table in Supabase | Persistent history, queryable, survives PM2 restarts | ✓ Good — verified in production with 16+ records |
-| Hardcoded admin credentials | Solo dev, no need for user management system | ✓ Good — simple, works for current scale |
-| ESM migration | Required by AdminJS v7+, backend already used ESM syntax | ✓ Good — clean migration, all 11 jobs verified |
-| Pino over Winston | 5x faster, structured JSON, ESM-native | ✓ Good — clean logs, queryable with jq |
-| connect-pg-simple for sessions | PM2 cluster-safe, auto-creates table | ✓ Good — sessions persist across workers |
-| Fire-and-forget triggers | Prevents HTTP timeouts on long-running Playwright jobs | ✓ Good — admin gets instant feedback |
-| jobName as String (not enum) | New jobs don't require schema migration | ✓ Good — flexibility confirmed with cleanup job |
-| prisma db push (not migrate) | Production schema drift detected, db push is safer | ✓ Good — no data loss |
-| Rate limiter scoped to /api | AdminJS assets need unlimited requests | ✓ Good — panel loads without 429 errors |
-| SSE over WebSocket | Unidirectional, simpler, sufficient for dashboard | ✓ Good — real-time updates with 30s heartbeat |
-| Box-as-table pattern | AdminJS design-system table exports vary between versions | ✓ Good — resilient to AdminJS upgrades |
-| Exclude admin/components from tsc | AdminJS bundles with its own bundler | ✓ Good — clean TypeScript compilation |
+| Themes above tags (not replacing) | Tags provide detail, themes provide navigation. Reuse existing auto-tagging investment | — Pending |
+| Multi-theme content | A video about "Python for finance" belongs in both Dev and Finance themes | — Pending |
+| 100% auto-creation by AI | Lower friction than manual setup. User adjusts after | — Pending |
+| Mix + synthesis quiz mode | Mix reuses existing questions, synthesis creates new cross-content understanding | — Pending |
 
 ## Constraints
 
-- **Single VPS**: Everything runs on one Hetzner CPX32 — admin panel must stay lightweight
-- **Supabase DB**: Job history in same PostgreSQL — use Prisma schema sync
-- **Caddy proxy**: Admin routed via existing `api.ankora.study` → `localhost:3001`
-- **PM2 cluster**: Sessions must be database-backed (not in-memory)
-- **AdminJS v7**: ESM-only, components bundled separately from tsc
+- **Single VPS**: Backend + workers on one Hetzner CPX32
+- **Supabase DB**: PostgreSQL via Prisma — schema changes via `prisma db push`
+- **Expo SDK 54**: iOS app with OTA updates for JS changes
+- **Mistral AI**: Used for both tagging and quiz gen — themes classification should use same provider
+- **Existing tags**: Must coexist, themes derive from tags
 
 ---
-*Last updated: 2026-02-10 after v1.0 milestone*
+*Last updated: 2026-02-10 after v2.0 milestone started*
