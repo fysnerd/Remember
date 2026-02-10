@@ -10,3 +10,4 @@ export { useQuiz, useTopicQuiz, useSubmitAnswer, useCreateSession, useCompleteSe
 export { useReviews, useCompletedItems, useReviewStats } from './useReviews';
 export { useMemo, useTopicMemo } from './useMemo';
 export { useOAuthStatus, useRefreshContent } from './useOAuth';
+export { useThemes, useThemeDetail, useCreateTheme, useUpdateTheme, useDeleteTheme, useAddContentToTheme, useRemoveContentFromTheme } from './useThemes';

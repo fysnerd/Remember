@@ -83,3 +83,23 @@ export interface OAuthStatus {
   tiktok: PlatformStatus | null;
   instagram: PlatformStatus | null;
 }
+
+export interface ThemeListItem {
+  id: string;
+  name: string;
+  slug: string;
+  color: string;       // hex e.g. "#6366F1"
+  emoji: string;       // e.g. "📚"
+  contentCount: number;
+  tags: { id: string; name: string }[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ThemeRef {
+  id: string;
+  name: string;
+  slug: string;
+  color: string;
+  emoji: string;
+}
