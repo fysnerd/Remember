@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A unified admin panel for the Ankora backend that combines data exploration (AdminJS) with real-time observability. Accessible on `/admin`, it gives full visibility into what's happening: cron job status, error tracking, content pipeline stats, and the ability to browse all database models. Built for a solo developer who currently has no visibility beyond console log spam.
+A unified admin panel and observability layer for the Ankora backend. Provides structured JSON logging (Pino), persistent cron job execution tracking, a full-featured AdminJS panel at `/admin` for data exploration and manual job triggers, and a real-time dashboard with 6 panels showing system health, sync status, errors, success rates, and timeline.
 
 ## Core Value
 
@@ -12,56 +12,68 @@ See at a glance whether the backend is healthy — which syncs ran, what failed,
 
 ### Validated
 
-- Express.js backend with 11 cron jobs (YouTube/Spotify/TikTok/Instagram sync, transcription, quiz generation, etc.) — existing
-- PostgreSQL database via Supabase with Prisma ORM — existing
-- PM2 process management with Caddy reverse proxy on Hetzner VPS — existing
-- Console-based logging with prefixes (`[Scheduler]`, `[OAuth]`, etc.) — existing
-- Worker overlap prevention via `runningJobs` Set — existing
+- ✓ ESM module system with `"type": "module"` — v1.0
+- ✓ Pino structured JSON logging (replaced 400+ console.log) — v1.0
+- ✓ HTTP request auto-logging with timing via pino-http — v1.0
+- ✓ JobExecution model with persistent job history (status, duration, errors) — v1.0
+- ✓ All 11 cron jobs tracked with non-blocking execution recording — v1.0
+- ✓ 30-day automatic cleanup of job execution records — v1.0
+- ✓ AdminJS panel at `/admin` with 14 Prisma models in 5 navigation groups — v1.0
+- ✓ Session-based admin auth with PostgreSQL store (PM2 cluster-safe) — v1.0
+- ✓ 11 manual trigger actions with fire-and-forget pattern — v1.0
+- ✓ MANUAL/SCHEDULED trigger source tracking — v1.0
+- ✓ Real-time dashboard with 6 panels and SSE auto-refresh — v1.0
+- ✓ Stats, sync status, error log, success rates, timeline views — v1.0
 
 ### Active
 
-- [ ] AdminJS panel on `/admin` for browsing all database models (User, Content, Quiz, Card, Review, etc.)
-- [ ] Dashboard homepage with real-time overview of system health
-- [ ] Job execution tracking — persist every cron job run (start, end, status, items processed, errors) to a `job_runs` table in Supabase
-- [ ] Timeline view — chronological feed of all job executions
-- [ ] Error log — recent errors from last 24h, filterable by job type
-- [ ] Sync status panel — last run of each sync job with success/failure indicator
-- [ ] General stats — users actifs, contenus par plateforme, quiz generated, reviews completed
-- [ ] Simple email/password authentication for admin access (hardcoded credentials)
+(No active requirements — milestone complete. Define new requirements via `/gsd:new-milestone`.)
 
 ### Out of Scope
 
-- Multi-user admin with roles — solo dev, single login sufficient
-- External monitoring tools (Grafana, Prometheus, Datadog) — overkill for current scale
-- Alerting/notifications (Slack, email alerts) — deferred, manual monitoring for now
-- Frontend web admin — everything lives on the backend `/admin` route
-- Mobile admin access — desktop browser only
+- Grafana/Prometheus/Datadog — overkill for single VPS with 11 jobs, custom dashboard sufficient
+- WebSocket real-time updates — SSE is simpler, unidirectional, sufficient
+- Mobile admin access — desktop browser only, solo dev
+- Alerting/notifications (Slack, email alerts) — deferred to v2
+- Multi-admin with roles — solo dev, single login sufficient
+- IP whitelisting for /admin — deferred to v2
 
 ## Context
 
-The Ankora backend runs 11 cron jobs every 2-30 minutes. Currently, the only visibility into these jobs is PM2 logs (`pm2 logs remember-api`) which output unstructured console.log statements. When something breaks (like the Instagram sync selectors becoming outdated), it takes manual SSH + log scrolling to diagnose.
+Shipped v1.0 with 1,822 lines added across 41 backend files over 2 days.
 
-AdminJS v7+ is ESM-only. The backend currently compiles to CJS but uses ESM syntax — adding `"type": "module"` to package.json is needed. A plan for this already exists (REM-131).
+Tech stack: Node.js v22, Express.js, TypeScript, Prisma, PostgreSQL (Supabase), Pino, AdminJS v7, Recharts, SSE.
 
-The existing `scheduler.ts` already tracks running jobs in memory via a `runningJobs` Set, but doesn't persist execution history. The new `job_runs` table will capture what the Set currently tracks, plus duration, item counts, and error details.
+Backend runs 12 cron jobs (11 sync + 1 cleanup) on Hetzner CPX32 VPS with PM2 cluster mode and Caddy reverse proxy.
 
-## Constraints
-
-- **ESM migration**: AdminJS v7+ requires `"type": "module"` in package.json — impacts build pipeline
-- **Single VPS**: Everything runs on one Hetzner CPX32 — admin panel must be lightweight
-- **Supabase DB**: Job history stored in same Supabase PostgreSQL — use Prisma migration
-- **Caddy proxy**: Admin already routed via existing `api.ankora.study` → `localhost:3001` — no Caddy changes needed
-- **Rate limiter**: AdminJS makes many internal requests — must exclude `/admin` from express-rate-limit
+Admin panel accessible at `https://api.ankora.study/admin`.
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| AdminJS for data exploration | Auto-generates CRUD from Prisma models, no custom UI needed | — Pending |
-| Custom dashboard page in AdminJS | AdminJS supports custom pages — avoids separate frontend | — Pending |
-| `job_runs` table in Supabase | Persistent history, queryable, survives PM2 restarts | — Pending |
-| Simple hardcoded admin credentials | Solo dev, no need for user management system | — Pending |
-| ESM migration (`"type": "module"`) | Required by AdminJS v7+, backend already uses ESM syntax | — Pending |
+| AdminJS for data exploration | Auto-generates CRUD from Prisma models, no custom UI needed | ✓ Good — 14 models browsable with zero custom code |
+| Custom dashboard page in AdminJS | AdminJS supports custom pages — avoids separate frontend | ✓ Good — 573-line React component with 6 panels |
+| JobExecution table in Supabase | Persistent history, queryable, survives PM2 restarts | ✓ Good — verified in production with 16+ records |
+| Hardcoded admin credentials | Solo dev, no need for user management system | ✓ Good — simple, works for current scale |
+| ESM migration | Required by AdminJS v7+, backend already used ESM syntax | ✓ Good — clean migration, all 11 jobs verified |
+| Pino over Winston | 5x faster, structured JSON, ESM-native | ✓ Good — clean logs, queryable with jq |
+| connect-pg-simple for sessions | PM2 cluster-safe, auto-creates table | ✓ Good — sessions persist across workers |
+| Fire-and-forget triggers | Prevents HTTP timeouts on long-running Playwright jobs | ✓ Good — admin gets instant feedback |
+| jobName as String (not enum) | New jobs don't require schema migration | ✓ Good — flexibility confirmed with cleanup job |
+| prisma db push (not migrate) | Production schema drift detected, db push is safer | ✓ Good — no data loss |
+| Rate limiter scoped to /api | AdminJS assets need unlimited requests | ✓ Good — panel loads without 429 errors |
+| SSE over WebSocket | Unidirectional, simpler, sufficient for dashboard | ✓ Good — real-time updates with 30s heartbeat |
+| Box-as-table pattern | AdminJS design-system table exports vary between versions | ✓ Good — resilient to AdminJS upgrades |
+| Exclude admin/components from tsc | AdminJS bundles with its own bundler | ✓ Good — clean TypeScript compilation |
+
+## Constraints
+
+- **Single VPS**: Everything runs on one Hetzner CPX32 — admin panel must stay lightweight
+- **Supabase DB**: Job history in same PostgreSQL — use Prisma schema sync
+- **Caddy proxy**: Admin routed via existing `api.ankora.study` → `localhost:3001`
+- **PM2 cluster**: Sessions must be database-backed (not in-memory)
+- **AdminJS v7**: ESM-only, components bundled separately from tsc
 
 ---
-*Last updated: 2026-02-09 after initialization*
+*Last updated: 2026-02-10 after v1.0 milestone*
