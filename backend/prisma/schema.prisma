@@ -41,6 +41,7 @@ model User {
   quizSessions  QuizSession[]
   settings      UserSettings?
   pushTokens    PushToken[]
+  themes        Theme[]
 
   @@index([email])
 }
@@ -184,6 +185,8 @@ model Content {
   transcript    Transcript?
   quizzes       Quiz[]
   tags          Tag[]    @relation("ContentTags")
+
+  contentThemes ContentTheme[]
 
   // Global transcript cache reference
   transcriptCacheId String?
@@ -360,10 +363,59 @@ model Tag {
   id          String    @id @default(cuid())
   name        String    @unique
   contents    Content[] @relation("ContentTags")
+  themeTags   ThemeTag[]
 
   createdAt   DateTime  @default(now())
 
   @@index([name])
+}
+
+// ============================================================================
+// Themes
+// ============================================================================
+
+model Theme {
+  id            String         @id @default(cuid())
+  userId        String
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  slug          String
+  color         String         @default("#6366F1")
+  emoji         String         @default("📚")
+  contentThemes ContentTheme[]
+  themeTags     ThemeTag[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@unique([userId, slug])
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model ContentTheme {
+  id          String   @id @default(cuid())
+  contentId   String
+  content     Content  @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  themeId     String
+  theme       Theme    @relation(fields: [themeId], references: [id], onDelete: Cascade)
+  assignedAt  DateTime @default(now())
+  assignedBy  String   @default("system")
+
+  @@unique([contentId, themeId])
+  @@index([themeId])
+  @@index([contentId])
+}
+
+model ThemeTag {
+  id       String @id @default(cuid())
+  themeId  String
+  theme    Theme  @relation(fields: [themeId], references: [id], onDelete: Cascade)
+  tagId    String
+  tag      Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([themeId, tagId])
+  @@index([themeId])
+  @@index([tagId])
 }
 
 // ============================================================================
