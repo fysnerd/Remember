@@ -389,6 +389,7 @@ model Theme {
   emoji         String         @default("📚")
   memo          String?
   memoGeneratedAt DateTime?
+  discoveredAt  DateTime?     // null = pending discovery, set = user confirmed
   contentThemes ContentTheme[]
   themeTags     ThemeTag[]
   quizzes       Quiz[]
