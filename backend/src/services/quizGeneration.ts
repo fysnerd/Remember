@@ -253,6 +253,105 @@ Génère un mémo d'étude structuré optimisé pour la rétention à long terme
   return generateText(userPrompt, { system: systemPrompt, temperature: 0.7 });
 }
 
+// ============================================================================
+// Synthesis Question Generation (Cross-content)
+// ============================================================================
+
+interface SynthesisGenerationResult {
+  questions: {
+    question: string;
+    options: string[];
+    correctAnswer: string;
+    explanation: string;
+    sourceIndices: number[];
+  }[];
+}
+
+/**
+ * Generate cross-content synthesis questions for a theme.
+ * Requires 2+ content memos to create questions that connect ideas from different sources.
+ */
+export async function generateSynthesisQuestions(
+  themeName: string,
+  contentMemos: { id: string; title: string; memo: string }[],
+  maxQuestions: number = 5
+): Promise<SynthesisGenerationResult> {
+  if (contentMemos.length < 2) {
+    return { questions: [] };
+  }
+
+  try {
+    const memosText = contentMemos
+      .map((cm, i) => `[Source ${i + 1}: "${cm.title}"]\n${cm.memo.substring(0, 2000)}`)
+      .join('\n\n---\n\n');
+
+    const systemPrompt = `Tu es un concepteur pedagogique expert specialise dans les questions de SYNTHESE inter-contenus.
+
+Regles:
+- Chaque question DOIT necessiter la comprehension d'AU MOINS 2 sources differentes
+- Les questions doivent relier, comparer ou connecter des idees provenant de sources distinctes
+- Types de synthese: comparaison, cause-effet, generalisation, contradiction, complementarite
+- 4 options (A-D), une seule correcte
+- Les distracteurs doivent etre plausibles -- ils pourraient etre vrais si on ne connait qu'UNE seule source
+- L'explication doit nommer les sources concernees
+- Tout en FRANCAIS
+- Reponds UNIQUEMENT en JSON valide`;
+
+    const userPrompt = `Theme: "${themeName}"
+Nombre de sources: ${contentMemos.length}
+
+${memosText}
+
+Genere ${maxQuestions} questions de synthese qui connectent les idees de plusieurs sources.
+
+Format JSON attendu:
+{
+  "questions": [
+    {
+      "question": "Question de synthese claire ?",
+      "options": ["A) Option", "B) Option", "C) Option", "D) Option"],
+      "correctAnswer": "B",
+      "explanation": "Explication mentionnant les sources...",
+      "sourceIndices": [1, 3]
+    }
+  ]
+}`;
+
+    const response = await llmLimiter(() =>
+      getLLMClient().chatCompletion({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.6,
+        jsonMode: true,
+      })
+    );
+
+    const parsed = JSON.parse(response.content || '{"questions": []}');
+
+    if (!parsed.questions || !Array.isArray(parsed.questions)) {
+      log.warn({ themeName }, 'Synthesis generation returned invalid format');
+      return { questions: [] };
+    }
+
+    // Post-process: filter out questions where sourceIndices has fewer than 2 entries
+    const validQuestions = parsed.questions.filter(
+      (q: any) => Array.isArray(q.sourceIndices) && q.sourceIndices.length >= 2
+    );
+
+    log.info(
+      { themeName, questionCount: validQuestions.length, contentCount: contentMemos.length },
+      'Synthesis questions generated'
+    );
+
+    return { questions: validQuestions };
+  } catch (error) {
+    log.error({ err: error, themeName }, 'Error generating synthesis questions');
+    return { questions: [] };
+  }
+}
+
 /**
  * Process content to generate quiz questions and create cards
  */

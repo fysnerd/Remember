@@ -282,8 +282,12 @@ enum TranscriptCacheStatus {
 
 model Quiz {
   id          String   @id @default(cuid())
-  contentId   String
-  content     Content  @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  contentId   String?
+  content     Content? @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  themeId     String?
+  theme       Theme?   @relation(fields: [themeId], references: [id], onDelete: Cascade)
+  isSynthesis Boolean  @default(false)
 
   question    String
   type        QuizType
@@ -297,6 +301,7 @@ model Quiz {
   cards       Card[]
 
   @@index([contentId])
+  @@index([themeId])
 }
 
 enum QuizType {
@@ -386,6 +391,7 @@ model Theme {
   memoGeneratedAt DateTime?
   contentThemes ContentTheme[]
   themeTags     ThemeTag[]
+  quizzes       Quiz[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
