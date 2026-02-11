@@ -2,7 +2,7 @@
  * Memo hooks - content memo/summary
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 import type { Memo } from '../types/content';
 
@@ -58,5 +58,54 @@ export function useTopicMemo(topicName: string) {
       };
     },
     enabled: !!topicName,
+  });
+}
+
+// Backend response structure for theme memo
+interface BackendThemeMemoResponse {
+  memo: string;
+  themeName: string;
+  contentCount: number;
+  generatedAt: string;
+  cached: boolean;
+}
+
+// Get memo for a theme (synthesized from all content memos in theme)
+export function useThemeMemo(themeId: string) {
+  return useQuery({
+    queryKey: ['memo', 'theme', themeId],
+    queryFn: async () => {
+      const { data } = await api.get<BackendThemeMemoResponse>(
+        `/themes/${themeId}/memo`
+      );
+      console.log('[useThemeMemo] Got memo for theme:', data.themeName, 'from', data.contentCount, 'contents');
+
+      return {
+        themeId,
+        themeName: data.themeName,
+        content: data.memo,
+        contentCount: data.contentCount,
+        generatedAt: data.generatedAt,
+        cached: data.cached,
+      };
+    },
+    enabled: !!themeId,
+  });
+}
+
+// Force-refresh memo for a theme
+export function useRefreshThemeMemo() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (themeId: string) => {
+      const { data } = await api.post<BackendThemeMemoResponse>(
+        `/themes/${themeId}/memo/refresh`
+      );
+      return data;
+    },
+    onSuccess: (_, themeId) => {
+      queryClient.invalidateQueries({ queryKey: ['memo', 'theme', themeId] });
+    },
   });
 }

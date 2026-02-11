@@ -8,6 +8,6 @@ export { useTopics, useTopicsWithCount, useUpdateContentTopics, useRenameUserTop
 export { useChannels } from './useChannels';
 export { useQuiz, useTopicQuiz, useThemeQuiz, useSubmitAnswer, useCreateSession, useCompleteSession } from './useQuiz';
 export { useReviews, useCompletedItems, useReviewStats } from './useReviews';
-export { useMemo, useTopicMemo } from './useMemo';
+export { useMemo, useTopicMemo, useThemeMemo, useRefreshThemeMemo } from './useMemo';
 export { useOAuthStatus, useRefreshContent } from './useOAuth';
 export { useThemes, useThemeDetail, useCreateTheme, useUpdateTheme, useDeleteTheme, useAddContentToTheme, useRemoveContentFromTheme } from './useThemes';

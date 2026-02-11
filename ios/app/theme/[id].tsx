@@ -49,6 +49,15 @@ export default function ThemeDetailScreen() {
     }
   };
 
+  const handleViewMemo = () => {
+    if (id) {
+      router.push({
+        pathname: '/memo/theme/[id]' as any,
+        params: { id },
+      });
+    }
+  };
+
   if (isLoading) {
     return <LoadingScreen />;
   }
@@ -121,8 +130,8 @@ export default function ThemeDetailScreen() {
           </View>
         )}
 
-        {/* Quiz button - always visible */}
-        <View style={styles.quizButton}>
+        {/* Action buttons - always visible */}
+        <View style={styles.actionButtons}>
           <Button
             variant="primary"
             fullWidth
@@ -138,6 +147,15 @@ export default function ThemeDetailScreen() {
               Il faut au moins 3 contenus avec quiz pour lancer un quiz theme.
             </Text>
           )}
+          <View style={{ marginTop: spacing.sm }}>
+            <Button
+              variant="secondary"
+              fullWidth
+              onPress={handleViewMemo}
+            >
+              Memo {theme?.name}
+            </Button>
+          </View>
         </View>
       </ScrollView>
     </>
@@ -184,7 +202,7 @@ const styles = StyleSheet.create({
   info: {
     flex: 1,
   },
-  quizButton: {
+  actionButtons: {
     marginTop: spacing.xl,
   },
   quizHint: {

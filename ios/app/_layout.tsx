@@ -110,6 +110,13 @@ export default function RootLayout() {
           }}
         />
         <Stack.Screen
+          name="memo/theme/[id]"
+          options={{
+            headerShown: true,
+            presentation: 'card',
+          }}
+        />
+        <Stack.Screen
           name="oauth/[platform]"
           options={{
             headerShown: true,
