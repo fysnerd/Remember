@@ -528,7 +528,7 @@ contentRouter.get('/stats', async (req: Request, res: Response, next: NextFuncti
 // GET /api/content/inbox - Get all inbox items
 contentRouter.get('/inbox', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { page = '1', limit = '50' } = req.query;
+    const { page = '1', limit = '20' } = req.query;
     const pageNum = parseInt(page as string, 10);
     const limitNum = Math.min(parseInt(limit as string, 10), 100);
     const skip = (pageNum - 1) * limitNum;

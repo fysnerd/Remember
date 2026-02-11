@@ -193,8 +193,8 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       return 0;
     }
 
-    // Limit to 15 most recent
-    const items = videos.slice(0, 15);
+    // Limit to 20 most recent
+    const items = videos.slice(0, 20);
 
     // Batch check existing content
     const externalIds = items
