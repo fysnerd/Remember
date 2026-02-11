@@ -1,31 +1,37 @@
 /**
  * Tab Navigator Layout
+ *
+ * Glass blur tab bar with Lucide icons.
+ * Tab bar is position: absolute so content scrolls behind the blur.
  */
 
 import { Tabs } from 'expo-router';
-import { StyleSheet, Text as RNText } from 'react-native';
-import { colors, fonts } from '../../theme';
-
-function TabIcon({ name, color }: { name: string; color: string }) {
-  const icons: Record<string, string> = {
-    home: '🏠',
-    grid: '📚',
-    brain: '🧠',
-    user: '👤',
-  };
-  return <RNText style={{ fontSize: 20, color }}>{icons[name]}</RNText>;
-}
+import { StyleSheet } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { House, BookOpen, Brain, User } from 'lucide-react-native';
+import { colors, fonts, glass } from '../../theme';
 
 export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: colors.text,
+        tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textSecondary,
+        tabBarBackground: () => (
+          <BlurView
+            intensity={glass.tabBarIntensity}
+            tint={glass.tabBarTint}
+            style={StyleSheet.absoluteFill}
+          />
+        ),
         tabBarStyle: {
-          backgroundColor: colors.background,
-          borderTopColor: colors.border,
-          borderTopWidth: StyleSheet.hairlineWidth,
+          position: 'absolute',
+          borderTopWidth: 0,
+          elevation: 0,
+          backgroundColor: 'transparent',
+        },
+        tabBarLabelStyle: {
+          fontFamily: fonts.medium,
         },
         headerStyle: {
           backgroundColor: colors.background,
@@ -41,28 +47,28 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Feed',
-          tabBarIcon: ({ color }) => <TabIcon name="home" color={color} />,
+          tabBarIcon: ({ color, size }) => <House size={size} color={color} strokeWidth={1.75} />,
         }}
       />
       <Tabs.Screen
         name="library"
         options={{
-          title: 'Bibliothèque',
-          tabBarIcon: ({ color }) => <TabIcon name="grid" color={color} />,
+          title: 'Biblioth\u00e8que',
+          tabBarIcon: ({ color, size }) => <BookOpen size={size} color={color} strokeWidth={1.75} />,
         }}
       />
       <Tabs.Screen
         name="reviews"
         options={{
-          title: 'Mémos',
-          tabBarIcon: ({ color }) => <TabIcon name="brain" color={color} />,
+          title: 'M\u00e9mos',
+          tabBarIcon: ({ color, size }) => <Brain size={size} color={color} strokeWidth={1.75} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color }) => <TabIcon name="user" color={color} />,
+          tabBarIcon: ({ color, size }) => <User size={size} color={color} strokeWidth={1.75} />,
         }}
       />
     </Tabs>
