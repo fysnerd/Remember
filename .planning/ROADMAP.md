@@ -57,11 +57,11 @@ Full details: [milestones/v2.0-ROADMAP.md](milestones/v2.0-ROADMAP.md)
   3. Geist font renders correctly at multiple weights (Regular, Medium, SemiBold, Bold) in a test screen
   4. A Lucide icon renders on-device in a New Architecture + React 19 environment (proof-of-concept validated)
   5. New production binary is submitted to TestFlight via eas build
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 12-01: Install native deps, configure dark mode, validate Lucide + blur + Geist on preview build
-- [ ] 12-02: Ship production build to TestFlight
+- [ ] 12-01-PLAN.md -- Install native deps, configure dark mode + Geist font globally, create validation test screen
+- [ ] 12-02-PLAN.md -- Preview build validation on device + production build to TestFlight
 
 ### Phase 13: Design System
 **Goal**: A complete, reusable design system is in place -- Night Blue palette, Glass UI components, Lucide icon wrappers, and all existing UI primitives restyled -- so screens can be rebuilt using these building blocks
