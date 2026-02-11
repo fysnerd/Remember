@@ -1,77 +1,117 @@
-# Architecture Patterns: Theme-Based Content Organization
+# Architecture Patterns: Glass UI Design System Integration
 
-**Domain:** Active learning platform -- theme-based UX layer for Ankora
-**Researched:** 2026-02-10
-**Overall confidence:** HIGH -- based on direct codebase analysis plus verified Prisma/Expo patterns
+**Domain:** Night Blue Glass UI design system for existing Expo iOS learning app
+**Researched:** 2026-02-11
+**Overall confidence:** HIGH -- based on direct codebase analysis, verified Expo/RN library APIs, and established design system patterns
 
 ---
 
 ## Executive Summary
 
-Theme-based organization is an **extension layer** on top of the existing Tag system, not a replacement. Tags remain granular (AI-generated per-content labels like "react-hooks", "typescript"), while Themes are broad user-facing groupings ("Web Development", "Finance") that aggregate multiple tags and their content under human-readable categories.
+The v3.0 milestone introduces a complete visual transformation: Night Blue dark palette, Glass UI surfaces via `expo-blur`, Geist typography via `@expo-google-fonts/geist`, Lucide icons replacing emoji, and a screen restructure from 4 tabs (Feed/Library/Memos/Profile) to 4 redesigned tabs (Home/Explorer/Revisions/Profile). This is a **visual reskin + screen restructure**, not an architectural rewrite -- the data layer (Zustand stores, React Query hooks, Axios API client, backend routes) remains largely unchanged.
 
-The existing codebase already has a "topic" concept on iOS -- but it is simply a tag filter. The Feed screen shows tags as a 2-column grid, and tapping a tag navigates to `/topic/[name]` which filters content by that tag name. There is no dedicated Topic or Theme model in the database.
+The key architectural insight is that the design system must be built as a **replacement layer**, not an addition. The current `theme.ts` exports (`colors`, `spacing`, `fonts`, `borderRadius`, `shadows`, `layout`) are imported by every UI component and every screen. The Glass UI system replaces these values in-place (same export names, new values) plus adds new exports (`glass`, `gradients`, `typography`). This means existing components automatically pick up the new palette without individual migration, and new Glass components build on the same token system.
 
-This architecture adds a proper Theme model with many-to-many content relations, a classification worker, dedicated API endpoints, and iOS screens -- all built on the existing patterns already proven in the codebase.
+Two new backend endpoints (`GET /api/themes/daily` and `GET /api/themes/suggestions`) are lightweight additions to the existing themes router, requiring no schema changes.
 
 ---
 
 ## Current Architecture (as-is)
 
 ```
-[Platforms] --> [Sync Workers] --> Content (INBOX)
-                                      |
-                                      v
-                              [Transcription Workers]
-                                      |
-                                      v
-                                [Quiz Generation] --> Quiz --> Card
-                                      |
-                                      v
-                                 [Auto-Tagging] --> Tag (many-to-many, implicit)
-                                      |
-                                      v
-                              iOS "topic" screens = tag filter
-                              (topic/[name].tsx filters by tag name)
+ios/
+  theme.ts                    <-- Single flat file: colors, spacing, fonts, borderRadius, shadows, layout
+  components/ui/              <-- 8 primitives: Text, Button, Card, Input, Badge, TopicChip, Skeleton, Toast
+  components/                 <-- Feature: ThemeCard, LoadingScreen, EmptyState, ErrorState, content/*
+  app/(tabs)/                 <-- 4 tabs: index (Feed), library, reviews, profile
+  app/                        <-- Stack screens: theme/[id], quiz/[id], memo/[id], content/[id], etc.
+  hooks/                      <-- React Query: useThemes, useContent, useQuiz, useReviews, etc.
+  stores/                     <-- Zustand: authStore, contentStore
+  lib/                        <-- api.ts (Axios), constants.ts, queryClient.ts, storage.ts
+  types/                      <-- content.ts (Content, ThemeListItem, Quiz, etc.)
 ```
 
-**Key observations from codebase analysis:**
+### Current Token Architecture
 
-1. **Tag model is global** -- `Tag` has `@@unique([name])`, shared across all users. Content connects to tags via implicit many-to-many `@relation("ContentTags")`.
+The `theme.ts` file is a flat export of 6 const objects:
 
-2. **Topics on iOS are just tags** -- `useTopics()` calls `GET /content/tags` which returns tags with content counts. The Feed screen renders them in a grid. Tapping navigates to `/topic/[name]`.
+```typescript
+export const colors = { background: '#FFFFFF', surface: '#FAFAFA', text: '#0A0A0A', ... };
+export const spacing = { xs: 4, sm: 8, md: 12, lg: 20, xl: 28, xxl: 40 };
+export const fonts = { regular: 'System', medium: 'System', bold: 'System' };
+export const borderRadius = { xs: 4, sm: 6, md: 10, lg: 14, xl: 20, full: 9999 };
+export const shadows = { sm: {...}, md: {...}, lg: {...} };
+export const layout = { screenPadding: spacing.lg, buttonHeight: 48, inputHeight: 48, minTouchTarget: 44 };
+```
 
-3. **Topic quiz and memo exist** -- `POST /reviews/practice/topic` and `GET /content/topic/:name/memo` are already implemented, querying by tag name. These patterns are directly reusable for themes.
+Every component imports directly: `import { colors, spacing, borderRadius } from '../../theme'`. There is no ThemeProvider, no React Context, no dynamic theming. All values are compile-time constants. The app is hardcoded light mode.
 
-4. **Auto-tagging worker** -- Runs every 15 min, processes 10 items per batch, uses Mistral AI to generate 3-5 French tags per content. Tags are lowercased and upserted.
+### Current Component Patterns
 
-5. **Quiz session system** -- `QuizSession` model already supports `tagIds` for filtering, with `mode: 'practice' | 'due'`. This needs extension for `themeIds`.
+Components follow a consistent pattern:
+1. Props interface with TypeScript unions for variants
+2. `StyleSheet.create()` at module level
+3. Direct imports from `../../theme` (relative path)
+4. No `useTheme()` hooks or context-based theming
+5. Emojis for icons (tab bar, platform indicators, content cards)
+
+### Import Dependency Map (theme.ts consumers)
+
+| File | Imports |
+|------|---------|
+| `components/ui/Text.tsx` | `colors`, `fonts` |
+| `components/ui/Button.tsx` | `colors`, `spacing`, `borderRadius`, `layout` |
+| `components/ui/Card.tsx` | `colors`, `spacing`, `borderRadius` |
+| `components/ui/Input.tsx` | `colors`, `spacing`, `borderRadius`, `layout` |
+| `components/ui/Badge.tsx` | `colors`, `spacing` |
+| `components/ui/Skeleton.tsx` | `colors`, `borderRadius` |
+| `components/ui/Toast.tsx` | `colors`, `spacing`, `borderRadius` |
+| `components/ThemeCard.tsx` | `colors`, `spacing`, `borderRadius`, `shadows` |
+| `app/(tabs)/index.tsx` | `colors`, `spacing`, `borderRadius` |
+| `app/(tabs)/library.tsx` | `colors`, `spacing`, `borderRadius`, `shadows` |
+| `app/(tabs)/reviews.tsx` | `colors`, `spacing` |
+| `app/(tabs)/profile.tsx` | `colors`, `spacing`, `borderRadius` |
+| `app/(tabs)/_layout.tsx` | `colors` |
 
 ---
 
 ## Target Architecture (to-be)
 
 ```
-[Platforms] --> [Sync Workers] --> Content (INBOX)
-                                      |
-                                      v
-                              [Transcription Workers]
-                                      |
-                                      v
-                                [Quiz Generation] --> Quiz --> Card
-                                      |
-                                      v
-                                 [Auto-Tagging] --> Tag (granular, global)
-                                      |
-                                      v
-                          [Theme Classification Worker]  <-- NEW (runs after auto-tagging)
-                                      |
-                                      v
-                              Theme (per-user, many-to-many) <-- NEW MODEL
-                                      |
-                                      v
-                          iOS: Theme screens, Theme quizzes,
-                          Theme memos, Theme progress
+ios/
+  theme/                         <-- NEW: design system directory (replaces flat theme.ts)
+    tokens.ts                    <-- colors, spacing, typography, borderRadius, shadows, glass, gradients
+    index.ts                     <-- Re-exports everything (backward-compatible import path)
+  components/ui/                 <-- MODIFIED: existing primitives updated to Night Blue palette
+    Text.tsx                     <-- Updated: Geist font, Night Blue colors
+    Button.tsx                   <-- Updated: Night Blue palette + glass variant
+    Card.tsx                     <-- Updated: Night Blue surface color
+    Input.tsx                    <-- Updated: Night Blue palette + glass variant
+    Badge.tsx                    <-- Updated: Night Blue palette
+    Skeleton.tsx                 <-- Updated: Night Blue pulse color
+    Toast.tsx                    <-- Updated: Night Blue palette
+    index.ts                     <-- MODIFIED: adds Glass* component exports
+  components/ui/glass/           <-- NEW: Glass UI primitives
+    GlassCard.tsx                <-- BlurView-based card with glass surface
+    GlassButton.tsx              <-- BlurView-based button
+    GlassSurface.tsx             <-- Reusable glass background container
+    GlassInput.tsx               <-- Glass-styled input
+    GlassTabBar.tsx              <-- Custom glass tab bar
+    index.ts                     <-- Glass component barrel export
+  components/icons/              <-- NEW: Lucide icon wrapper
+    Icon.tsx                     <-- Unified Lucide icon component
+    TabIcon.tsx                  <-- Tab bar icon component (replaces emoji TabIcon)
+    PlatformIcon.tsx             <-- Platform-specific icon (replaces emoji mapping)
+    index.ts                     <-- Icon barrel export
+  app/(tabs)/                    <-- MODIFIED: 4 tabs restructured
+    _layout.tsx                  <-- MODIFIED: Home/Explorer/Revisions/Profile + GlassTabBar
+    index.tsx                    <-- REWRITTEN: Home screen (3 daily themes + stats)
+    explorer.tsx                 <-- NEW: Explorer (Suggestions + Library tabs)
+    revisions.tsx                <-- REWRITTEN: Revision cards with filter/search
+    profile.tsx                  <-- MODIFIED: Night Blue styling
+  app/_layout.tsx                <-- MODIFIED: StatusBar light, font loading, SafeAreaProvider
+  hooks/useDaily.ts              <-- NEW: useDailyThemes hook
+  hooks/useSuggestions.ts        <-- NEW: useThemeSuggestions hook
 ```
 
 ---
@@ -82,492 +122,729 @@ This architecture adds a proper Theme model with many-to-many content relations,
 
 | Component | Responsibility | Communicates With |
 |-----------|---------------|-------------------|
-| **Theme model** (Prisma) | Stores theme definitions per user, many-to-many with Content | Content, User |
-| **Theme classification service** | Assigns content to themes based on tag matching + LLM suggestions | Content, Tag, Theme, LLM service |
-| **Theme API routes** (`/api/themes`) | CRUD, content management, theme memos, suggestions | Theme model, Content, Quiz/Card models |
-| **Theme iOS screens** | Theme list, detail, quiz, memo, manage | Theme API via hooks |
-| **useThemes hook** | Data fetching + cache invalidation for themes | Theme API endpoints |
+| **theme/tokens.ts** | All design tokens (colors, typography, spacing, glass, gradients) | Every component and screen |
+| **GlassCard** | Blurred card surface with configurable intensity/tint | tokens.ts glass values |
+| **GlassButton** | Glass-surface button with press states | tokens.ts glass values |
+| **GlassSurface** | Generic glass background container | tokens.ts glass values |
+| **GlassInput** | Text input with glass background | tokens.ts glass values |
+| **GlassTabBar** | Custom bottom tab bar with glass effect | expo-router Tabs, tokens.ts |
+| **Icon** | Lucide icon wrapper with theme-aware colors | lucide-react-native, tokens.ts |
+| **TabIcon** | Tab bar icon using Lucide | Icon component |
+| **PlatformIcon** | YouTube/Spotify/TikTok/Instagram icons | Icon component or custom SVGs |
+| **useDaily hook** | Fetches 3 daily themes | `GET /api/themes/daily` |
+| **useSuggestions hook** | Fetches 8 AI suggestions | `GET /api/themes/suggestions` |
 
-### Modified Components
+### Modified Components (file-level changes)
 
-| Component | Modification | Impact |
-|-----------|-------------|--------|
-| **schema.prisma** | Add Theme model, update Content + User relations | Low -- additive migration |
-| **scheduler.ts** | Add `theme-classification` cron job entry | Low -- follows existing pattern exactly |
-| **content.ts routes** | Include `themes` in content detail responses | Low -- add to `include` clause |
-| **review.ts routes** | Add `POST /reviews/practice/theme` and `themeIds` to session | Medium -- new endpoints mirroring existing topic pattern |
-| **Content type** (iOS) | Add `themes` field to Content interface | Low -- additive |
-| **Feed screen** (index.tsx) | Show themes as primary grouping, tags as secondary | Medium -- UI restructure of existing screen |
-| **contentStore.ts** | Add `themeFilter` state | Low -- additive |
-| **FilterBar component** | Add theme filter option | Low -- new filter chip |
-| **hooks/index.ts** | Export new theme hooks | Low -- additive |
+| Component | What Changes | Why |
+|-----------|-------------|-----|
+| **theme.ts** -> **theme/tokens.ts** | Color values, font values, add glass/gradient tokens | Night Blue palette, Geist font |
+| **Text.tsx** | fontFamily references to Geist weights | Typography overhaul |
+| **Button.tsx** | Color references + add 'glass' variant | Night Blue + glass option |
+| **Card.tsx** | backgroundColor from `colors.surface` (now dark surface) | Palette swap |
+| **Input.tsx** | Border/bg colors, placeholder color | Night Blue palette |
+| **Badge.tsx** | Background colors | Night Blue palette |
+| **Skeleton.tsx** | Pulse color from light gray to dark blue-gray | Dark palette |
+| **ThemeCard.tsx** | Complete restyle with glass surface | Glass UI treatment |
+| **app/_layout.tsx** | Add font loading, StatusBar style='light' | Geist fonts + dark status bar text |
+| **app/(tabs)/_layout.tsx** | New tab names/icons, custom tab bar | Screen restructure |
+| **app/(tabs)/index.tsx** | Full rewrite for Home screen | Daily themes + stats layout |
+| **app/(tabs)/reviews.tsx** | Restyle + add filter/search | Night Blue + new functionality |
+| **app/(tabs)/profile.tsx** | Restyle for Night Blue | Palette swap |
 
 ### Unchanged Components
 
 | Component | Why Unchanged |
 |-----------|--------------|
-| Sync workers (YouTube, Spotify, TikTok, Instagram) | Themes are post-processing, not sync-time |
-| Transcription workers (all 4) | No theme awareness needed at transcription stage |
-| Quiz generation service | Generates per-content, theme quizzes aggregate existing cards |
-| Auto-tagging worker | Continues producing tags; themes layer sits above |
-| Auth/OAuth routes | No relation to themes |
-| SM-2 algorithm (review.ts) | Card-level, theme-agnostic -- works same regardless of grouping |
-| Existing topic screens | Keep functional alongside theme screens during transition |
+| `stores/authStore.ts` | No visual concerns, pure auth logic |
+| `stores/contentStore.ts` | Filter state logic only, no visuals |
+| `hooks/useThemes.ts` | Data layer, no visual dependencies |
+| `hooks/useContent.ts` | Data layer |
+| `hooks/useQuiz.ts` | Data layer |
+| `hooks/useReviews.ts` | Data layer |
+| `lib/api.ts` | HTTP client, no visuals |
+| `lib/queryClient.ts` | Cache config, no visuals |
+| `lib/storage.ts` | SecureStore wrapper, no visuals |
+| `types/content.ts` | TypeScript interfaces (add DailyTheme type only) |
+| All backend routes | No changes needed for visual redesign |
+| Quiz components (QuestionCard, AnswerFeedback, QuizSummary) | Restyle in-place via tokens, no structural change |
 
 ---
 
-## Data Model Design
+## Design Token Architecture
 
-### Recommended: Implicit Many-to-Many (matches existing Tag pattern)
+### Recommended: Flat Module with Named Exports (evolution of current pattern)
 
-Use Prisma's implicit many-to-many for Theme-Content because no metadata is needed on the join itself (no "added date" or "relevance score" on the relationship).
+**Confidence: HIGH** -- This preserves backward compatibility with all existing imports.
 
-**Confidence: HIGH** -- The existing Tag-Content relation already uses implicit many-to-many (`@relation("ContentTags")`) and works well throughout the codebase.
-
-```prisma
-// ============================================================================
-// Themes (User-scoped content organization)
-// ============================================================================
-
-model Theme {
-  id          String    @id @default(cuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  name        String                // "Web Development", "Finance", "Health"
-  description String?               // Optional AI or user description
-  emoji       String?   @default("folder")  // Emoji identifier for UI
-  color       String?               // Hex color for visual differentiation
-
-  // Classification rules
-  tagPatterns String[]              // Tag names that map to this theme
-                                    // e.g. ["react", "javascript", "typescript"]
-
-  // Metadata
-  isAutoGenerated Boolean @default(false)  // true if AI-created
-  sortOrder       Int     @default(0)      // User-defined display order
-
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  // Relations
-  contents    Content[] @relation("ContentThemes")
-
-  @@unique([userId, name])
-  @@index([userId])
-  @@index([userId, sortOrder])
-}
-```
-
-**Content model addition:**
-
-```prisma
-model Content {
-  // ... all existing fields unchanged ...
-
-  tags          Tag[]    @relation("ContentTags")      // existing
-  themes        Theme[]  @relation("ContentThemes")    // NEW
-
-  // ... rest unchanged ...
-}
-```
-
-**User model addition:**
-
-```prisma
-model User {
-  // ... all existing fields unchanged ...
-
-  themes        Theme[]   // NEW
-
-  // ... rest unchanged ...
-}
-```
-
-### Key Design Decisions
-
-**1. Themes are per-user, Tags are global**
-
-Tags are shared across users (global `Tag` table with `@@unique([name])`). Themes are per-user (`@@unique([userId, name])`). Rationale:
-- Different users consume different content mixes and organize differently
-- A finance YouTuber and a coding student would never share theme structures
-- Theme names can be personalized ("My Side Hustle" vs "Entrepreneuriat")
-- This mirrors how every note-taking app handles folders/categories (per-user)
-
-**2. tagPatterns for automatic classification**
-
-The `tagPatterns String[]` field stores tag names that automatically map content to the theme. When the classification worker runs:
-- Fetch user's themes with their tagPatterns
-- Fetch user's content that has tags but no themes
-- For each content, check if any of its tags match any theme's tagPatterns
-- If match found, connect content to theme
-
-This is deterministic and fast -- no LLM call needed for routine classification. The LLM is only used for initial theme suggestions and edge cases.
-
-**3. Why not a ThemeTag join model?**
-
-Considered a separate `ThemeTag` model, but `tagPatterns String[]` on Theme is simpler:
-- Tag names are already unique strings
-- PostgreSQL supports array containment operators (`@>`, `&&`) for efficient matching
-- Avoids an extra table and join
-- The list is small (5-15 tags per theme) so array storage is appropriate
-
-**4. Why implicit over explicit many-to-many?**
-
-- No metadata needed on the Theme-Content relationship itself
-- Simpler Prisma Client API (one fewer nesting level)
-- Matches the existing Tag-Content pattern exactly
-- Can always migrate to explicit later if metadata needed ([Prisma docs confirm this](https://www.prisma.io/docs/orm/more/help-and-troubleshooting/implicit-to-explicit-conversion))
-
----
-
-## Data Flow
-
-### Flow 1: Theme Creation
-
-```
-User creates theme manually (name, emoji, optional tagPatterns)
-  OR
-AI suggests themes based on user's unclassified content
-  |
-  v
-POST /api/themes --> Theme record created
-  |
-  v
-If tagPatterns provided:
-  Classification worker runs immediately (or on next cron cycle)
-  Scans user's content for matching tags
-  Connects matching content to theme
-  |
-  v
-iOS invalidates ['themes'] query key --> UI updates
-```
-
-### Flow 2: Automatic Theme Classification (Worker)
-
-```
-1. Cron fires (every 15 min, offset from auto-tagging)
-2. For each user with at least one theme:
-   a. Load themes with tagPatterns
-   b. Load content that has tags but no themes (take 50)
-   c. For each content item:
-      - Get content's tag names
-      - Check intersection with each theme's tagPatterns
-      - If match: prisma.theme.update({ contents: { connect: { id } } })
-   d. If many unclassified items remain after matching:
-      - Consider suggesting a new theme (batch, not per-content)
-3. Log results via existing jobExecutionTracker
-```
-
-**Worker scheduling detail:** Run at offset minutes (e.g., `7,22,37,52 * * * *`) so it runs ~7 minutes AFTER auto-tagging (`0,15,30,45 * * * *`). This gives tags time to be applied before theme classification attempts to match them.
-
-### Flow 3: Theme-Based Quiz
-
-```
-User taps "Quiz" on theme detail screen
-  |
-  v
-POST /api/reviews/practice/theme { themeId }
-  |
-  v
-Backend:
-  1. Find theme, verify userId
-  2. Get all Content IDs in this theme (status: READY)
-  3. Get all Cards for those Contents (via Quiz -> Card)
-  4. Shuffle and return (same as existing topic quiz pattern)
-  |
-  v
-iOS renders quiz using existing QuestionCard, AnswerFeedback, QuizSummary components
-(identical to quiz/topic/[name].tsx flow)
-```
-
-### Flow 4: Theme Memo
-
-```
-User taps "Memo" on theme detail screen
-  |
-  v
-GET /api/themes/:id/memo
-  |
-  v
-Backend:
-  1. Get all theme contents with transcripts
-  2. Collect individual content memos (from transcript.segments.memo)
-  3. If memos exist: synthesize with LLM (same pattern as /content/topic/:name/memo)
-  4. Return aggregated memo
-  |
-  v
-iOS renders memo using existing memo display component
-```
-
----
-
-## API Structure
-
-### New Routes: `/api/themes`
-
-| Method | Route | Description | Request Body / Params |
-|--------|-------|-------------|----------------------|
-| GET | `/api/themes` | List user's themes with content counts | -- |
-| POST | `/api/themes` | Create theme | `{ name, emoji?, color?, tagPatterns?, description? }` |
-| GET | `/api/themes/:id` | Theme detail with content list | Query: `?page=1&limit=20` |
-| PATCH | `/api/themes/:id` | Update theme | `{ name?, emoji?, color?, tagPatterns?, sortOrder?, description? }` |
-| DELETE | `/api/themes/:id` | Delete theme (NOT content) | -- |
-| POST | `/api/themes/:id/content` | Add content to theme | `{ contentIds: string[] }` |
-| DELETE | `/api/themes/:id/content/:contentId` | Remove content from theme | -- |
-| POST | `/api/themes/:id/reclassify` | Re-run tag matching | -- |
-| GET | `/api/themes/:id/memo` | Get/generate theme memo | -- |
-| GET | `/api/themes/suggestions` | AI-suggested themes | -- |
-| PATCH | `/api/themes/reorder` | Bulk update sortOrder | `{ themeIds: string[] }` (order = new sortOrder) |
-
-### Extended Existing Routes
-
-| Route | Change | Details |
-|-------|--------|---------|
-| `GET /api/content` | Add `themeId` query param | Filter content by theme |
-| `GET /api/content/:id` | Include `themes` in response | Add to Prisma `include` |
-| `POST /api/reviews/practice/theme` | NEW endpoint | Mirror `/practice/topic` but filter by themeId |
-| `POST /api/reviews/session` | Add `themeIds` to schema | Extend createSessionSchema with optional `themeIds` array |
-| `GET /api/reviews` | Include theme info in response | Add themes to content select |
-
-### Route File Structure
+The current `theme.ts` is a flat file. Evolve it to a directory `theme/` with the same export surface:
 
 ```typescript
-// backend/src/routes/theme.ts -- NEW FILE
+// ios/theme/tokens.ts
 
-import { Router } from 'express';
-import { authenticateToken } from '../middleware/auth.js';
+// ============================================================================
+// Night Blue Palette
+// ============================================================================
 
-export const themeRouter = Router();
-themeRouter.use(authenticateToken);
+export const colors = {
+  // Core palette - Night Blue
+  background: '#0A0F1A',          // Deep navy, primary background
+  surface: '#111827',              // Slightly elevated surface
+  surfaceElevated: '#1E293B',      // Cards, modals
+  surfaceGlass: 'rgba(17, 24, 39, 0.7)',  // Glass surfaces (used with BlurView)
 
-// GET /api/themes
-themeRouter.get('/', async (req, res, next) => { /* ... */ });
-// POST /api/themes
-themeRouter.post('/', async (req, res, next) => { /* ... */ });
-// etc.
+  // Text hierarchy on dark
+  text: '#F8FAFC',                 // Primary text (near-white)
+  textSecondary: '#94A3B8',        // Secondary text (slate)
+  textTertiary: '#64748B',         // Muted text
+  textMuted: '#475569',            // Disabled/placeholder
+
+  // Accent - Soft Gold
+  accent: '#D4A574',               // Primary accent
+  accentLight: 'rgba(212, 165, 116, 0.15)', // Accent background tint
+  accentMuted: '#B8956A',          // Pressed/disabled accent
+
+  // Borders on dark
+  border: '#1E293B',               // Subtle border
+  borderLight: '#334155',          // More visible border
+  borderGlass: 'rgba(255, 255, 255, 0.08)', // Glass surface border
+
+  // Semantic (unchanged conceptually, adjusted for dark)
+  error: '#EF4444',
+  errorBg: 'rgba(239, 68, 68, 0.15)',
+  success: '#22C55E',
+  successBg: 'rgba(34, 197, 94, 0.15)',
+  warning: '#F59E0B',
+  warningBg: 'rgba(245, 158, 11, 0.15)',
+
+  // Overlays
+  overlay: 'rgba(0, 0, 0, 0.4)',
+  overlayStrong: 'rgba(0, 0, 0, 0.6)',
+  overlayLight: 'rgba(255, 255, 255, 0.05)',
+} as const;
+
+// ============================================================================
+// Glass Surface Tokens
+// ============================================================================
+
+export const glass = {
+  // BlurView intensity levels (1-100)
+  intensity: {
+    light: 20,       // Subtle background blur
+    medium: 40,      // Standard glass surface
+    heavy: 60,       // Navigation bars, modals
+  },
+  // BlurView tint
+  tint: 'dark' as const,
+  // Glass surface background (applied INSIDE BlurView)
+  background: {
+    subtle: 'rgba(17, 24, 39, 0.3)',
+    standard: 'rgba(17, 24, 39, 0.5)',
+    solid: 'rgba(17, 24, 39, 0.7)',
+  },
+  // Glass border
+  border: {
+    width: 1,
+    color: 'rgba(255, 255, 255, 0.08)',
+  },
+} as const;
+
+// ============================================================================
+// Typography - Geist Font Family
+// ============================================================================
+
+export const fonts = {
+  regular: 'Geist_400Regular',
+  medium: 'Geist_500Medium',
+  semibold: 'Geist_600SemiBold',
+  bold: 'Geist_700Bold',
+} as const;
+
+export const typography = {
+  h1: { fontSize: 28, fontFamily: fonts.bold, lineHeight: 36, letterSpacing: -0.5 },
+  h2: { fontSize: 24, fontFamily: fonts.bold, lineHeight: 32, letterSpacing: -0.3 },
+  h3: { fontSize: 20, fontFamily: fonts.semibold, lineHeight: 28, letterSpacing: -0.2 },
+  body: { fontSize: 16, fontFamily: fonts.regular, lineHeight: 24 },
+  bodyMedium: { fontSize: 16, fontFamily: fonts.medium, lineHeight: 24 },
+  caption: { fontSize: 14, fontFamily: fonts.regular, lineHeight: 20 },
+  label: { fontSize: 12, fontFamily: fonts.medium, lineHeight: 16, letterSpacing: 0.5 },
+  tabLabel: { fontSize: 10, fontFamily: fonts.medium, lineHeight: 14 },
+} as const;
+
+// ============================================================================
+// Spacing (unchanged values, same scale)
+// ============================================================================
+
+export const spacing = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 20,
+  xl: 28,
+  xxl: 40,
+} as const;
+
+// ============================================================================
+// Border Radius (unchanged values)
+// ============================================================================
+
+export const borderRadius = {
+  xs: 4,
+  sm: 6,
+  md: 10,
+  lg: 14,
+  xl: 20,
+  full: 9999,
+} as const;
+
+// ============================================================================
+// Shadows (adjusted for dark background)
+// ============================================================================
+
+export const shadows = {
+  sm: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  md: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  lg: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  glow: {
+    shadowColor: '#D4A574',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 0,
+  },
+} as const;
+
+// ============================================================================
+// Layout (same values, extended)
+// ============================================================================
+
+export const layout = {
+  screenPadding: spacing.lg,
+  buttonHeight: 48,
+  inputHeight: 48,
+  minTouchTarget: 44,
+  tabBarHeight: 80,
+  statusBarStyle: 'light' as const,
+} as const;
+
+// ============================================================================
+// Gradients (for LinearGradient usage)
+// ============================================================================
+
+export const gradients = {
+  // Background gradient overlays
+  screenFade: ['rgba(10, 15, 26, 0)', 'rgba(10, 15, 26, 1)'],     // Fade to bg
+  cardShine: ['rgba(255, 255, 255, 0.05)', 'rgba(255, 255, 255, 0)'], // Subtle shine
+  accent: ['#D4A574', '#B8956A'],                                    // Gold gradient
+  // Progress bar
+  progress: ['#D4A574', '#E8C49A'],
+} as const;
+
+// ============================================================================
+// Animation (micro-interaction timing)
+// ============================================================================
+
+export const animation = {
+  fast: 150,
+  normal: 250,
+  slow: 400,
+  spring: { damping: 15, stiffness: 150 },
+} as const;
 ```
 
-Registration in the main app (alongside existing routers):
+### Backward-Compatible Re-export
 
 ```typescript
-// In server.ts / app.ts
-import { themeRouter } from './routes/theme.js';
-app.use('/api/themes', themeRouter);
+// ios/theme/index.ts
+// This file ensures ALL existing imports work unchanged:
+// import { colors, spacing } from '../../theme' --> now resolves to theme/index.ts
+
+export {
+  colors,
+  spacing,
+  fonts,
+  borderRadius,
+  shadows,
+  layout,
+  glass,
+  typography,
+  gradients,
+  animation,
+} from './tokens';
 ```
+
+This means every existing `import { colors, spacing } from '../../theme'` continues to work without any import path changes. The directory `theme/` replaces the file `theme.ts` because Node/Metro resolves `theme` to `theme/index.ts` automatically.
+
+---
+
+## Glass Component Architecture
+
+### Core Pattern: GlassSurface as Foundation
+
+All Glass components are built on a single foundational component: `GlassSurface`. This avoids duplicating BlurView configuration across components.
+
+```typescript
+// ios/components/ui/glass/GlassSurface.tsx
+
+import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { glass, borderRadius, colors } from '../../../theme';
+
+type GlassIntensity = 'light' | 'medium' | 'heavy';
+
+interface GlassSurfaceProps {
+  children: React.ReactNode;
+  intensity?: GlassIntensity;
+  style?: StyleProp<ViewStyle>;
+  borderRadiusSize?: keyof typeof borderRadius;
+}
+
+export function GlassSurface({
+  children,
+  intensity = 'medium',
+  style,
+  borderRadiusSize = 'md',
+}: GlassSurfaceProps) {
+  return (
+    <View style={[
+      styles.container,
+      { borderRadius: borderRadius[borderRadiusSize] },
+      style,
+    ]}>
+      <BlurView
+        intensity={glass.intensity[intensity]}
+        tint={glass.tint}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={[
+        styles.innerBorder,
+        { borderRadius: borderRadius[borderRadiusSize] },
+      ]} />
+      <View style={styles.content}>
+        {children}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  innerBorder: {
+    ...StyleSheet.absoluteFillObject,
+    borderWidth: glass.border.width,
+    borderColor: glass.border.color,
+  },
+  content: {
+    position: 'relative',
+    zIndex: 1,
+  },
+});
+```
+
+### GlassCard = GlassSurface + Card Props
+
+```typescript
+// ios/components/ui/glass/GlassCard.tsx
+
+import { Pressable, StyleProp, ViewStyle } from 'react-native';
+import { GlassSurface } from './GlassSurface';
+import { spacing } from '../../../theme';
+
+type GlassPadding = 'none' | 'sm' | 'md' | 'lg';
+
+interface GlassCardProps {
+  children: React.ReactNode;
+  padding?: GlassPadding;
+  onPress?: () => void;
+  style?: StyleProp<ViewStyle>;
+  intensity?: 'light' | 'medium' | 'heavy';
+}
+
+const paddingMap: Record<GlassPadding, number> = {
+  none: 0, sm: spacing.sm, md: spacing.md, lg: spacing.lg,
+};
+
+export function GlassCard({ children, padding = 'md', onPress, style, intensity }: GlassCardProps) {
+  const content = (
+    <GlassSurface intensity={intensity} style={[{ padding: paddingMap[padding] }, style]}>
+      {children}
+    </GlassSurface>
+  );
+
+  if (onPress) {
+    return (
+      <Pressable onPress={onPress} style={({ pressed }) => [pressed && { opacity: 0.8 }]}>
+        {content}
+      </Pressable>
+    );
+  }
+
+  return content;
+}
+```
+
+### Component Hierarchy
+
+```
+GlassSurface (foundation -- manages BlurView, border, overflow)
+  |
+  +-- GlassCard (adds padding + pressable behavior)
+  +-- GlassButton (adds press states, loading, variants)
+  +-- GlassInput (adds TextInput with glass background)
+  +-- GlassTabBar (custom tab bar implementation)
+```
+
+---
+
+## Screen Restructure Architecture
+
+### Tab Mapping: Old -> New
+
+| Old Tab | New Tab | Route File | Changes |
+|---------|---------|------------|---------|
+| Feed (`index.tsx`) | Home | `app/(tabs)/index.tsx` | **REWRITE**: Daily themes (3 cards), stats summary, quick actions |
+| Library (`library.tsx`) | Explorer | `app/(tabs)/explorer.tsx` | **NEW FILE**: Suggestions tab (8 AI) + Library tab (existing filters) |
+| Memos (`reviews.tsx`) | Revisions | `app/(tabs)/revisions.tsx` | **REWRITE**: Revision cards + category filter + search |
+| Profile (`profile.tsx`) | Profile | `app/(tabs)/profile.tsx` | **MODIFY**: Night Blue restyle, remove dev tools in prod |
+
+### Tab Bar: Custom Glass Implementation
+
+The current tab bar uses default Expo Router `Tabs` with emoji icons. Replace with a custom `tabBar` prop that renders a `GlassTabBar`:
+
+```typescript
+// app/(tabs)/_layout.tsx
+
+import { Tabs } from 'expo-router';
+import { GlassTabBar } from '../../components/ui/glass';
+
+export default function TabLayout() {
+  return (
+    <Tabs
+      tabBar={(props) => <GlassTabBar {...props} />}
+      screenOptions={{
+        headerShown: false,  // We handle our own headers
+      }}
+    >
+      <Tabs.Screen name="index" options={{ title: 'Home' }} />
+      <Tabs.Screen name="explorer" options={{ title: 'Explorer' }} />
+      <Tabs.Screen name="revisions" options={{ title: 'Revisions' }} />
+      <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
+    </Tabs>
+  );
+}
+```
+
+**Confidence: HIGH** -- The Expo Router `Tabs` component supports a `tabBar` prop for custom tab bar rendering. This is the documented approach.
+
+### Home Screen Data Flow
+
+```
+Home Screen (app/(tabs)/index.tsx)
+  |
+  +-- useDailyThemes() --> GET /api/themes/daily --> 3 theme objects
+  |     Query key: ['themes', 'daily']
+  |     Stale time: 1 hour (daily subjects change infrequently)
+  |
+  +-- useReviewStats() --> GET /api/reviews/stats --> { streak, todayCount, totalCount }
+  |     (already exists)
+  |
+  +-- useThemes() --> GET /api/themes --> all user themes
+       (already exists, used for "Your themes" section)
+```
+
+### Explorer Screen Data Flow
+
+```
+Explorer Screen (app/(tabs)/explorer.tsx)
+  |
+  +-- Tab 1: Suggestions
+  |     useSuggestions() --> GET /api/themes/suggestions --> 8 AI suggestions
+  |     Query key: ['themes', 'suggestions']
+  |     Stale time: 30 minutes
+  |
+  +-- Tab 2: Library
+        useContentList(filters) --> GET /api/content --> paginated content
+        (already exists, moved from library.tsx)
+        useInbox() / useInboxCount() --> triage flow
+        (already exists, moved from library.tsx)
+```
+
+### Revisions Screen Data Flow
+
+```
+Revisions Screen (app/(tabs)/revisions.tsx)
+  |
+  +-- useReviews({ filter, search }) --> GET /api/reviews/due?filter=X&q=Y
+  |     (extends existing hook with filter/search params)
+  |
+  +-- Category filter chips (local state)
+  +-- Search input (local state, debounced)
+```
+
+---
+
+## Backend Integration
+
+### New Endpoints (added to existing `backend/src/routes/themes.ts`)
+
+#### `GET /api/themes/daily`
+
+Returns 3 themes for the user to review today. Smart rotation based on:
+1. Due cards count (themes with most due cards first)
+2. Last reviewed (themes not reviewed recently)
+3. Content count minimum (themes with >= 3 content items)
+
+```typescript
+// Response shape
+{
+  themes: [
+    {
+      id: string,
+      name: string,
+      emoji: string,
+      color: string,
+      contentCount: number,
+      dueCards: number,
+      masteryPercent: number,
+      reason: 'due_cards' | 'not_reviewed' | 'new_content'
+    },
+    // ... (3 items)
+  ],
+  generatedAt: string  // ISO timestamp
+}
+```
+
+**Implementation approach:** No new table needed. Query existing Theme + Card data, sort by due cards DESC and last quiz session date ASC, take top 3. Cache in memory (per-user, 1 hour TTL) or compute on each request since the query is lightweight.
+
+#### `GET /api/themes/suggestions`
+
+Returns up to 8 AI-generated theme suggestions based on user's uncategorized content.
+
+```typescript
+// Response shape
+{
+  suggestions: [
+    {
+      name: string,
+      emoji: string,
+      color: string,
+      reason: string,          // "Vous avez 5 videos sur ce sujet"
+      matchingContentCount: number,
+      sampleContentTitles: string[]  // 2-3 example titles
+    },
+    // ... (up to 8 items)
+  ]
+}
+```
+
+**Implementation approach:** Reuse existing theme suggestion logic from `services/themeClassification.ts`. Analyze unclassified content tags, cluster them, generate theme names via Mistral AI. This is a read-only endpoint that does NOT create themes -- the user taps "Add" to create.
+
+### No Schema Changes Required
+
+Both endpoints query existing models (Theme, ContentTheme, Card, Content, Tag). No new Prisma models or migrations needed for v3.0.
+
+---
+
+## Data Flow Diagram: Full v3.0 Architecture
+
+```
+                          +-----------------+
+                          |   Font Loading  |
+                          |  (app/_layout)  |
+                          |  Geist fonts    |
+                          | StatusBar light |
+                          +--------+--------+
+                                   |
+                    +--------------+--------------+
+                    |                             |
+            +-------+-------+            +-------+-------+
+            |  Glass TabBar |            |  Stack Screens |
+            | (custom blur) |            | (unchanged nav)|
+            +---+---+---+---+            +-------+-------+
+                |   |   |   |                    |
+      +---------+   |   |   +--------+    /theme/[id]
+      |             |   |            |    /quiz/[id]
+  +---+---+   +----+---+  +----+----+  +---+----+    /memo/[id]
+  | Home  |   |Explorer|  |Revisions|  |Profile |    /content/[id]
+  +---+---+   +---+----+  +----+----+  +---+----+
+      |           |             |           |
+      |     +-----+-----+      |           |
+      |     | Suggest |Lib|     |     useAuthStore
+      |     +-----+-----+      |     useOAuthStatus
+      |           |             |
+  useDailyThemes  |       useReviews (extended)
+  useReviewStats  |
+  useThemes       useSuggestions
+                  useContentList (existing)
+                  useInbox (existing)
+```
+
+---
+
+## Integration Points Summary
+
+### Files: NEW
+
+| File | Purpose |
+|------|---------|
+| `ios/theme/tokens.ts` | All design tokens (replaces `theme.ts`) |
+| `ios/theme/index.ts` | Barrel re-export for backward compatibility |
+| `ios/components/ui/glass/GlassSurface.tsx` | Foundation glass component |
+| `ios/components/ui/glass/GlassCard.tsx` | Glass card component |
+| `ios/components/ui/glass/GlassButton.tsx` | Glass button component |
+| `ios/components/ui/glass/GlassInput.tsx` | Glass input component |
+| `ios/components/ui/glass/GlassTabBar.tsx` | Custom glass tab bar |
+| `ios/components/ui/glass/index.ts` | Glass barrel export |
+| `ios/components/icons/Icon.tsx` | Lucide icon wrapper |
+| `ios/components/icons/TabIcon.tsx` | Tab bar icons |
+| `ios/components/icons/PlatformIcon.tsx` | Platform icons |
+| `ios/components/icons/index.ts` | Icons barrel export |
+| `ios/app/(tabs)/explorer.tsx` | Explorer screen (new tab) |
+| `ios/hooks/useDaily.ts` | Daily themes hook |
+| `ios/hooks/useSuggestions.ts` | Theme suggestions hook |
+
+### Files: MODIFIED
+
+| File | Change |
+|------|--------|
+| `ios/theme.ts` | DELETE (replaced by `theme/` directory) |
+| `ios/components/ui/Text.tsx` | Geist fontFamily, color values auto-updated via tokens |
+| `ios/components/ui/Button.tsx` | Add 'glass' variant, colors auto-updated |
+| `ios/components/ui/Card.tsx` | Colors auto-updated via tokens |
+| `ios/components/ui/Input.tsx` | Colors auto-updated via tokens |
+| `ios/components/ui/Badge.tsx` | Colors auto-updated via tokens |
+| `ios/components/ui/Skeleton.tsx` | Pulse color auto-updated via tokens |
+| `ios/components/ui/Toast.tsx` | Colors auto-updated via tokens |
+| `ios/components/ui/index.ts` | Add Glass* exports |
+| `ios/components/ThemeCard.tsx` | Restyle with glass treatment |
+| `ios/app/_layout.tsx` | Font loading (useFonts), StatusBar, SafeAreaProvider |
+| `ios/app/(tabs)/_layout.tsx` | New tab structure + custom tabBar |
+| `ios/app/(tabs)/index.tsx` | Rewrite: Home screen |
+| `ios/app/(tabs)/reviews.tsx` | Rewrite: Revisions with filter/search |
+| `ios/app/(tabs)/profile.tsx` | Night Blue restyle |
+| `ios/hooks/index.ts` | Export new hooks |
+| `ios/types/content.ts` | Add DailyTheme, ThemeSuggestion types |
+| `backend/src/routes/themes.ts` | Add daily + suggestions endpoints |
+
+### Files: DELETE
+
+| File | Reason |
+|------|--------|
+| `ios/theme.ts` | Replaced by `ios/theme/` directory |
+| `ios/app/(tabs)/library.tsx` | Merged into `explorer.tsx` |
+
+### Files: UNCHANGED
+
+| File | Reason |
+|------|--------|
+| All hooks (useThemes, useContent, useQuiz, useReviews, useMemo, useOAuth) | Data layer, no visual dependencies |
+| All stores (authStore, contentStore) | State management, no visuals |
+| All lib/ files (api.ts, constants.ts, queryClient.ts, storage.ts) | Infrastructure layer |
+| All backend files except themes.ts | No visual concerns |
+| All quiz components | Restyle via tokens only, no structural change |
+| All stack screens (theme/[id], content/[id], quiz/[id], memo/[id]) | Restyle via tokens, no structural change |
 
 ---
 
 ## Patterns to Follow
 
-### Pattern 1: Worker Pattern (match existing auto-tagging worker exactly)
+### Pattern 1: Token-First Styling
 
-The theme classification worker follows the same structure as `runAutoTaggingWorker()` in `services/tagging.ts`.
+Every color, font, spacing, and effect value comes from tokens. No hardcoded values in components.
 
+**What:** Import design tokens, never use raw hex/number values.
+**When:** Always.
+**Example:**
 ```typescript
-// backend/src/services/themeClassification.ts
-
-import { prisma } from '../config/database.js';
-import pLimit from 'p-limit';
-import { logger } from '../config/logger.js';
-
-const log = logger.child({ service: 'theme-classification' });
-
-export async function runThemeClassificationWorker(): Promise<void> {
-  log.info('Theme classification worker starting');
-
-  try {
-    // Get users who have themes defined
-    const usersWithThemes = await prisma.user.findMany({
-      where: { themes: { some: {} } },
-      select: { id: true },
-    });
-
-    log.info({ userCount: usersWithThemes.length }, 'Users with themes found');
-
-    const limit = pLimit(5);
-    const results = await Promise.allSettled(
-      usersWithThemes.map(user =>
-        limit(() => classifyContentForUser(user.id))
-      )
-    );
-
-    const classified = results.filter(r => r.status === 'fulfilled').length;
-    log.info({ classified, total: usersWithThemes.length },
-      'Theme classification worker completed');
-  } catch (error) {
-    log.error({ err: error }, 'Theme classification worker error');
-  }
-}
-
-async function classifyContentForUser(userId: string): Promise<number> {
-  const themes = await prisma.theme.findMany({
-    where: { userId },
-    select: { id: true, tagPatterns: true },
-  });
-
-  const unclassifiedContent = await prisma.content.findMany({
-    where: {
-      userId,
-      tags: { some: {} },
-      themes: { none: {} },
-      status: 'READY',
-    },
-    include: { tags: true },
-    take: 50,
-  });
-
-  let classified = 0;
-
-  for (const content of unclassifiedContent) {
-    const contentTagNames = content.tags.map(t => t.name);
-
-    for (const theme of themes) {
-      const hasMatch = theme.tagPatterns.some(pattern =>
-        contentTagNames.includes(pattern)
-      );
-
-      if (hasMatch) {
-        await prisma.theme.update({
-          where: { id: theme.id },
-          data: { contents: { connect: { id: content.id } } },
-        });
-        classified++;
-        break; // Connect to first matching theme (avoid double-counting)
-      }
-    }
-  }
-
-  return classified;
-}
-```
-
-**Note on the `break`:** A content item CAN belong to multiple themes. The `break` above prevents double-classification in a single worker run. On subsequent runs, if the content still has unmatched tagPatterns for other themes, it will be classified into those too. Alternative: remove the `break` to allow immediate multi-theme assignment. The choice depends on UX preference.
-
-### Pattern 2: Scheduler Registration (match existing cron entries)
-
-```typescript
-// In scheduler.ts -- add to startScheduler() function
-
-import { runThemeClassificationWorker } from '../services/themeClassification.js';
-
-// Theme Classification Worker - Every 15 minutes (offset from auto-tagging)
-cron.schedule('7,22,37,52 * * * *', async () => {
-  log.info({ job: 'theme-classification' }, 'Triggering scheduled job');
-  await runJob('theme-classification', runThemeClassificationWorker);
+// GOOD
+import { colors, glass, spacing } from '../../theme';
+const styles = StyleSheet.create({
+  card: { backgroundColor: colors.surfaceElevated, padding: spacing.md },
 });
 
-// Also add to triggerJob() switch statement:
-case 'theme-classification':
-  await runJob('theme-classification', runThemeClassificationWorker, triggerSource);
-  return { success: true, message: 'Theme classification worker completed' };
+// BAD
+const styles = StyleSheet.create({
+  card: { backgroundColor: '#1E293B', padding: 12 },
+});
 ```
 
-### Pattern 3: React Query Hook (match existing useTopics pattern)
+### Pattern 2: Glass Component Composition
+
+Use `GlassSurface` as the base, compose higher-level glass components on top.
+
+**What:** Never use `BlurView` directly in screens. Always use `GlassSurface` or its derivatives.
+**When:** Any glass effect needed.
+**Why:** Centralizes BlurView configuration. If we need to adjust intensity, border, or tint across all glass surfaces, one file changes.
+
+### Pattern 3: Existing Component Restyling via Token Swap
+
+When the current `Card` component references `colors.surface`, changing `colors.surface` from `#FAFAFA` to `#111827` in tokens automatically reskins it. No component code changes needed for basic palette swap.
+
+**What:** Rely on token value changes for reskinning, not component rewrites.
+**When:** Basic components (Card, Button, Input, Badge, Skeleton).
+**Exception:** Components needing structural changes (ThemeCard gets glass treatment, Feed gets rewritten).
+
+### Pattern 4: Font Loading at Root
+
+Load Geist fonts once in `app/_layout.tsx` using `useFonts` from `@expo-google-fonts/geist`. Show splash/loading until fonts are loaded. Then `Text.tsx` references font family names from tokens.
 
 ```typescript
-// ios/hooks/useThemes.ts
+// app/_layout.tsx
+import { useFonts, Geist_400Regular, Geist_500Medium, Geist_600SemiBold, Geist_700Bold } from '@expo-google-fonts/geist';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import api from '../lib/api';
+export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    Geist_400Regular,
+    Geist_500Medium,
+    Geist_600SemiBold,
+    Geist_700Bold,
+  });
 
-interface Theme {
-  id: string;
-  name: string;
-  emoji: string;
+  if (!fontsLoaded) return <LoadingScreen />;
+
+  // ... rest of layout
+}
+```
+
+### Pattern 5: Icon Component Abstraction
+
+Wrap Lucide icons in a single `Icon` component that applies theme-aware defaults (color, size). This replaces emoji usage across the app.
+
+```typescript
+// components/icons/Icon.tsx
+import { colors } from '../../theme';
+import { type LucideIcon } from 'lucide-react-native';
+
+interface IconProps {
+  icon: LucideIcon;
+  size?: number;
   color?: string;
-  description?: string;
-  contentCount: number;
-  isAutoGenerated: boolean;
+  strokeWidth?: number;
 }
 
-export function useThemes() {
-  return useQuery({
-    queryKey: ['themes'],
-    queryFn: async () => {
-      const { data } = await api.get<Theme[]>('/themes');
-      return data;
-    },
-  });
-}
-
-export function useThemeDetail(themeId: string) {
-  return useQuery({
-    queryKey: ['themes', themeId],
-    queryFn: async () => {
-      const { data } = await api.get(`/themes/${themeId}`);
-      return data;
-    },
-    enabled: !!themeId,
-  });
-}
-
-export function useCreateTheme() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (payload: {
-      name: string;
-      emoji?: string;
-      tagPatterns?: string[];
-    }) => {
-      const { data } = await api.post('/themes', payload);
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['themes'] });
-    },
-  });
-}
-
-export function useDeleteTheme() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (themeId: string) => {
-      const { data } = await api.delete(`/themes/${themeId}`);
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['themes'] });
-      queryClient.invalidateQueries({ queryKey: ['content'] });
-    },
-  });
-}
-```
-
-### Pattern 4: Expo Router Screen (match existing topic/[name].tsx)
-
-Theme screens live at top-level file routes, pushing onto the root stack -- exactly like existing topic screens.
-
-```
-ios/app/
-  theme/
-    [id].tsx              # Theme detail screen
-    manage/[id].tsx       # Theme settings (rename, edit tags, delete)
-    create.tsx            # Theme creation screen
-  quiz/
-    theme/[id].tsx        # Theme quiz (reuses QuestionCard components)
-  memo/
-    theme/[id].tsx        # Theme memo display
-```
-
-The theme detail screen mirrors `topic/[name].tsx` structure:
-
-```typescript
-// ios/app/theme/[id].tsx -- follows same pattern as topic/[name].tsx
-export default function ThemeDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: theme, isLoading } = useThemeDetail(id);
-
-  const handleStartQuiz = () => {
-    router.push({ pathname: '/quiz/theme/[id]', params: { id } });
-  };
-
-  const handleManageTheme = () => {
-    router.push({ pathname: '/theme/manage/[id]', params: { id } });
-  };
-
-  // ... render content list, quiz button, memo button
-  // Same component structure as topic/[name].tsx
+export function Icon({ icon: LucideIcon, size = 24, color = colors.text, strokeWidth = 1.5 }: IconProps) {
+  return <LucideIcon size={size} color={color} strokeWidth={strokeWidth} />;
 }
 ```
 
@@ -575,197 +852,125 @@ export default function ThemeDetailScreen() {
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Replacing Tags with Themes
+### Anti-Pattern 1: ThemeProvider / React Context for Design Tokens
 
-**What:** Removing the Tag model and using only Themes for all classification.
-**Why bad:** Tags serve a different purpose (granular, AI-generated, per-content). The auto-tagging pipeline, the existing topic-based quiz flow, the Library FilterBar, and the `useTopics` hook all depend on tags. Removing them breaks the entire classification pipeline.
-**Instead:** Keep both. Tags = raw AI classification. Themes = user-facing organization. Themes reference tags via `tagPatterns`. Content can have both tags AND themes simultaneously.
+**What:** Creating a React Context with a ThemeProvider that wraps the app and provides tokens via `useTheme()` hook.
+**Why bad:** The app has only ONE theme (Night Blue). There is no light/dark toggle, no user-selectable themes. A Context adds re-render overhead and boilerplate for zero benefit. The current static import pattern (`import { colors } from '../../theme'`) is simpler and faster.
+**Instead:** Keep static imports. If dark/light toggle is ever needed (v4+), THEN add a Context. Do not over-engineer.
 
-### Anti-Pattern 2: Theme Classification at Sync Time
+### Anti-Pattern 2: Using GlassEffect (iOS 26+ only)
 
-**What:** Running theme classification inside sync workers right after content import.
-**Why bad:** At sync time, content is in INBOX status with no transcript and no tags. Theme classification depends on tags, which depend on transcription. The pipeline is: sync -> transcribe -> tag -> classify into themes. Short-circuiting this creates empty themes.
-**Instead:** Separate worker with time offset after auto-tagging.
+**What:** Using Expo's new `GlassEffect` component for glass surfaces.
+**Why bad:** GlassEffect requires iOS 26+. The app targets Expo SDK 54 which supports iOS 16+. Most users will NOT be on iOS 26. `expo-blur` `BlurView` works on all iOS versions and is the correct choice.
+**Instead:** Use `BlurView` from `expo-blur` with `intensity` and `tint` props.
 
-### Anti-Pattern 3: Cross-User Theme Sharing (Global Themes)
+### Anti-Pattern 3: Stacking Multiple BlurViews
 
-**What:** Making themes global like tags, so all users share the same theme definitions.
-**Why bad:** Users have wildly different content mixes. "Finance" for user A means crypto trading; for user B it means personal budgeting. Shared themes would create constant mis-classification and user frustration.
-**Instead:** Themes are per-user (`@@unique([userId, name])`). AI can suggest similar structures, but each user's themes are independent.
+**What:** Having BlurView in tab bar + BlurView in each card + BlurView in header = 10+ blur layers on screen.
+**Why bad:** GPU-intensive. Each BlurView renders as a separate composition layer. On older devices, this causes frame drops and battery drain.
+**Instead:** Use BlurView sparingly: tab bar (1), modal backgrounds (1 at a time), selected hero cards (1-3). Regular cards use opaque `surfaceElevated` color, not blur.
 
-### Anti-Pattern 4: Generating New Quiz Questions for Themes
+### Anti-Pattern 4: Breaking Import Paths
 
-**What:** Using LLM to create cross-content synthesis questions specifically for themes.
-**Why bad:** Massively increases LLM costs (generating questions for N contents combined), requires complex prompt engineering, creates questions that cannot be attributed to a single content source (breaks the Content -> Quiz -> Card chain), and the SM-2 algorithm operates at card level regardless.
-**Instead:** Theme quizzes aggregate existing per-content quiz cards. The review routes already support filtering cards by content IDs.
+**What:** Renaming `theme.ts` to something else or restructuring exports so all 15+ files need import changes.
+**Why bad:** Creates a massive diff, high merge conflict risk, and no functional benefit.
+**Instead:** Replace `theme.ts` file with `theme/` directory. Metro resolves `../../theme` to `../../theme/index.ts` automatically. Zero import path changes needed.
 
-### Anti-Pattern 5: Deeply Nested Tab Navigation
+### Anti-Pattern 5: Migrating Library Tab Functionality into Explorer Before Design Tokens
 
-**What:** Creating a "Themes" tab and nesting theme detail/quiz/memo screens inside it.
-**Why bad:** expo-router handles file-based routing at the top level. Deep nesting inside tabs creates complex navigation state, URL ambiguity, and back-button confusion.
-**Instead:** Theme screens at top-level routes (`/theme/[id]`, `/quiz/theme/[id]`) pushing onto the root stack, identical to existing `/topic/[name]` and `/quiz/topic/[name]` patterns. The [Expo Router docs](https://docs.expo.dev/router/advanced/nesting-navigators/) confirm this is the recommended approach.
+**What:** Building the Explorer screen (with Suggestions + Library tabs) before the design system tokens and glass components are in place.
+**Why bad:** You'd build the Explorer screen twice -- once with old styles, then restyle it. Waste of effort.
+**Instead:** Build order must be: tokens -> glass components -> screen restructure.
 
-### Anti-Pattern 6: Per-Content LLM Calls for Theme Classification
+### Anti-Pattern 6: Emoji Icons Alongside Lucide
 
-**What:** Calling Mistral AI for every content item to determine which theme it belongs to.
-**Why bad:** Tags already exist and were generated by Mistral. Running another LLM call per content just to map tags to themes is wasteful. At 50 contents per user, that's 50 additional API calls per classification run.
-**Instead:** Tag-pattern matching is deterministic and instant. Only use LLM for theme SUGGESTIONS (analyzing aggregate tag patterns to suggest new themes), not for per-content classification.
-
----
-
-## Integration Points Summary
-
-### Database Layer
-
-| What | Type | File |
-|------|------|------|
-| Theme model | NEW | `prisma/schema.prisma` |
-| Content themes relation | MODIFY | `prisma/schema.prisma` |
-| User themes relation | MODIFY | `prisma/schema.prisma` |
-| Migration | NEW | `prisma/migrations/[timestamp]_add_themes/` |
-
-### Backend Services
-
-| What | Type | File |
-|------|------|------|
-| Theme classification service | NEW | `src/services/themeClassification.ts` |
-| Theme suggestion service | NEW | `src/services/themeSuggestion.ts` |
-| Theme routes | NEW | `src/routes/theme.ts` |
-| Scheduler cron entry | MODIFY | `src/workers/scheduler.ts` |
-| Admin trigger support | MODIFY | `src/routes/admin.ts` |
-| Content routes (include themes) | MODIFY | `src/routes/content.ts` |
-| Review routes (theme practice) | MODIFY | `src/routes/review.ts` |
-| Server route registration | MODIFY | `src/index.ts` or `src/app.ts` |
-
-### iOS App
-
-| What | Type | File |
-|------|------|------|
-| Theme interface | NEW | `ios/types/content.ts` |
-| useThemes hook | NEW | `ios/hooks/useThemes.ts` |
-| Hook exports | MODIFY | `ios/hooks/index.ts` |
-| Theme detail screen | NEW | `ios/app/theme/[id].tsx` |
-| Theme manage screen | NEW | `ios/app/theme/manage/[id].tsx` |
-| Theme create screen | NEW | `ios/app/theme/create.tsx` |
-| Theme quiz screen | NEW | `ios/app/quiz/theme/[id].tsx` |
-| Theme memo screen | NEW | `ios/app/memo/theme/[id].tsx` |
-| Feed screen | MODIFY | `ios/app/(tabs)/index.tsx` |
-| contentStore | MODIFY | `ios/stores/contentStore.ts` |
-| FilterBar component | MODIFY | `ios/components/content/FilterBar.tsx` |
-
----
-
-## Feed Screen Transition Strategy
-
-The Feed screen (currently `ios/app/(tabs)/index.tsx`) currently shows:
-1. Tags in a 2-column grid (labeled "Topics")
-2. Recent content suggestions below
-
-**Recommended transition:**
-1. Show themes as the primary grid (larger cards with emoji + name + content count)
-2. Show "Uncategorized" as a special entry if content exists without themes
-3. Keep recent suggestions section below
-4. Add a "Create Theme" card at the end of the grid
-5. Keep existing tag-based topic screens functional (no breaking change)
-6. Gradually phase out raw tag display in Feed as themes become populated
-
-This avoids a breaking change -- users with no themes see the same tag-based view, while users who create themes get the enhanced experience.
+**What:** Using Lucide icons in some places and emoji in others.
+**Why bad:** Visual inconsistency. Emoji render differently across iOS versions, are not color-controllable, and cannot match the stroke weight of Lucide icons.
+**Instead:** Replace ALL emoji icons in a single pass: tab bar, platform indicators, content cards, theme cards, empty states.
 
 ---
 
 ## Scalability Considerations
 
-| Concern | At 100 users | At 10K users | At 1M users |
-|---------|--------------|--------------|-------------|
-| Theme count per user | 3-10, no concern | Same | Same |
-| Classification worker runtime | <1s/user, <2min total | Batch by user, paginate content | Queue-based, distributed workers |
-| Theme query performance | Direct join, <50ms | Composite index on join table | Materialized view for stats |
-| LLM calls for suggestions | On-demand only, no concern | Rate limit per user | Cache suggestions, daily batch |
-| Join table size (_ContentThemes) | ~500 rows total | ~500K rows | ~50M rows, monitor index size |
-
-### Index Strategy
-
-Prisma's implicit many-to-many creates a `_ContentThemes` join table with indexes on both FK columns. The explicit indexes on Theme (`[userId]`, `[userId, sortOrder]`) handle the primary query patterns. At current scale this is more than sufficient.
+| Concern | Current (light theme) | v3.0 (Night Blue) | Future (multi-theme) |
+|---------|----------------------|--------------------|-----------------------|
+| Token system | Flat file, static imports | Flat file, static imports (same) | React Context + `useTheme()` hook |
+| Glass performance | N/A | 3-5 BlurViews max per screen | Same limit |
+| Font loading | System font (0ms) | Geist loaded via useFonts (~200ms) | Same |
+| Icon rendering | Emoji (text rendering) | Lucide SVG (tree-shaken) | Same |
+| Tab bar | Default Expo Tabs | Custom glass tab bar | Same custom implementation |
+| Color scheme | Light only | Dark only | `useColorScheme()` + token variants |
 
 ---
 
-## Suggested Build Order
+## Suggested Build Order (Dependencies)
 
-Dependencies flow top-to-bottom. Each phase can be deployed independently.
+Build order is strictly dependency-driven. Each phase can be deployed independently.
 
 ```
-Phase 1: Data Model + Migration
-  - Add Theme model to schema.prisma
-  - Add themes relation to Content and User
-  - Run prisma migrate dev
-  - Run prisma generate
+Phase 1: Design Tokens + Font Setup
+  - Create theme/ directory with tokens.ts and index.ts
+  - Delete old theme.ts (Metro resolves automatically)
+  - Install @expo-google-fonts/geist
+  - Add font loading to app/_layout.tsx
+  - Add StatusBar style='light'
+  - Update app.json splash backgroundColor to #0A0F1A
   Dependencies: None
-  Risk: Low (additive migration, no data changes)
+  Risk: LOW (pure value changes, backward-compatible imports)
+  Verify: App renders with dark background, Geist fonts loaded
 
-Phase 2: Backend Theme CRUD API
-  - Create src/routes/theme.ts
-  - Register in server/app
-  - Implement: list, create, get, update, delete
-  - Implement: add/remove content manually
-  - Include themes in GET /api/content/:id response
-  Dependencies: Phase 1
-  Risk: Low (new endpoints only)
+Phase 2: Icon System
+  - Install lucide-react-native + react-native-svg
+  - Create components/icons/ (Icon, TabIcon, PlatformIcon)
+  Dependencies: Phase 1 (needs colors from tokens)
+  Risk: LOW
+  Verify: Icons render at correct size/color
 
-Phase 3: Theme Classification Worker
-  - Create src/services/themeClassification.ts
-  - Register in scheduler.ts (cron + triggerJob)
-  - Add to admin manual trigger list
-  Dependencies: Phase 1
-  Risk: Low (follows existing worker pattern)
+Phase 3: Glass Components
+  - Install expo-blur (if not already)
+  - Create components/ui/glass/ (GlassSurface, GlassCard, GlassButton, GlassInput, GlassTabBar)
+  - Update components/ui/index.ts to export glass components
+  Dependencies: Phase 1 (needs glass tokens)
+  Risk: LOW-MEDIUM (BlurView behavior needs testing on device)
+  Verify: GlassCard renders with blur effect on physical device
 
-Phase 4: iOS Theme Screens (Core)
-  - Add Theme type to types/content.ts
-  - Create useThemes hook
-  - Create theme/[id].tsx (detail screen)
-  - Create theme/manage/[id].tsx (settings)
-  - Create theme/create.tsx
-  - Update Feed screen to show themes
-  Dependencies: Phase 2
-  Risk: Medium (UI work, needs design decisions)
+Phase 4: Existing Component Restyling
+  - Update Text.tsx (Geist fontFamily references)
+  - Update Button.tsx (add 'glass' variant)
+  - Verify Card, Input, Badge, Skeleton, Toast auto-restyled via token swap
+  - Update ThemeCard with glass treatment
+  - Replace emoji TabIcon with Lucide TabIcon
+  Dependencies: Phase 1, Phase 2, Phase 3
+  Risk: LOW (mostly verifying auto-reskin works)
 
-Phase 5: Theme Quiz + Memo
-  - Add POST /reviews/practice/theme endpoint
-  - Add themeIds to review session schema
-  - Create quiz/theme/[id].tsx (reuse QuestionCard)
-  - Add GET /themes/:id/memo endpoint
-  - Create memo/theme/[id].tsx
-  Dependencies: Phase 2, Phase 4
-  Risk: Low (mirrors existing topic quiz/memo pattern)
+Phase 5: Tab Restructure + Screen Rewrites
+  - Rename library.tsx -> explorer.tsx
+  - Rewrite _layout.tsx with new tabs + GlassTabBar
+  - Rewrite index.tsx (Home: daily themes, stats)
+  - Build explorer.tsx (Suggestions + Library tabs)
+  - Rewrite revisions.tsx (cards, filters, search)
+  - Restyle profile.tsx
+  Dependencies: Phase 1-4 (all design system components ready)
+  Risk: MEDIUM (most complex, multiple screens)
 
-Phase 6: AI Theme Suggestions
-  - Create src/services/themeSuggestion.ts
-  - Add GET /themes/suggestions endpoint
-  - iOS suggestion UI (accept/reject/customize)
-  Dependencies: Phase 3, Phase 4
-  Risk: Medium (LLM prompt engineering, UX decisions)
+Phase 6: Backend Endpoints
+  - Add GET /api/themes/daily to themes.ts
+  - Add GET /api/themes/suggestions to themes.ts
+  - Create useDaily.ts and useSuggestions.ts hooks
+  - Wire hooks into Home and Explorer screens
+  Dependencies: Can run in parallel with Phase 3-4 (backend is independent)
+  Risk: LOW (lightweight query endpoints, no schema changes)
 ```
 
 ---
 
 ## Sources
 
-- [Prisma Many-to-Many Relations Documentation](https://www.prisma.io/docs/orm/prisma-schema/data-model/relations/many-to-many-relations) -- Implicit vs explicit patterns, when to use each
-- [Prisma Implicit to Explicit Conversion Guide](https://www.prisma.io/docs/orm/more/help-and-troubleshooting/implicit-to-explicit-conversion) -- Migration path if metadata needed later
-- [Expo Router Common Navigation Patterns](https://docs.expo.dev/router/basics/common-navigation-patterns/) -- Tabs + stack nesting best practices
-- [Expo Router Nesting Navigators](https://docs.expo.dev/router/advanced/nesting-navigators/) -- File-based routing with nested layouts
-- Direct codebase analysis of all relevant files:
-  - `backend/prisma/schema.prisma` -- Full data model (473 lines)
-  - `backend/src/workers/scheduler.ts` -- All 12 cron jobs, runJob wrapper, triggerJob dispatcher
-  - `backend/src/services/tagging.ts` -- Auto-tagging worker pattern (generateTags, autoTagContent, runAutoTaggingWorker)
-  - `backend/src/services/quizGeneration.ts` -- Quiz generation pipeline (processContentQuiz, generateQuizFromTranscript)
-  - `backend/src/routes/content.ts` -- Content API (filters, tags, topic memo, triage)
-  - `backend/src/routes/review.ts` -- Review API (due cards, sessions, topic practice, topic quiz, memos)
-  - `ios/app/(tabs)/index.tsx` -- Feed screen (tag-based topics grid)
-  - `ios/app/(tabs)/library.tsx` -- Library with FilterBar
-  - `ios/app/topic/[name].tsx` -- Topic detail screen
-  - `ios/app/quiz/topic/[name].tsx` -- Topic quiz screen
-  - `ios/app/topic/manage/[name].tsx` -- Topic management
-  - `ios/hooks/useTopics.ts` -- Topic hooks (useTopics, useTopicsWithCount, mutations)
-  - `ios/hooks/useContent.ts` -- Content hooks (useContentList, mapContent)
-  - `ios/stores/contentStore.ts` -- Zustand store (filters, tabs)
-  - `ios/types/content.ts` -- TypeScript interfaces
+- [Expo BlurView Documentation](https://docs.expo.dev/versions/latest/sdk/blur-view/) -- BlurView props, platform support, performance notes
+- [Expo GlassEffect Documentation](https://docs.expo.dev/versions/latest/sdk/glass-effect/) -- iOS 26+ only, NOT suitable for SDK 54
+- [Expo Fonts Documentation](https://docs.expo.dev/develop/user-interface/fonts/) -- useFonts hook, font loading patterns
+- [@expo-google-fonts/geist on npm](https://www.npmjs.com/package/@expo-google-fonts/geist) -- Geist font package for Expo
+- [Lucide React Native](https://lucide.dev/guide/packages/lucide-react-native) -- Icon library setup and usage
+- [Expo Color Themes](https://docs.expo.dev/develop/user-interface/color-themes/) -- Dark mode / StatusBar handling
+- [Expo System Bars](https://docs.expo.dev/develop/user-interface/system-bars/) -- StatusBar style for dark backgrounds
+- Direct codebase analysis of all relevant iOS and backend files (theme.ts, 8 UI components, 4 tab screens, _layout.tsx, hooks, stores, types, backend themes.ts)
