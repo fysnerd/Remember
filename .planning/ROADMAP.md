@@ -73,12 +73,12 @@ Plans:
   3. All icons across the app (tab bar, cards, badges, action buttons) use Lucide icons -- no emoji remain
   4. Existing UI components (Text, Button, Card, Input, Badge, TopicChip, Skeleton, Toast) render in Night Blue / Glass style
   5. Tab bar uses glass blur background that content scrolls behind
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 13-01: Night Blue tokens + Geist font loading + restyled UI primitives
-- [ ] 13-02: Glass UI components (GlassSurface, GlassCard, GlassButton, GlassInput) + Glass tab bar
-- [ ] 13-03: Lucide icon system (Icon, TabIcon, PlatformIcon wrappers) + emoji replacement pass
+- [ ] 13-01-PLAN.md -- Glass tokens in theme.ts + restyle 8 UI primitives + QuestionCard dark mode
+- [ ] 13-02-PLAN.md -- Glass components (GlassSurface, GlassCard, GlassButton, GlassInput) + Glass tab bar with Lucide icons
+- [ ] 13-03-PLAN.md -- Icon wrappers (Icon, TabIcon, PlatformIcon) + emoji replacement pass across 20 files
 
 ### Phase 14: Screen Rebuild
 **Goal**: All four main screens are rebuilt using Glass UI components, delivering the new information architecture (daily themes home, explorer with suggestions + library, revisions with filter/search, profile with settings)
@@ -145,7 +145,7 @@ Phase 15 can execute in parallel with 13/14/16 (backend is independent).
 | 10. Cross-Content Synthesis Quiz | v2.0 | 2/2 | Complete | 2026-02-11 |
 | 11. Theme Discovery & Onboarding | v2.0 | 2/2 | Complete | 2026-02-11 |
 | 12. Foundation Build | v3.0 | 2/2 | Complete | 2026-02-11 |
-| 13. Design System | v3.0 | 0/3 | Not started | - |
+| 13. Design System | v3.0 | 0/3 | Planned | - |
 | 14. Screen Rebuild | v3.0 | 0/3 | Not started | - |
 | 15. Backend Endpoints | v3.0 | 0/1 | Not started | - |
 | 16. UX Polish | v3.0 | 0/2 | Not started | - |
