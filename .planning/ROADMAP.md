@@ -129,11 +129,11 @@ Plans:
   1. When themes are first generated for a user, a discovery flow presents the AI-suggested themes for review before they appear in navigation
   2. During the discovery flow, user can rename, merge, or dismiss individual themes before confirming
   3. Theme cards on the home screen display learning progress (mastery percentage and number of cards due for review)
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 11-01: Theme discovery onboarding flow (iOS screens for review/rename/merge/dismiss)
-- [ ] 11-02: Theme learning progress aggregation and display on theme cards
+- [ ] 11-01-PLAN.md -- Backend: discoveredAt schema migration, status filter, progress aggregation, bulk discovery endpoint
+- [ ] 11-02-PLAN.md -- iOS: types/hooks, ThemeCard progress UI, DiscoveryThemeCard, discovery screen, home screen banner
 
 ## Progress
 
