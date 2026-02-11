@@ -6,10 +6,11 @@ import { useState, useCallback } from 'react';
 import { View, ScrollView, StyleSheet, Dimensions, RefreshControl, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
+import { Link2, ChevronRight } from 'lucide-react-native';
 import { Text, Card } from '../../components/ui';
+import { PlatformIcon } from '../../components/icons';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
-import { Link } from 'lucide-react-native';
 import { ThemeCard } from '../../components/ThemeCard';
 import { useThemes, usePendingThemes, useContentList } from '../../hooks';
 import { colors, spacing, borderRadius } from '../../theme';
@@ -18,13 +19,6 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_GAP = spacing.sm;
 const GRID_PADDING = spacing.lg;
 const COLUMN_WIDTH = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP) / 2;
-
-const sourceEmoji: Record<string, string> = {
-  youtube: '🎬',
-  spotify: '🎧',
-  tiktok: '📱',
-  instagram: '📷',
-};
 
 export default function FeedScreen() {
   const router = useRouter();
@@ -59,7 +53,7 @@ export default function FeedScreen() {
   const suggestions = contentData?.items?.slice(0, 5) ?? [];
 
   if (themeList.length === 0 && suggestions.length === 0) {
-    return <EmptyState message="Connectez vos plateformes pour voir du contenu" icon={Link} hasHeader />;
+    return <EmptyState message="Connectez vos plateformes pour voir du contenu" icon={Link2} hasHeader />;
   }
 
   return (
@@ -84,7 +78,7 @@ export default function FeedScreen() {
               Revoyez et confirmez vos themes
             </Text>
           </View>
-          <Text style={styles.discoveryArrow}>{'>'}</Text>
+          <ChevronRight size={24} color={colors.textSecondary} strokeWidth={1.75} />
         </Pressable>
       )}
 
@@ -140,9 +134,9 @@ export default function FeedScreen() {
                 style={styles.suggestionCard}
               >
                 <View style={styles.suggestionRow}>
-                  <Text variant="h2" style={styles.emoji}>
-                    {sourceEmoji[item.source] || '📄'}
-                  </Text>
+                  <View style={styles.suggestionIcon}>
+                    <PlatformIcon platform={item.source} size={20} colored />
+                  </View>
                   <Text variant="body" numberOfLines={2} style={styles.suggestionTitle}>
                     {item.title}
                   </Text>
@@ -205,10 +199,6 @@ const styles = StyleSheet.create({
   discoveryBannerContent: {
     flex: 1,
   },
-  discoveryArrow: {
-    fontSize: 24,
-    color: colors.textSecondary,
-  },
   suggestionsList: {
     gap: spacing.md,
   },
@@ -219,8 +209,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  emoji: {
-    fontSize: 24,
+  suggestionIcon: {
     marginRight: spacing.md,
   },
   suggestionTitle: {
