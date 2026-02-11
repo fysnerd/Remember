@@ -9,6 +9,7 @@ import { Tabs } from 'expo-router';
 import { StyleSheet } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { House, BookOpen, Brain, User } from 'lucide-react-native';
+import { TabIcon } from '../../components/icons';
 import { colors, fonts, glass } from '../../theme';
 
 export default function TabLayout() {
@@ -47,28 +48,28 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Feed',
-          tabBarIcon: ({ color, size }) => <House size={size} color={color} strokeWidth={1.75} />,
+          tabBarIcon: ({ color, size }) => <TabIcon icon={House} color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="library"
         options={{
           title: 'Biblioth\u00e8que',
-          tabBarIcon: ({ color, size }) => <BookOpen size={size} color={color} strokeWidth={1.75} />,
+          tabBarIcon: ({ color, size }) => <TabIcon icon={BookOpen} color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="reviews"
         options={{
           title: 'M\u00e9mos',
-          tabBarIcon: ({ color, size }) => <Brain size={size} color={color} strokeWidth={1.75} />,
+          tabBarIcon: ({ color, size }) => <TabIcon icon={Brain} color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, size }) => <User size={size} color={color} strokeWidth={1.75} />,
+          tabBarIcon: ({ color, size }) => <TabIcon icon={User} color={color} size={size} />,
         }}
       />
     </Tabs>

@@ -12,7 +12,9 @@ import {
   Pressable,
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { X } from 'lucide-react-native';
 import { Text, Button, Card } from '../../../components/ui';
+import { PlatformIcon } from '../../../components/icons';
 import { LoadingScreen } from '../../../components/LoadingScreen';
 import {
   useThemeDetail,
@@ -33,13 +35,6 @@ const COLOR_PALETTE = [
   '#EF4444', '#F97316', '#EAB308', '#22C55E', '#14B8A6', '#3B82F6',
   '#6366F1', '#8B5CF6', '#EC4899', '#F43F5E', '#06B6D4', '#84CC16',
 ];
-
-const sourceEmoji: Record<string, string> = {
-  youtube: '\u{1F3AC}',
-  spotify: '\u{1F3A7}',
-  tiktok: '\u{1F4F1}',
-  instagram: '\u{1F4F7}',
-};
 
 export default function ThemeManageScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -221,9 +216,9 @@ export default function ThemeManageScreen() {
                     style={styles.contentInfo}
                     onPress={() => handleContentPress(item.id)}
                   >
-                    <Text variant="h2" style={styles.emoji}>
-                      {sourceEmoji[item.source] || '\u{1F4C4}'}
-                    </Text>
+                    <View style={styles.iconContainer}>
+                      <PlatformIcon platform={item.source} size={20} colored />
+                    </View>
                     <View style={styles.info}>
                       <Text variant="body" weight="medium" numberOfLines={2}>
                         {item.title}
@@ -235,7 +230,7 @@ export default function ThemeManageScreen() {
                     hitSlop={8}
                     style={styles.removeButton}
                   >
-                    <Text style={styles.removeButtonText}>✕</Text>
+                    <X size={16} color={colors.error} strokeWidth={2} />
                   </Pressable>
                 </View>
               </Card>
@@ -346,8 +341,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
-  emoji: {
-    fontSize: 24,
+  iconContainer: {
     marginRight: spacing.md,
   },
   info: {
@@ -359,11 +353,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: spacing.sm,
-  },
-  removeButtonText: {
-    color: colors.error,
-    fontSize: 16,
-    fontWeight: '600',
   },
   dangerSection: {
     marginTop: spacing.lg,

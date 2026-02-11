@@ -6,18 +6,12 @@ import { useState } from 'react';
 import { View, ScrollView, StyleSheet, Image, Linking, Pressable, Modal, FlatList } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Text, Button, TopicChip } from '../../components/ui';
+import { PlatformIcon } from '../../components/icons';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { ErrorState } from '../../components/ErrorState';
 import { TopicEditModal } from '../../components/TopicEditModal';
 import { useContent, useUpdateContentTopics, useThemes, useAddContentToTheme } from '../../hooks';
 import { colors, spacing, borderRadius } from '../../theme';
-
-const sourceEmoji: Record<string, string> = {
-  youtube: '🎬',
-  spotify: '🎧',
-  tiktok: '📱',
-  instagram: '📷',
-};
 
 const sourceLabel: Record<string, string> = {
   youtube: 'YouTube',
@@ -92,9 +86,7 @@ export default function ContentDetailScreen() {
           />
         ) : (
           <View style={[styles.thumbnail, styles.thumbnailPlaceholder]}>
-            <Text variant="h1" style={styles.thumbnailEmoji}>
-              {sourceEmoji[content.source] || '📄'}
-            </Text>
+            <PlatformIcon platform={content.source} size={48} colored />
           </View>
         )}
 
@@ -108,10 +100,13 @@ export default function ContentDetailScreen() {
           </Text>
         )}
         <View style={styles.metaRow}>
-          <Text variant="caption" color="secondary">
-            {sourceEmoji[content.source]} {sourceLabel[content.source] || content.source}
-            {content.duration && ` • ${formatDuration(content.duration)}`}
-          </Text>
+          <View style={styles.metaSource}>
+            <PlatformIcon platform={content.source} size={14} colored />
+            <Text variant="caption" color="secondary">
+              {sourceLabel[content.source] || content.source}
+              {content.duration && ` \u2022 ${formatDuration(content.duration)}`}
+            </Text>
+          </View>
           {content.url && (
             <Pressable onPress={handleOpenSource} style={styles.sourceLink}>
               <Text variant="caption" style={styles.sourceLinkText}>
@@ -285,7 +280,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  thumbnailEmoji: { fontSize: 48 },
   title: { marginBottom: spacing.xs },
   channelName: { marginBottom: spacing.sm },
   metaRow: {
@@ -293,6 +287,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.lg,
+  },
+  metaSource: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   sourceLink: {
     paddingVertical: spacing.xs,

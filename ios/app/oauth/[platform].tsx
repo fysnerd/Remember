@@ -10,6 +10,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useQueryClient } from '@tanstack/react-query';
 import { Text, Button } from '../../components/ui';
+import { PlatformIcon } from '../../components/icons';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import api from '../../lib/api';
 import { colors, spacing } from '../../theme';
@@ -24,18 +25,16 @@ try {
 
 type Platform = 'tiktok' | 'instagram';
 
-const PLATFORM_CONFIG: Record<Platform, { name: string; loginUrl: string; domain: string; emoji: string }> = {
+const PLATFORM_CONFIG: Record<Platform, { name: string; loginUrl: string; domain: string }> = {
   tiktok: {
     name: 'TikTok',
     loginUrl: 'https://www.tiktok.com/login',
     domain: 'https://www.tiktok.com',
-    emoji: '📱',
   },
   instagram: {
     name: 'Instagram',
     loginUrl: 'https://www.instagram.com/accounts/login/',
     domain: 'https://www.instagram.com',
-    emoji: '📷',
   },
 };
 
@@ -88,9 +87,9 @@ export default function OAuthWebViewScreen() {
         <Stack.Screen options={{ title: `Connexion ${config.name}` }} />
         <SafeAreaView style={styles.container}>
           <View style={styles.errorContainer}>
-            <Text variant="h2" style={styles.errorEmoji}>
-              {config.emoji}
-            </Text>
+            <View style={styles.errorIcon}>
+              <PlatformIcon platform={platformKey} size={48} colored />
+            </View>
             <Text variant="h3" style={styles.errorTitle}>
               Development Build requis
             </Text>
@@ -169,9 +168,12 @@ export default function OAuthWebViewScreen() {
       />
       <SafeAreaView style={styles.container}>
         <View style={styles.instructions}>
-          <Text variant="body" color="secondary">
-            {config.emoji} Connectez-vous à {config.name}, puis appuyez sur le bouton ci-dessous.
-          </Text>
+          <View style={styles.instructionRow}>
+            <PlatformIcon platform={platformKey} size={16} colored />
+            <Text variant="body" color="secondary">
+              Connectez-vous a {config.name}, puis appuyez sur le bouton ci-dessous.
+            </Text>
+          </View>
         </View>
 
         <View style={styles.webviewContainer}>
@@ -224,8 +226,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.xl,
   },
-  errorEmoji: {
-    fontSize: 48,
+  errorIcon: {
     marginBottom: spacing.md,
   },
   errorTitle: {
@@ -245,6 +246,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+  },
+  instructionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   webviewContainer: {
     flex: 1,

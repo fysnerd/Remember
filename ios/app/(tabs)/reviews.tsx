@@ -4,6 +4,7 @@
 
 import { View, ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { BookOpen, FileText } from 'lucide-react-native';
 import { Text, Card } from '../../components/ui';
 import { PlatformIcon } from '../../components/icons';
@@ -14,6 +15,7 @@ import { colors, spacing } from '../../theme';
 
 export default function ReviewsScreen() {
   const router = useRouter();
+  const tabBarHeight = useBottomTabBarHeight();
   const { data, isLoading } = useCompletedItems();
 
   if (isLoading) {
@@ -45,7 +47,7 @@ export default function ReviewsScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.lg }]}>
       <View style={styles.list}>
         {/* Topics */}
         {topics.map((topic) => (

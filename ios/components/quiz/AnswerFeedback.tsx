@@ -3,6 +3,7 @@
  */
 
 import { View, StyleSheet } from 'react-native';
+import { Check, X } from 'lucide-react-native';
 import { Text } from '../ui';
 import { colors, spacing, borderRadius } from '../../theme';
 
@@ -20,14 +21,21 @@ export function AnswerFeedback({
   return (
     <View style={styles.container}>
       <View style={[styles.header, isCorrect ? styles.correct : styles.wrong]}>
-        <Text variant="h2" color="inverse">
-          {isCorrect ? '✓ Correct !' : '✗ Incorrect'}
-        </Text>
+        <View style={styles.headerContent}>
+          {isCorrect ? (
+            <Check size={24} color={colors.background} strokeWidth={2.5} />
+          ) : (
+            <X size={24} color={colors.background} strokeWidth={2.5} />
+          )}
+          <Text variant="h2" color="inverse">
+            {isCorrect ? 'Correct !' : 'Incorrect'}
+          </Text>
+        </View>
       </View>
 
       <View style={styles.content}>
         <Text variant="body" color="secondary" style={styles.label}>
-          La bonne réponse était :
+          La bonne reponse etait :
         </Text>
         <Text variant="body" weight="medium" style={styles.answer}>
           {correctAnswer}
@@ -50,6 +58,11 @@ const styles = StyleSheet.create({
   header: {
     padding: spacing.md,
     alignItems: 'center',
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   correct: {
     backgroundColor: colors.success,

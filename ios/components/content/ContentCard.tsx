@@ -4,7 +4,9 @@
  */
 
 import { Pressable, StyleSheet, View, Image } from 'react-native';
+import { Check } from 'lucide-react-native';
 import { Text } from '../ui';
+import { PlatformIcon } from '../icons';
 import { colors, spacing, borderRadius, shadows } from '../../theme';
 
 type ContentSource = 'youtube' | 'spotify' | 'tiktok' | 'instagram';
@@ -34,13 +36,6 @@ function formatDuration(seconds?: number): string | null {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-const sourceIcon: Record<ContentSource, string> = {
-  youtube: '▶',
-  spotify: '●',
-  tiktok: '♪',
-  instagram: '◐',
-};
-
 export function ContentCard({
   title,
   source,
@@ -62,13 +57,13 @@ export function ContentCard({
           <Image source={{ uri: thumbnailUrl }} style={styles.thumbnail} resizeMode="cover" />
         ) : (
           <View style={styles.placeholder}>
-            <Text style={styles.placeholderIcon}>{sourceIcon[source]}</Text>
+            <PlatformIcon platform={source} size={24} color={colors.textTertiary} />
           </View>
         )}
         {/* Source badge - top left */}
         <View style={styles.badgeOverlay}>
           <View style={styles.badge}>
-            <Text style={styles.badgeText}>{sourceIcon[source]}</Text>
+            <PlatformIcon platform={source} size={9} color="#FFFFFF" />
           </View>
         </View>
         {/* Duration badge - bottom right */}
@@ -83,7 +78,7 @@ export function ContentCard({
         {selectionMode && (
           <View style={styles.selectionOverlay}>
             <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-              {isSelected && <Text style={styles.checkmark}>✓</Text>}
+              {isSelected && <Check size={13} color={colors.background} strokeWidth={3} />}
             </View>
           </View>
         )}
@@ -147,10 +142,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  placeholderIcon: {
-    fontSize: 24,
-    color: colors.textTertiary,
-  },
   badgeOverlay: {
     position: 'absolute',
     top: spacing.xs,
@@ -161,10 +152,8 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xs,
     paddingHorizontal: 6,
     paddingVertical: 3,
-  },
-  badgeText: {
-    fontSize: 9,
-    color: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   selectionOverlay: {
     position: 'absolute',
@@ -184,11 +173,6 @@ const styles = StyleSheet.create({
   checkboxSelected: {
     backgroundColor: colors.text,
     borderColor: colors.text,
-  },
-  checkmark: {
-    color: colors.background,
-    fontSize: 11,
-    fontWeight: '700',
   },
   durationOverlay: {
     position: 'absolute',

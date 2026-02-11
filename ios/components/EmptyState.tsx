@@ -4,25 +4,25 @@
 
 import { View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Inbox, LucideIcon } from 'lucide-react-native';
 import { Text } from './ui';
 import { colors, spacing } from '../theme';
 
 interface EmptyStateProps {
   message: string;
-  icon?: string;
+  icon?: LucideIcon;
   /** Set to true when used in a screen with a header (skips top safe area) */
   hasHeader?: boolean;
 }
 
-export function EmptyState({ message, icon = '📭', hasHeader = false }: EmptyStateProps) {
+export function EmptyState({ message, icon, hasHeader = false }: EmptyStateProps) {
   const edges = hasHeader ? ['bottom'] : ['top', 'bottom'];
+  const IconComponent = icon || Inbox;
 
   return (
     <SafeAreaView style={styles.container} edges={edges as any}>
       <View style={styles.content}>
-        <Text variant="h1" style={styles.icon}>
-          {icon}
-        </Text>
+        <IconComponent size={48} color={colors.textSecondary} strokeWidth={1.5} />
         <Text variant="body" color="secondary" style={styles.message}>
           {message}
         </Text>
@@ -41,10 +41,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.xl,
-  },
-  icon: {
-    fontSize: 48,
-    marginBottom: spacing.md,
+    gap: spacing.md,
   },
   message: {
     textAlign: 'center',

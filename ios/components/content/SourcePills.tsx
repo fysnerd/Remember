@@ -6,6 +6,7 @@
 
 import { View, ScrollView, StyleSheet, Pressable } from 'react-native';
 import { Text } from '../ui';
+import { PlatformIcon } from '../icons';
 import { colors, spacing, borderRadius } from '../../theme';
 
 type Source = 'all' | 'youtube' | 'spotify' | 'tiktok' | 'instagram';
@@ -15,12 +16,12 @@ interface SourcePillsProps {
   onSourceChange: (source: Source) => void;
 }
 
-const sources: { key: Source; label: string; icon?: string }[] = [
+const sources: { key: Source; label: string }[] = [
   { key: 'all', label: 'Tout' },
-  { key: 'youtube', label: 'YouTube', icon: '▶' },
-  { key: 'spotify', label: 'Spotify', icon: '●' },
-  { key: 'tiktok', label: 'TikTok', icon: '♪' },
-  { key: 'instagram', label: 'Instagram', icon: '◐' },
+  { key: 'youtube', label: 'YouTube' },
+  { key: 'spotify', label: 'Spotify' },
+  { key: 'tiktok', label: 'TikTok' },
+  { key: 'instagram', label: 'Instagram' },
 ];
 
 export function SourcePills({ selectedSource, onSourceChange }: SourcePillsProps) {
@@ -39,10 +40,12 @@ export function SourcePills({ selectedSource, onSourceChange }: SourcePillsProps
               style={[styles.sourcePill, isActive && styles.sourcePillActive]}
               onPress={() => onSourceChange(source.key)}
             >
-              {source.icon && (
-                <Text style={[styles.sourceIcon, isActive && styles.sourceIconActive]}>
-                  {source.icon}
-                </Text>
+              {source.key !== 'all' && (
+                <PlatformIcon
+                  platform={source.key}
+                  size={10}
+                  color={isActive ? colors.background : colors.textSecondary}
+                />
               )}
               <Text
                 variant="caption"
@@ -82,13 +85,6 @@ const styles = StyleSheet.create({
   sourcePillActive: {
     backgroundColor: colors.text,
     borderColor: colors.text,
-  },
-  sourceIcon: {
-    fontSize: 10,
-    color: colors.textSecondary,
-  },
-  sourceIconActive: {
-    color: colors.background,
   },
   sourceLabel: {
     color: colors.text,

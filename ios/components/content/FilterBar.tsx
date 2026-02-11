@@ -7,7 +7,9 @@
 
 import { useState } from 'react';
 import { View, ScrollView, StyleSheet, Pressable, Modal } from 'react-native';
+import { Check, X, ChevronDown } from 'lucide-react-native';
 import { Text } from '../ui';
+import { PlatformIcon } from '../icons';
 import { colors, spacing, borderRadius, shadows } from '../../theme';
 
 type Source = 'all' | 'youtube' | 'spotify' | 'tiktok' | 'instagram';
@@ -28,12 +30,12 @@ interface FilterBarProps {
   onChannelChange: (channel: string | null) => void;
 }
 
-const sources: { key: Source; label: string; icon?: string }[] = [
+const sources: { key: Source; label: string }[] = [
   { key: 'all', label: 'Tout' },
-  { key: 'youtube', label: 'YouTube', icon: '▶' },
-  { key: 'spotify', label: 'Spotify', icon: '●' },
-  { key: 'tiktok', label: 'TikTok', icon: '♪' },
-  { key: 'instagram', label: 'Instagram', icon: '◐' },
+  { key: 'youtube', label: 'YouTube' },
+  { key: 'spotify', label: 'Spotify' },
+  { key: 'tiktok', label: 'TikTok' },
+  { key: 'instagram', label: 'Instagram' },
 ];
 
 export function FilterBar({
@@ -68,10 +70,12 @@ export function FilterBar({
               style={[styles.sourcePill, isActive && styles.sourcePillActive]}
               onPress={() => onSourceChange(source.key)}
             >
-              {source.icon && (
-                <Text style={[styles.sourceIcon, isActive && styles.sourceIconActive]}>
-                  {source.icon}
-                </Text>
+              {source.key !== 'all' && (
+                <PlatformIcon
+                  platform={source.key}
+                  size={10}
+                  color={isActive ? colors.background : colors.textSecondary}
+                />
               )}
               <Text
                 variant="caption"
@@ -97,9 +101,7 @@ export function FilterBar({
               <Text style={[styles.filterLabel, selectedChannel && styles.filterLabelActive]}>
                 {selectedChannel || 'Chaîne'}
               </Text>
-              <Text style={[styles.filterArrow, selectedChannel && styles.filterArrowActive]}>
-                ▾
-              </Text>
+              <ChevronDown size={12} color={selectedChannel ? colors.background : colors.textTertiary} strokeWidth={2} />
             </Pressable>
           )}
 
@@ -112,9 +114,7 @@ export function FilterBar({
               <Text style={[styles.filterLabel, selectedTopic && styles.filterLabelActive]}>
                 {selectedTopic || 'Topic'}
               </Text>
-              <Text style={[styles.filterArrow, selectedTopic && styles.filterArrowActive]}>
-                ▾
-              </Text>
+              <ChevronDown size={12} color={selectedTopic ? colors.background : colors.textTertiary} strokeWidth={2} />
             </Pressable>
           )}
 
@@ -127,7 +127,7 @@ export function FilterBar({
                 onChannelChange(null);
               }}
             >
-              <Text style={styles.clearLabel}>✕</Text>
+              <X size={14} color={colors.textSecondary} strokeWidth={2} />
             </Pressable>
           )}
         </View>
@@ -216,7 +216,7 @@ function FilterModal({
               {title}
             </Text>
             <Pressable onPress={onClose} hitSlop={12}>
-              <Text style={styles.modalClose}>✕</Text>
+              <X size={16} color={colors.textSecondary} strokeWidth={2} />
             </Pressable>
           </View>
 
@@ -262,7 +262,7 @@ function ModalOption({
           </Text>
         )}
       </View>
-      {isSelected && <Text style={styles.modalCheckmark}>✓</Text>}
+      {isSelected && <Check size={16} color={colors.text} strokeWidth={2.5} />}
     </Pressable>
   );
 }
@@ -292,13 +292,6 @@ const styles = StyleSheet.create({
   sourcePillActive: {
     backgroundColor: colors.text,
     borderColor: colors.text,
-  },
-  sourceIcon: {
-    fontSize: 10,
-    color: colors.textSecondary,
-  },
-  sourceIconActive: {
-    color: colors.background,
   },
   sourceLabel: {
     color: colors.text,
@@ -339,14 +332,6 @@ const styles = StyleSheet.create({
   filterLabelActive: {
     color: colors.background,
   },
-  filterArrow: {
-    fontSize: 11,
-    color: colors.textTertiary,
-    marginLeft: spacing.sm,
-  },
-  filterArrowActive: {
-    color: colors.background,
-  },
   clearButton: {
     width: 36,
     height: 36,
@@ -355,11 +340,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  clearLabel: {
-    color: colors.textSecondary,
-    fontSize: 14,
-  },
-
   // Modal
   modalBackdrop: {
     flex: 1,
@@ -392,10 +372,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
   },
-  modalClose: {
-    fontSize: 16,
-    color: colors.textSecondary,
-  },
   modalScroll: {
     maxHeight: 400,
   },
@@ -417,10 +393,5 @@ const styles = StyleSheet.create({
   },
   modalOptionSubtitle: {
     marginTop: 2,
-  },
-  modalCheckmark: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
   },
 });

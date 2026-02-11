@@ -6,6 +6,7 @@ import { useState, useCallback } from 'react';
 import { View, ScrollView, StyleSheet, Dimensions, RefreshControl, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Link2, ChevronRight } from 'lucide-react-native';
 import { Text, Card } from '../../components/ui';
 import { PlatformIcon } from '../../components/icons';
@@ -23,6 +24,7 @@ const COLUMN_WIDTH = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP) / 2;
 export default function FeedScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const tabBarHeight = useBottomTabBarHeight();
   const [refreshing, setRefreshing] = useState(false);
   const { data: themes, isLoading: themesLoading } = useThemes();
   const { data: pendingThemes } = usePendingThemes();
@@ -59,7 +61,7 @@ export default function FeedScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.lg }]}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
       }

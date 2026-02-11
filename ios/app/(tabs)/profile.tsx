@@ -7,7 +7,10 @@ import { View, ScrollView, StyleSheet, Pressable, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useQueryClient } from '@tanstack/react-query';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { User } from 'lucide-react-native';
 import { Text, Card, Button } from '../../components/ui';
+import { PlatformIcon } from '../../components/icons';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { useAuthStore } from '../../stores/authStore';
 import { useOAuthStatus } from '../../hooks';
@@ -15,14 +18,15 @@ import api from '../../lib/api';
 import { colors, spacing, borderRadius } from '../../theme';
 
 const platformConfig = [
-  { id: 'youtube', name: 'YouTube', emoji: '🎬' },
-  { id: 'spotify', name: 'Spotify', emoji: '🎧' },
-  { id: 'tiktok', name: 'TikTok', emoji: '📱' },
-  { id: 'instagram', name: 'Instagram', emoji: '📷' },
+  { id: 'youtube', name: 'YouTube' },
+  { id: 'spotify', name: 'Spotify' },
+  { id: 'tiktok', name: 'TikTok' },
+  { id: 'instagram', name: 'Instagram' },
 ] as const;
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const tabBarHeight = useBottomTabBarHeight();
   const { user, logout } = useAuthStore();
   const { data: oauthStatus, isLoading } = useOAuthStatus();
   const queryClient = useQueryClient();
@@ -135,12 +139,12 @@ export default function ProfileScreen() {
   }));
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.lg }]}>
       {/* User Info */}
       <Card padding="lg" style={styles.userCard}>
         <View style={styles.userRow}>
           <View style={styles.avatar}>
-            <Text variant="h1">👤</Text>
+            <User size={28} color={colors.textSecondary} strokeWidth={1.75} />
           </View>
           <View style={styles.userInfo}>
             <Text variant="body" weight="medium">
@@ -169,9 +173,9 @@ export default function ProfileScreen() {
                 onPress={() => handlePlatformPress(platform.id, platform.name, isConnected)}
                 disabled={isLoading}
               >
-                <Text variant="body" style={styles.platformEmoji}>
-                  {platform.emoji}
-                </Text>
+                <View style={styles.platformIcon}>
+                  <PlatformIcon platform={platform.id} size={20} colored />
+                </View>
                 <Text variant="body" style={styles.platformName}>
                   {platform.name}
                 </Text>
@@ -233,10 +237,10 @@ export default function ProfileScreen() {
           </Pressable>
           <View style={styles.syncGrid}>
             {([
-              { id: 'youtube', label: 'YouTube', emoji: '🎬' },
-              { id: 'spotify', label: 'Spotify', emoji: '🎧' },
-              { id: 'tiktok', label: 'TikTok', emoji: '📱' },
-              { id: 'instagram', label: 'Instagram', emoji: '📷' },
+              { id: 'youtube', label: 'YouTube' },
+              { id: 'spotify', label: 'Spotify' },
+              { id: 'tiktok', label: 'TikTok' },
+              { id: 'instagram', label: 'Instagram' },
             ] as const).map((p) => (
               <Pressable
                 key={p.id}
@@ -244,9 +248,12 @@ export default function ProfileScreen() {
                 onPress={() => handleSync(p.id, p.label)}
                 disabled={syncingPlatform !== null}
               >
-                <Text variant="body" weight="medium" style={styles.syncButtonText}>
-                  {syncingPlatform === p.id ? '⏳' : p.emoji} {p.label}
-                </Text>
+                <View style={styles.syncButtonContent}>
+                  <PlatformIcon platform={p.id} size={14} colored />
+                  <Text variant="body" weight="medium" style={styles.syncButtonText}>
+                    {p.label}
+                  </Text>
+                </View>
               </Pressable>
             ))}
           </View>
@@ -278,7 +285,7 @@ const styles = StyleSheet.create({
   sectionTitle: { marginBottom: spacing.md },
   platformRow: { flexDirection: 'row', alignItems: 'center', padding: spacing.md },
   platformBorder: { borderBottomWidth: 1, borderBottomColor: colors.border },
-  platformEmoji: { fontSize: 20, marginRight: spacing.md },
+  platformIcon: { marginRight: spacing.md },
   platformName: { flex: 1 },
   settingsRow: {
     flexDirection: 'row',
@@ -313,6 +320,7 @@ const styles = StyleSheet.create({
   syncButtonDisabled: {
     opacity: 0.5,
   },
+  syncButtonContent: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing.xs },
   syncButtonText: { color: colors.text },
   syncHint: { marginTop: spacing.sm, textAlign: 'center' },
 });

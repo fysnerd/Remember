@@ -4,6 +4,7 @@
 
 import { View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { TriangleAlert } from 'lucide-react-native';
 import { Text, Button } from './ui';
 import { colors, spacing } from '../theme';
 
@@ -20,15 +21,13 @@ export function ErrorState({ message, onRetry, hasHeader = false }: ErrorStatePr
   return (
     <SafeAreaView style={styles.container} edges={edges as any}>
       <View style={styles.content}>
-        <Text variant="h1" style={styles.icon}>
-          ⚠️
-        </Text>
+        <TriangleAlert size={48} color={colors.error} strokeWidth={1.5} />
         <Text variant="body" color="secondary" style={styles.message}>
           {message}
         </Text>
         {onRetry && (
           <Button variant="outline" onPress={onRetry}>
-            Réessayer
+            Reessayer
           </Button>
         )}
       </View>
@@ -46,13 +45,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.xl,
-  },
-  icon: {
-    fontSize: 48,
-    marginBottom: spacing.md,
+    gap: spacing.md,
   },
   message: {
     textAlign: 'center',
-    marginBottom: spacing.lg,
   },
 });

@@ -1,9 +1,9 @@
 /**
- * Triage action buttons - Icon only (X / ✓)
+ * Triage action buttons - Icon only (X / Check)
  */
 
 import { View, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
-import { Text } from '../ui';
+import { Check, X } from 'lucide-react-native';
 import { colors, spacing, borderRadius } from '../../theme';
 
 interface TriageActionsProps {
@@ -26,7 +26,7 @@ export function TriageActions({ onLearn, onIgnore, loadingLearn = false, loading
         {loadingIgnore ? (
           <ActivityIndicator size="small" color={colors.textSecondary} />
         ) : (
-          <Text style={styles.ignoreIcon}>✕</Text>
+          <X size={18} color={colors.textSecondary} strokeWidth={2} />
         )}
       </Pressable>
       <Pressable
@@ -37,7 +37,7 @@ export function TriageActions({ onLearn, onIgnore, loadingLearn = false, loading
         {loadingLearn ? (
           <ActivityIndicator size="small" color={colors.background} />
         ) : (
-          <Text style={styles.learnIcon}>✓</Text>
+          <Check size={18} color={colors.background} strokeWidth={2} />
         )}
       </Pressable>
     </View>
@@ -64,16 +64,6 @@ const styles = StyleSheet.create({
   },
   learnButton: {
     backgroundColor: colors.text,
-  },
-  ignoreIcon: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  learnIcon: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.background,
   },
   pressed: {
     opacity: 0.7,

@@ -7,6 +7,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { View, ScrollView, StyleSheet, Pressable, RefreshControl, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Text, Badge } from '../../components/ui';
 import { ContentCard, FilterBar, SourcePills, SelectionBar } from '../../components/content';
 import { LoadingScreen } from '../../components/LoadingScreen';
@@ -24,6 +25,7 @@ const COLUMN_WIDTH = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP) / 2;
 export default function LibraryScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const tabBarHeight = useBottomTabBarHeight();
   const [refreshing, setRefreshing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchAction, setBatchAction] = useState<'learn' | 'ignore' | null>(null);
@@ -189,7 +191,7 @@ export default function LibraryScreen() {
         <LoadingScreen />
       ) : (
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.lg }]}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
           }

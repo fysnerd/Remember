@@ -4,6 +4,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { View, Animated, StyleSheet, Pressable } from 'react-native';
+import { Check, X, Info, LucideIcon } from 'lucide-react-native';
 import { Text } from './Text';
 import { colors, spacing, borderRadius } from '../../theme';
 
@@ -16,10 +17,10 @@ interface ToastProps {
   onHide: () => void;
 }
 
-const iconMap: Record<ToastType, string> = {
-  success: '✓',
-  error: '✕',
-  info: 'ℹ',
+const iconMap: Record<ToastType, LucideIcon> = {
+  success: Check,
+  error: X,
+  info: Info,
 };
 
 const bgColorMap: Record<ToastType, string> = {
@@ -30,6 +31,7 @@ const bgColorMap: Record<ToastType, string> = {
 
 export function Toast({ message, type, visible, onHide }: ToastProps) {
   const translateY = useRef(new Animated.Value(-100)).current;
+  const IconComponent = iconMap[type];
 
   useEffect(() => {
     if (visible) {
@@ -57,9 +59,7 @@ export function Toast({ message, type, visible, onHide }: ToastProps) {
         onPress={onHide}
         style={[styles.toast, { backgroundColor: bgColorMap[type] }]}
       >
-        <Text variant="body" color="inverse" weight="bold">
-          {iconMap[type]}
-        </Text>
+        <IconComponent size={16} color={colors.background} strokeWidth={2.5} />
         <Text variant="body" color="inverse" style={styles.message}>
           {message}
         </Text>
@@ -102,9 +102,9 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
+    gap: spacing.sm,
   },
   message: {
-    marginLeft: spacing.sm,
     flex: 1,
   },
 });

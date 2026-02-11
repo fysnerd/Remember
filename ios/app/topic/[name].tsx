@@ -4,19 +4,13 @@
 
 import { View, ScrollView, StyleSheet, Pressable } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Inbox, Settings } from 'lucide-react-native';
 import { Text, Card, Button } from '../../components/ui';
+import { PlatformIcon } from '../../components/icons';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
-import { Inbox } from 'lucide-react-native';
 import { useContentList } from '../../hooks';
 import { colors, spacing } from '../../theme';
-
-const sourceEmoji: Record<string, string> = {
-  youtube: '🎬',
-  spotify: '🎧',
-  tiktok: '📱',
-  instagram: '📷',
-};
 
 export default function TopicScreen() {
   const { name } = useLocalSearchParams<{ name: string }>();
@@ -50,7 +44,7 @@ export default function TopicScreen() {
           headerBackTitle: 'Retour',
           headerRight: () => (
             <Pressable onPress={handleManageTopic} hitSlop={8} style={styles.settingsButton}>
-              <Text variant="h2">⚙️</Text>
+              <Settings size={20} color={colors.text} strokeWidth={1.75} />
             </Pressable>
           ),
         }}
@@ -69,9 +63,9 @@ export default function TopicScreen() {
                   style={styles.card}
                 >
                   <View style={styles.row}>
-                    <Text variant="h2" style={styles.emoji}>
-                      {sourceEmoji[item.source] || '📄'}
-                    </Text>
+                    <View style={styles.iconContainer}>
+                      <PlatformIcon platform={item.source} size={20} colored />
+                    </View>
                     <View style={styles.info}>
                       <Text variant="body" weight="medium" numberOfLines={2}>
                         {item.title}
@@ -122,8 +116,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  emoji: {
-    fontSize: 24,
+  iconContainer: {
     marginRight: spacing.md,
   },
   info: {

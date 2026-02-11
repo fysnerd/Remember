@@ -3,6 +3,7 @@
  */
 
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { Check } from 'lucide-react-native';
 import { Text } from '../ui';
 import { colors, spacing, borderRadius } from '../../theme';
 
@@ -97,7 +98,7 @@ export function QuestionCard({
                 {cleanOptionText(option.text)}
               </Text>
               {isSelected && !correctId && (
-                <Text variant="body" weight="bold"> ✓</Text>
+                <Check size={18} color={colors.text} strokeWidth={2.5} />
               )}
             </TouchableOpacity>
           );
