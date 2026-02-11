@@ -3,7 +3,7 @@
 ## Milestones
 
 - ✅ **v1.0 Admin & Observability** -- Phases 1-4 (shipped 2026-02-10)
-- 🚧 **v2.0 Themes-first UX** -- Phases 5-11 (in progress)
+- ✅ **v2.0 Themes-first UX** -- Phases 5-11 (shipped 2026-02-11)
 
 ## Phases
 
@@ -19,7 +19,7 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 
 </details>
 
-### 🚧 v2.0 Themes-first UX (In Progress)
+### ✅ v2.0 Themes-first UX (SHIPPED 2026-02-11)
 
 **Milestone Goal:** Transform Ankora from content-centric navigation to theme-centric navigation, with AI-generated themes, theme-scoped quizzes, cross-content synthesis, and theme memos.
 
@@ -29,7 +29,7 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 - [x] **Phase 8: Theme Quiz (Existing Cards)** -- Quiz scoped to a theme using existing per-content questions (completed 2026-02-10)
 - [x] **Phase 9: Theme Memo** -- AI-generated synthesis memos aggregating knowledge per theme (completed 2026-02-11)
 - [x] **Phase 10: Cross-Content Synthesis Quiz** -- New AI-generated questions connecting concepts across multiple content items (completed 2026-02-11)
-- [ ] **Phase 11: Theme Discovery & Onboarding** -- First-time theme review flow and learning progress visibility
+- [x] **Phase 11: Theme Discovery & Onboarding** -- First-time theme review flow and learning progress visibility (completed 2026-02-11)
 
 ## Phase Details
 
@@ -132,8 +132,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 11-01-PLAN.md -- Backend: discoveredAt schema migration, status filter, progress aggregation, bulk discovery endpoint
-- [ ] 11-02-PLAN.md -- iOS: types/hooks, ThemeCard progress UI, DiscoveryThemeCard, discovery screen, home screen banner
+- [x] 11-01-PLAN.md -- Backend: discoveredAt schema migration, status filter, progress aggregation, bulk discovery endpoint
+- [x] 11-02-PLAN.md -- iOS: types/hooks, ThemeCard progress UI, DiscoveryThemeCard, discovery screen, home screen banner
 
 ## Progress
 
@@ -152,4 +152,4 @@ Phases execute in numeric order: 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11
 | 8. Theme Quiz (Existing Cards) | v2.0 | 1/1 | Complete | 2026-02-10 |
 | 9. Theme Memo | v2.0 | 1/1 | Complete | 2026-02-11 |
 | 10. Cross-Content Synthesis Quiz | v2.0 | 2/2 | Complete | 2026-02-11 |
-| 11. Theme Discovery & Onboarding | v2.0 | 0/2 | Not started | - |
+| 11. Theme Discovery & Onboarding | v2.0 | 2/2 | Complete | 2026-02-11 |
