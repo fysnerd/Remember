@@ -634,12 +634,13 @@ reviewRouter.post('/practice/theme', async (req: Request, res: Response, next: N
 
     const contentIds = contents.map(c => c.id);
 
-    // Get ALL cards for these contents
+    // Get per-content cards (exclude synthesis)
     const cards = await prisma.card.findMany({
       where: {
         userId,
         quiz: {
           contentId: { in: contentIds },
+          isSynthesis: false,
         },
       },
       include: {
@@ -658,18 +659,97 @@ reviewRouter.post('/practice/theme', async (req: Request, res: Response, next: N
       },
     });
 
-    // Shuffle cards randomly
-    const shuffledCards = cards.sort(() => Math.random() - 0.5);
+    // Get existing synthesis cards for this theme
+    let synthesisCards = await prisma.card.findMany({
+      where: {
+        userId,
+        quiz: { themeId, isSynthesis: true },
+      },
+      include: {
+        quiz: {
+          include: {
+            theme: { select: { id: true, name: true } },
+          },
+        },
+      },
+    });
 
-    // Cap at 20 questions
-    const cappedCards = shuffledCards.slice(0, 20);
+    // On-demand synthesis generation if no synthesis cards exist
+    if (synthesisCards.length === 0) {
+      const contentWithMemos = await prisma.content.findMany({
+        where: {
+          id: { in: contentIds },
+          transcript: { isNot: null },
+        },
+        include: { transcript: true },
+        take: 15,
+      });
+
+      const contentMemos = contentWithMemos
+        .filter(c => {
+          const segments = c.transcript?.segments as any;
+          return segments?.memo;
+        })
+        .map(c => ({
+          id: c.id,
+          title: c.title,
+          memo: (c.transcript!.segments as any).memo as string,
+        }));
+
+      if (contentMemos.length >= 2) {
+        const { generateSynthesisQuestions } = await import('../services/quizGeneration.js');
+        const result = await generateSynthesisQuestions(theme.name, contentMemos, 5);
+
+        if (result.questions.length > 0) {
+          for (const q of result.questions) {
+            const quiz = await prisma.quiz.create({
+              data: {
+                themeId,
+                contentId: null,
+                isSynthesis: true,
+                question: q.question,
+                type: 'MULTIPLE_CHOICE',
+                options: q.options,
+                correctAnswer: q.correctAnswer,
+                explanation: q.explanation,
+              },
+            });
+            await prisma.card.create({
+              data: { quizId: quiz.id, userId },
+            });
+          }
+
+          // Re-fetch synthesis cards after creation
+          synthesisCards = await prisma.card.findMany({
+            where: {
+              userId,
+              quiz: { themeId, isSynthesis: true },
+            },
+            include: {
+              quiz: {
+                include: {
+                  theme: { select: { id: true, name: true } },
+                },
+              },
+            },
+          });
+        }
+      }
+    }
+
+    // Mix: up to 5 synthesis + remaining per-content, total capped at 20
+    const shuffledSynthesis = synthesisCards.sort(() => Math.random() - 0.5).slice(0, 5);
+    const remainingSlots = 20 - shuffledSynthesis.length;
+    const shuffledContent = cards.sort(() => Math.random() - 0.5).slice(0, remainingSlots);
+    const cappedCards = [...shuffledContent, ...shuffledSynthesis].sort(() => Math.random() - 0.5);
 
     return res.json({
       cards: cappedCards,
       count: cappedCards.length,
       theme: { id: theme.id, name: theme.name, emoji: theme.emoji },
       contentCount: contents.length,
-      isPractice: true,
+      hasSynthesis: shuffledSynthesis.length > 0,
+      synthesisCount: shuffledSynthesis.length,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -928,6 +1008,7 @@ reviewRouter.post('/session/:id/memo', async (req: Request, res: Response, next:
 
     for (const review of reviews) {
       const content = review.card.quiz.content;
+      if (!content) continue; // Skip synthesis questions (no content link)
       if (!contentMap.has(content.id)) {
         contentMap.set(content.id, {
           title: content.title,
@@ -1234,6 +1315,7 @@ reviewRouter.get('/memos', async (req: Request, res: Response, next: NextFunctio
       const contentMap = new Map<string, { id: string; title: string; platform: string; thumbnailUrl: string | null }>();
       for (const review of session.reviews) {
         const content = review.card.quiz.content;
+        if (!content) continue; // Skip synthesis questions
         if (!contentMap.has(content.id)) {
           contentMap.set(content.id, content);
         }

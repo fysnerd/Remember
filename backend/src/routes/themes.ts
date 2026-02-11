@@ -352,6 +352,13 @@ themeRouter.post('/:id/content', async (req: Request, res: Response, next: NextF
       data: { memo: null, memoGeneratedAt: null },
     });
 
+    // Delete synthesis quizzes for this theme (they reference old content combinations)
+    // Cascade: deleting Quiz also deletes Card and Review via onDelete: Cascade
+    await prisma.quiz.deleteMany({
+      where: { themeId, isSynthesis: true },
+    });
+    log.info({ themeId, action: 'synthesis-invalidated' }, 'Synthesis quizzes cleared on content change');
+
     log.info({ userId, themeId, added: result.count }, 'Content added to theme');
 
     return res.json({
@@ -398,6 +405,12 @@ themeRouter.delete('/:id/content/:contentId', async (req: Request, res: Response
       where: { id: themeId },
       data: { memo: null, memoGeneratedAt: null },
     });
+
+    // Delete synthesis quizzes for this theme (they reference old content combinations)
+    await prisma.quiz.deleteMany({
+      where: { themeId, isSynthesis: true },
+    });
+    log.info({ themeId, action: 'synthesis-invalidated' }, 'Synthesis quizzes cleared on content change');
 
     return res.json({ message: 'Content removed from theme' });
   } catch (error) {
