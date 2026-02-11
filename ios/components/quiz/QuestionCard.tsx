@@ -26,6 +26,23 @@ const cleanOptionText = (text: string) => {
   return text.replace(/^[A-D]\)\s*/, '');
 };
 
+const getOptionStyle = (isCorrect: boolean, isWrong: boolean, isSelected: boolean, hasResult: boolean) => ({
+  backgroundColor: isCorrect && hasResult
+    ? 'rgba(34, 197, 94, 0.15)'
+    : isWrong
+    ? 'rgba(239, 68, 68, 0.15)'
+    : isSelected
+    ? colors.surfaceElevated
+    : colors.surface,
+  borderColor: isCorrect && hasResult
+    ? colors.success
+    : isWrong
+    ? colors.error
+    : isSelected
+    ? colors.text
+    : colors.border,
+});
+
 export function QuestionCard({
   question,
   options,
@@ -35,8 +52,6 @@ export function QuestionCard({
   correctId,
   isSynthesis = false,
 }: QuestionCardProps) {
-  console.log('[QuestionCard] Render with selectedId:', selectedId);
-
   return (
     <View>
       {isSynthesis && (
@@ -53,7 +68,8 @@ export function QuestionCard({
         {options.map((option) => {
           const isSelected = selectedId === option.id;
           const isCorrect = correctId === option.id;
-          const isWrong = correctId && isSelected && !isCorrect;
+          const isWrong = !!(correctId && isSelected && !isCorrect);
+          const optionColors = getOptionStyle(isCorrect, isWrong, isSelected, !!correctId);
 
           return (
             <TouchableOpacity
@@ -64,36 +80,19 @@ export function QuestionCard({
                 }
               }}
               activeOpacity={0.7}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                padding: 16,
-                borderRadius: 12,
-                minHeight: 56,
-                backgroundColor: isCorrect && correctId
-                  ? '#DCFCE7'
-                  : isWrong
-                  ? '#FEE2E2'
-                  : isSelected
-                  ? '#E5E5E5'
-                  : '#F5F5F5',
-                borderWidth: isSelected ? 2 : 1,
-                borderColor: isCorrect && correctId
-                  ? '#16A34A'
-                  : isWrong
-                  ? '#DC2626'
-                  : isSelected
-                  ? '#000000'
-                  : '#E0E0E0',
-              }}
+              style={[
+                styles.option,
+                { borderWidth: isSelected ? 2 : 1 },
+                optionColors,
+              ]}
             >
-              <Text variant="body" weight="medium" color="secondary" style={{ width: 28 }}>
+              <Text variant="body" weight="medium" color="secondary" style={styles.optionLabel}>
                 {option.id})
               </Text>
               <Text
                 variant="body"
                 weight={isSelected ? 'bold' : 'regular'}
-                style={{ flex: 1 }}
+                style={styles.optionText}
               >
                 {cleanOptionText(option.text)}
               </Text>
@@ -110,21 +109,34 @@ export function QuestionCard({
 
 const styles = StyleSheet.create({
   question: {
-    marginBottom: 24,
+    marginBottom: spacing.xl,
   },
   options: {
-    gap: 12,
+    gap: spacing.md,
+  },
+  option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.lg,
+    borderRadius: borderRadius.md,
+    minHeight: 56,
+  },
+  optionLabel: {
+    width: 28,
+  },
+  optionText: {
+    flex: 1,
   },
   synthesisBadge: {
-    backgroundColor: '#6366F1',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    backgroundColor: colors.accent,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
     alignSelf: 'flex-start',
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
   synthesisBadgeText: {
-    color: '#FFFFFF',
+    color: colors.background,
     fontSize: 12,
   },
 });
