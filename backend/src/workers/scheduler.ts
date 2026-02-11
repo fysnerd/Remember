@@ -69,8 +69,8 @@ export function startScheduler(): void {
     await runJob('spotify-sync', runSpotifySync);
   });
 
-  // TikTok Sync - Every 30 minutes
-  cron.schedule('*/30 * * * *', async () => {
+  // TikTok Sync - Every 12 hours (low volume, mainly on-demand via /content/refresh)
+  cron.schedule('0 */12 * * *', async () => {
     log.info({ job: 'tiktok-sync' }, 'Triggering scheduled job');
     await runJob('tiktok-sync', runTikTokSync);
   });
@@ -97,9 +97,11 @@ export function startScheduler(): void {
     await runJob('tiktok-transcription', runTikTokTranscriptionWorker);
   });
 
-  // Instagram Sync - DISABLED (on-demand only via /content/refresh)
-  // Cron from datacenter causes Instagram ban warnings. Now syncs only when user opens the app.
-  // Manual trigger via POST /api/admin/sync/all { job: 'instagram' } still works.
+  // Instagram Sync - Every 12 hours (low volume, mainly on-demand via /content/refresh)
+  cron.schedule('0 */12 * * *', async () => {
+    log.info({ job: 'instagram-sync' }, 'Triggering scheduled job');
+    await runJob('instagram-sync', runInstagramSync);
+  });
 
   // Instagram Transcription Worker - Every 2 minutes (optimized)
   // Processes pending Instagram transcriptions (via yt-dlp + Whisper)
@@ -148,8 +150,8 @@ export function startScheduler(): void {
     jobs: [
       { name: 'youtube-sync', schedule: '*/15 * * * *' },
       { name: 'spotify-sync', schedule: '*/30 * * * *' },
-      { name: 'tiktok-sync', schedule: '*/30 * * * *' },
-      { name: 'instagram-sync', schedule: 'DISABLED (on-demand only)' },
+      { name: 'tiktok-sync', schedule: '0 */12 * * *' },
+      { name: 'instagram-sync', schedule: '0 */12 * * *' },
       { name: 'youtube-transcription', schedule: '*/2 * * * *' },
       { name: 'podcast-transcription', schedule: '*/5 * * * *' },
       { name: 'tiktok-transcription', schedule: '*/2 * * * *' },
@@ -270,8 +272,8 @@ export function getSchedulerStatus(): {
     jobs: [
       { name: 'youtube-sync', schedule: '*/15 * * * *' },
       { name: 'spotify-sync', schedule: '*/30 * * * *' },
-      { name: 'tiktok-sync', schedule: '*/30 * * * *' },
-      { name: 'instagram-sync', schedule: 'DISABLED (on-demand only)' },
+      { name: 'tiktok-sync', schedule: '0 */12 * * *' },
+      { name: 'instagram-sync', schedule: '0 */12 * * *' },
       { name: 'youtube-transcription', schedule: '*/2 * * * *' },
       { name: 'podcast-transcription', schedule: '*/5 * * * *' },
       { name: 'tiktok-transcription', schedule: '*/2 * * * *' },

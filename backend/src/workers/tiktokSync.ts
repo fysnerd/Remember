@@ -103,7 +103,7 @@ async function extractSecUid(page: any): Promise<string | null> {
 async function fetchLikedViaEvaluate(
   page: any,
   secUid: string,
-  maxVideos: number = 35,
+  maxVideos: number = 20,
 ): Promise<TikTokVideo[]> {
   const allVideos: TikTokVideo[] = [];
   let cursor: number | string = 0;
@@ -352,7 +352,7 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
       log.info({ userId, secUid: secUid.substring(0, 20) + '...' }, 'Extracted secUid, calling API directly');
 
       // Fetch liked videos via direct API call
-      const likedVideos = await fetchLikedViaEvaluate(page, secUid, 35);
+      const likedVideos = await fetchLikedViaEvaluate(page, secUid, 20);
 
       if (likedVideos.length === 0) {
         log.warn({ userId }, 'No liked videos from API. Possible: likes private, cookies expired, or API change');
@@ -520,7 +520,7 @@ async function syncUserTikTokScroll(page: any, userId: string, connectionId: str
 
   // Scroll to load videos
   const maxScrolls = 10;
-  const maxVideos = 15;
+  const maxVideos = 20;
   for (let i = 0; i < maxScrolls && !foundExisting && likedVideos.length < maxVideos; i++) {
     const prevCount = likedVideos.length;
     await page.mouse.wheel(0, 800);

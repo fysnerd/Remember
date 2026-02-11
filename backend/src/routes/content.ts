@@ -4,6 +4,8 @@ import { authenticateToken } from '../middleware/auth.js';
 import { ContentStatus, Platform, Prisma } from '@prisma/client';
 import { processContentTranscript } from '../services/transcription.js';
 import { processPodcastTranscript } from '../services/podcastTranscription.js';
+import { processTikTokTranscript } from '../services/tiktokTranscription.js';
+import { processInstagramTranscript } from '../services/instagramTranscription.js';
 import { processContentQuiz, regenerateQuiz } from '../services/quizGeneration.js';
 import { autoTagContent } from '../services/tagging.js';
 import { syncUserYouTube } from '../workers/youtubeSync.js';
@@ -658,6 +660,20 @@ contentRouter.post('/triage/bulk', async (req: Request, res: Response, next: Nex
                   if (success) await processContentQuiz(content.id);
                 })
                 .catch((err) => log.error({ err, contentId: content.id }, 'Bulk triage podcast transcription failed'));
+              processingStarted++;
+            } else if (content.platform === Platform.TIKTOK) {
+              processTikTokTranscript(content.id)
+                .then(async (success) => {
+                  if (success) await processContentQuiz(content.id);
+                })
+                .catch((err) => log.error({ err, contentId: content.id }, 'Bulk triage tiktok transcription failed'));
+              processingStarted++;
+            } else if (content.platform === Platform.INSTAGRAM) {
+              processInstagramTranscript(content.id)
+                .then(async (success) => {
+                  if (success) await processContentQuiz(content.id);
+                })
+                .catch((err) => log.error({ err, contentId: content.id }, 'Bulk triage instagram transcription failed'));
               processingStarted++;
             }
           }
@@ -1476,6 +1492,28 @@ contentRouter.patch('/:id/triage', async (req: Request, res: Response, next: Nex
           })
           .catch((error) => {
             log.error({ err: error, contentId: id }, 'Triage podcast processing failed');
+          });
+        processingStarted = true;
+      } else if (content.platform === Platform.TIKTOK) {
+        processTikTokTranscript(id)
+          .then(async (success) => {
+            if (success) {
+              await processContentQuiz(id);
+            }
+          })
+          .catch((error) => {
+            log.error({ err: error, contentId: id }, 'Triage tiktok processing failed');
+          });
+        processingStarted = true;
+      } else if (content.platform === Platform.INSTAGRAM) {
+        processInstagramTranscript(id)
+          .then(async (success) => {
+            if (success) {
+              await processContentQuiz(id);
+            }
+          })
+          .catch((error) => {
+            log.error({ err: error, contentId: id }, 'Triage instagram processing failed');
           });
         processingStarted = true;
       }
