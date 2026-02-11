@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-10)
 
 **Core value:** L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans effort supplementaire de curation.
-**Current focus:** v2.0 Themes-first UX -- Phase 10 complete, ready for Phase 11
+**Current focus:** v2.0 Themes-first UX -- Phase 11 in progress
 
 ## Current Position
 
-Phase: 10 of 11 (Cross-Content Synthesis Quiz) -- COMPLETE
-Plan: 2 of 2 in current phase (10-02 complete)
-Status: Phase 10 Complete -- Ready for Phase 11
-Last activity: 2026-02-11 -- Completed 10-02 (iOS synthesis quiz UI: types, hooks, badge, screen)
+Phase: 11 of 11 (Theme Discovery & Onboarding)
+Plan: 1 of 2 in current phase (11-01 complete)
+Status: Executing Phase 11
+Last activity: 2026-02-11 -- Completed 11-01 (discoveredAt field, status filter, progress aggregation, discovery endpoint)
 
-Progress: [####################] 20/22 plans (v1.0 complete, v2.0 phases 5-10 complete)
+Progress: [#####################] 21/22 plans (v1.0 complete, v2.0 phases 5-10 complete, 11-01 done)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 20 (10 v1.0 + 10 v2.0)
-- Average duration: ~14 min (improving with simpler integration plans)
-- Total execution time: ~4 hours 33 min
+- Total plans completed: 21 (10 v1.0 + 11 v2.0)
+- Average duration: ~13 min (improving with simpler integration plans)
+- Total execution time: ~4 hours 38 min
 
 **By Phase:**
 
@@ -37,6 +37,7 @@ Progress: [####################] 20/22 plans (v1.0 complete, v2.0 phases 5-10 co
 | 8. Theme Quiz (Existing Cards) | 1/1 | ~3 min | ~3 min |
 | 9. Theme Memo | 1/1 | ~5 min | ~5 min |
 | 10. Cross-Content Synthesis Quiz | 2/2 | ~8 min | ~4 min |
+| 11. Theme Discovery & Onboarding | 1/2 | ~5 min | ~5 min |
 
 **Recent Trend:**
 - v1.0 completed in 2 days (10 plans, 4 phases)
@@ -48,6 +49,7 @@ Progress: [####################] 20/22 plans (v1.0 complete, v2.0 phases 5-10 co
 - v2.0 phase 10 plan 01 completed in ~5 min (schema + synthesis service + endpoint extension)
 - v2.0 phase 10 plan 02 completed in ~3 min (iOS types, hooks, QuestionCard badge, theme quiz screen)
 - v2.0 phase 10 complete in ~8 min (2 plans: backend synthesis + iOS UI)
+- v2.0 phase 11 plan 01 completed in ~5 min (discoveredAt schema + status filter + progress + discovery endpoint)
 - Trend: Accelerating (plans completing in 3-5 min)
 
 ## Accumulated Context
@@ -100,6 +102,12 @@ Recent decisions affecting current work:
 - Indigo (#6366F1) pill badge for synthesis questions matching app primary accent
 - isSynthesis defaults to false throughout chain so non-synthesis questions unchanged
 - No changes to content/topic quiz screens (synthesis only in theme quizzes)
+- discoveredAt null = pending discovery, set = user confirmed (gate pattern, simpler than status enum)
+- Mastery threshold: repetitions >= 3 (practical for early users)
+- Progress computed via single raw SQL with FILTER clauses (no N+1)
+- POST /discover registered before POST / to avoid Express path conflict
+- User-created themes set discoveredAt immediately (skip discovery flow)
+- Merge action clears memo cache and synthesis quizzes on target theme
 
 ### Pending Todos
 
@@ -114,6 +122,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Completed 10-02-PLAN.md (iOS synthesis quiz UI: types, hooks, badge, screen)
-Next step: Execute Phase 11 (final phase)
+Stopped at: Completed 11-01-PLAN.md (discoveredAt field, status filter, progress, discovery endpoint)
+Next step: Execute 11-02-PLAN.md (iOS discovery onboarding UI)
 Resume file: None
