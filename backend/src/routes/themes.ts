@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { logger } from '../config/logger.js';
-import { Platform } from '@prisma/client';
+import { Platform, Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { generateSlug } from '../utils/slug.js';
 import { generateText } from '../services/llm.js';
@@ -34,16 +34,37 @@ const addContentSchema = z.object({
   contentIds: z.array(z.string()).min(1).max(100),
 });
 
+const discoverActionSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('confirm'), themeId: z.string() }),
+  z.object({ type: z.literal('rename'), themeId: z.string(), newName: z.string().min(1).max(100).trim() }),
+  z.object({ type: z.literal('merge'), sourceThemeId: z.string(), targetThemeId: z.string() }),
+  z.object({ type: z.literal('dismiss'), themeId: z.string() }),
+]);
+
+const discoverSchema = z.object({
+  actions: z.array(discoverActionSchema).min(1).max(50),
+});
+
 // ============================================================================
-// GET / -- List user's themes with content counts
+// GET / -- List user's themes with content counts and progress
 // ============================================================================
 
 themeRouter.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.id;
+    const status = (req.query.status as string) || 'discovered';
+
+    // Build where clause based on status filter
+    const where: Prisma.ThemeWhereInput = { userId };
+    if (status === 'discovered') {
+      where.discoveredAt = { not: null };
+    } else if (status === 'pending') {
+      where.discoveredAt = null;
+    }
+    // 'all' = no discoveredAt filter
 
     const themes = await prisma.theme.findMany({
-      where: { userId },
+      where,
       include: {
         _count: {
           select: { contentThemes: true },
@@ -57,11 +78,51 @@ themeRouter.get('/', async (req: Request, res: Response, next: NextFunction) => 
       orderBy: { name: 'asc' },
     });
 
-    const result = themes.map(({ _count, themeTags, ...theme }) => ({
-      ...theme,
-      contentCount: _count.contentThemes,
-      tags: themeTags.map((tt) => ({ id: tt.tag.id, name: tt.tag.name })),
-    }));
+    // Compute per-theme progress (only for discovered/all, not pending)
+    let progressMap = new Map<string, { totalCards: number; masteredCards: number; dueCards: number; masteryPercent: number }>();
+
+    if (status !== 'pending' && themes.length > 0) {
+      const progressData = await prisma.$queryRaw<{
+        themeId: string;
+        totalCards: bigint;
+        masteredCards: bigint;
+        dueCards: bigint;
+      }[]>`
+        SELECT
+          t.id AS "themeId",
+          COALESCE(COUNT(card.id), 0) AS "totalCards",
+          COALESCE(COUNT(card.id) FILTER (WHERE card.repetitions >= 3), 0) AS "masteredCards",
+          COALESCE(COUNT(card.id) FILTER (WHERE card."nextReviewAt" <= NOW()), 0) AS "dueCards"
+        FROM "Theme" t
+        LEFT JOIN "ContentTheme" ct ON ct."themeId" = t.id
+        LEFT JOIN "Quiz" q ON q."contentId" = ct."contentId" AND q."isSynthesis" = false
+        LEFT JOIN "Card" card ON card."quizId" = q.id AND card."userId" = ${userId}
+        WHERE t."userId" = ${userId} AND t."discoveredAt" IS NOT NULL
+        GROUP BY t.id
+      `;
+
+      progressMap = new Map(progressData.map(p => [
+        p.themeId,
+        {
+          totalCards: Number(p.totalCards),
+          masteredCards: Number(p.masteredCards),
+          dueCards: Number(p.dueCards),
+          masteryPercent: Number(p.totalCards) > 0
+            ? Math.round(Number(p.masteredCards) / Number(p.totalCards) * 100)
+            : 0,
+        },
+      ]));
+    }
+
+    const result = themes.map(({ _count, themeTags, ...theme }) => {
+      const progress = progressMap.get(theme.id) || { totalCards: 0, masteredCards: 0, dueCards: 0, masteryPercent: 0 };
+      return {
+        ...theme,
+        contentCount: _count.contentThemes,
+        tags: themeTags.map((tt) => ({ id: tt.tag.id, name: tt.tag.name })),
+        ...progress,
+      };
+    });
 
     return res.json({ themes: result });
   } catch (error) {
@@ -159,6 +220,175 @@ themeRouter.get('/:id', async (req: Request, res: Response, next: NextFunction) 
 });
 
 // ============================================================================
+// POST /discover -- Bulk discovery actions (confirm/rename/merge/dismiss)
+// ============================================================================
+
+themeRouter.post('/discover', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+    const data = discoverSchema.parse(req.body);
+
+    const results: { action: string; themeId?: string; success: boolean }[] = [];
+
+    await prisma.$transaction(async (tx) => {
+      for (const action of data.actions) {
+        switch (action.type) {
+          case 'confirm': {
+            // Verify ownership
+            const theme = await tx.theme.findFirst({
+              where: { id: action.themeId, userId },
+            });
+            if (!theme) {
+              throw new Error(`Theme ${action.themeId} not found or not owned by user`);
+            }
+            await tx.theme.update({
+              where: { id: action.themeId },
+              data: { discoveredAt: new Date() },
+            });
+            results.push({ action: 'confirm', themeId: action.themeId, success: true });
+            break;
+          }
+
+          case 'rename': {
+            const theme = await tx.theme.findFirst({
+              where: { id: action.themeId, userId },
+            });
+            if (!theme) {
+              throw new Error(`Theme ${action.themeId} not found or not owned by user`);
+            }
+            const newSlug = generateSlug(action.newName);
+            // Check slug uniqueness (exclude current theme)
+            const existing = await tx.theme.findFirst({
+              where: { userId, slug: newSlug, id: { not: action.themeId } },
+            });
+            if (existing) {
+              throw new Error(`A theme with name similar to "${action.newName}" already exists`);
+            }
+            await tx.theme.update({
+              where: { id: action.themeId },
+              data: { name: action.newName, slug: newSlug, discoveredAt: new Date() },
+            });
+            results.push({ action: 'rename', themeId: action.themeId, success: true });
+            break;
+          }
+
+          case 'merge': {
+            // Verify both themes belong to user
+            const [source, target] = await Promise.all([
+              tx.theme.findFirst({ where: { id: action.sourceThemeId, userId } }),
+              tx.theme.findFirst({ where: { id: action.targetThemeId, userId } }),
+            ]);
+            if (!source) {
+              throw new Error(`Source theme ${action.sourceThemeId} not found or not owned by user`);
+            }
+            if (!target) {
+              throw new Error(`Target theme ${action.targetThemeId} not found or not owned by user`);
+            }
+
+            // Move ContentTheme records from source to target (upsert to skip duplicates)
+            const sourceContentThemes = await tx.contentTheme.findMany({
+              where: { themeId: action.sourceThemeId },
+            });
+            for (const ct of sourceContentThemes) {
+              await tx.contentTheme.upsert({
+                where: { contentId_themeId: { contentId: ct.contentId, themeId: action.targetThemeId } },
+                create: { contentId: ct.contentId, themeId: action.targetThemeId, assignedBy: ct.assignedBy },
+                update: {}, // already exists, no-op
+              });
+            }
+
+            // Move ThemeTag records from source to target (upsert to skip duplicates)
+            const sourceThemeTags = await tx.themeTag.findMany({
+              where: { themeId: action.sourceThemeId },
+            });
+            for (const tt of sourceThemeTags) {
+              await tx.themeTag.upsert({
+                where: { themeId_tagId: { themeId: action.targetThemeId, tagId: tt.tagId } },
+                create: { themeId: action.targetThemeId, tagId: tt.tagId },
+                update: {}, // already exists, no-op
+              });
+            }
+
+            // Delete synthesis quizzes from source
+            await tx.quiz.deleteMany({
+              where: { themeId: action.sourceThemeId, isSynthesis: true },
+            });
+
+            // Delete source theme (cascades ContentTheme, ThemeTag, non-synthesis Quiz)
+            await tx.theme.delete({
+              where: { id: action.sourceThemeId },
+            });
+
+            // Confirm target and clear memo cache
+            await tx.theme.update({
+              where: { id: action.targetThemeId },
+              data: { discoveredAt: new Date(), memo: null, memoGeneratedAt: null },
+            });
+
+            results.push({ action: 'merge', themeId: action.targetThemeId, success: true });
+            break;
+          }
+
+          case 'dismiss': {
+            const theme = await tx.theme.findFirst({
+              where: { id: action.themeId, userId },
+            });
+            if (!theme) {
+              throw new Error(`Theme ${action.themeId} not found or not owned by user`);
+            }
+            await tx.theme.delete({
+              where: { id: action.themeId },
+            });
+            results.push({ action: 'dismiss', themeId: action.themeId, success: true });
+            break;
+          }
+        }
+      }
+    });
+
+    // Fetch updated discovered themes for user
+    const themes = await prisma.theme.findMany({
+      where: { userId, discoveredAt: { not: null } },
+      include: {
+        _count: {
+          select: { contentThemes: true },
+        },
+        themeTags: {
+          include: {
+            tag: true,
+          },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    const themeResult = themes.map(({ _count, themeTags, ...theme }) => ({
+      ...theme,
+      contentCount: _count.contentThemes,
+      tags: themeTags.map((tt) => ({ id: tt.tag.id, name: tt.tag.name })),
+    }));
+
+    log.info({ userId, actions: results.length, results }, 'Theme discovery actions processed');
+
+    return res.json({ themes: themeResult, results });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: error.errors,
+      });
+    }
+    if (error instanceof Error && error.message.includes('not found')) {
+      return res.status(404).json({ error: error.message });
+    }
+    if (error instanceof Error && error.message.includes('already exists')) {
+      return res.status(409).json({ error: error.message });
+    }
+    return next(error);
+  }
+});
+
+// ============================================================================
 // POST / -- Create theme
 // ============================================================================
 
@@ -193,6 +423,7 @@ themeRouter.post('/', async (req: Request, res: Response, next: NextFunction) =>
         userId,
         name: data.name,
         slug,
+        discoveredAt: new Date(), // User-created themes are immediately discovered
         ...(data.color && { color: data.color }),
         ...(data.emoji && { emoji: data.emoji }),
       },
