@@ -37,7 +37,22 @@ L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans eff
 
 ### Active
 
-(None -- next milestone not yet defined. Run `/gsd:new-milestone` to start.)
+#### Current Milestone: v3.0 Night Blue Glass UI
+
+**Goal:** Complete visual transformation with premium design system, screen restructure, and Glass UI components.
+
+- [ ] Night Blue color palette + Soft Gold accent across all screens
+- [ ] Geist font family replacing system font
+- [ ] Glass UI reusable components (GlassCard, GlassButton, GlassSurface, GlassInput)
+- [ ] Lucide Icons replacing emoji
+- [ ] Home screen: 3 daily themes in glass cards (smart rotation)
+- [ ] Explorer screen: Suggestions tab (8 AI-generated) + Library tab (filters/search)
+- [ ] Revisions screen: revision cards with category filter + full-text search
+- [ ] Profile screen: user info + settings
+- [ ] Backend: daily subjects selection endpoint
+- [ ] Backend: AI theme suggestions endpoint (8 suggestions via Mistral)
+- [ ] Visual freemium indicators (lock/overlay UI, no payment wiring)
+- [ ] Micro-interactions: transitions 200-300ms, loading animations, progress feedback
 
 ### Out of Scope
 
@@ -49,6 +64,12 @@ L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans eff
 - Hierarchical/nested themes -- Prisma lacks recursive queries, 5-15 themes not enough for hierarchy
 - Vector database for classification -- tag space too small, LLM simpler
 - Theme-specific SM-2 schedules -- SM-2 per-card, overriding fights the algorithm
+- Onboarding flow (11 steps) -- deferred to v3.1
+- Apple/Google Sign-In + Magic Links -- deferred to v3.1 (add alongside email/password)
+- RevenueCat payment integration -- deferred to v3.1 (visual freemium in v3.0)
+- Push notifications -- deferred to v3.1 (onboarding permission prompt)
+- Gamification (streaks, badges, levels) -- post-MVP
+- A/B testing (paywall, trial) -- post-MVP
 
 ## Context
 
@@ -60,6 +81,9 @@ Shipped v2.0 with ~14,000 LOC across backend + iOS.
 Theme system: 3 new Prisma models (Theme, ContentTheme, ThemeTag), 15+ new API endpoints, 8 new iOS screens.
 Workers: 15 cron jobs including theme classification at */15 schedule.
 Quiz system: per-content + cross-content synthesis questions, 20-card cap per session.
+
+v3.0 design direction: Night Blue dark mode (#0a0f1a), Glass UI surfaces (expo-blur), Soft Gold accent (#D4A574), Geist typography, Lucide icons. Current UI is light monochrome with system fonts and emoji icons -- full visual overhaul.
+Linear issues: REM-137 (design system + screens), REM-136 (onboarding, deferred to v3.1).
 
 ## Key Decisions
 
@@ -79,6 +103,11 @@ Quiz system: per-content + cross-content synthesis questions, 20-card cap per se
 | discoveredAt gate (not status enum) | Simpler schema, nullable DateTime sufficient | ✓ Good |
 | Zod validation on theme routes | Consistent with existing project patterns | ✓ Good |
 | 24h memo caching on model fields | Avoid separate cache table, lazy invalidation | ✓ Good |
+| Night Blue + Soft Gold palette | Premium feel, warm contrast against dark blue | — Pending |
+| Geist font (expo-font) | Modern, clean typography, Google Fonts available | — Pending |
+| Glass UI via expo-blur | Native blur, no SwiftUI dependency, OTA-compatible | — Pending |
+| Lucide Icons | Consistent line icons, better than emoji for Glass UI | — Pending |
+| REM-137 first, REM-136 deferred | Design system foundation before onboarding/payment | — Pending |
 
 ## Constraints
 
@@ -89,4 +118,4 @@ Quiz system: per-content + cross-content synthesis questions, 20-card cap per se
 - **Existing tags**: Themes derive from tags, both coexist
 
 ---
-*Last updated: 2026-02-11 after v2.0 milestone*
+*Last updated: 2026-02-11 after v3.0 milestone start*

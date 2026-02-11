@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-11)
 
 **Core value:** L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans effort supplementaire de curation.
-**Current focus:** Planning next milestone
+**Current focus:** v3.0 Night Blue Glass UI
 
 ## Current Position
 
-Phase: None active (between milestones)
-Plan: N/A
-Status: v2.0 Themes-first UX shipped, planning next milestone
-Last activity: 2026-02-11 -- v2.0 milestone archived
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements for v3.0
+Last activity: 2026-02-11 — Milestone v3.0 started
 
-Progress: [######################] 22/22 plans (v1.0 + v2.0 complete)
+Progress: [░░░░░░░░░░] 0/? plans (v3.0)
 
 ## Performance Metrics
 
@@ -41,6 +41,6 @@ None active.
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: v2.0 milestone archived
-Next step: /gsd:new-milestone to define v3.0 scope
+Stopped at: Milestone v3.0 started, defining requirements
+Next step: Research → Requirements → Roadmap
 Resume file: None
