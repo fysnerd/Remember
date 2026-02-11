@@ -2,6 +2,7 @@
 // Uses yt-dlp (primary) for robust subtitle extraction including auto-generated captions
 // Uses global TranscriptCache to avoid redundant calls across users
 import { logger } from '../config/logger.js';
+import { config } from '../config/env.js';
 import { prisma } from '../config/database.js';
 import { ContentStatus, TranscriptSource, TranscriptCacheStatus, Platform } from '@prisma/client';
 import { exec } from 'child_process';
@@ -89,9 +90,10 @@ export async function fetchYouTubeTranscriptWithYtDlp(
 
     try {
       // Download auto-generated subtitles in JSON3 format
-      // Use WARP proxy (socks5://127.0.0.1:40000) to avoid YouTube datacenter IP blocking
+      // Use proxy (configurable via YTDLP_PROXY env var) to avoid YouTube datacenter IP blocking
       // Use --remote-components ejs:github for JS challenge solving
-      const command = `yt-dlp --proxy socks5://127.0.0.1:40000 --remote-components ejs:github --write-auto-sub --sub-lang "${lang}" --sub-format json3 --skip-download -o "${outputBase}" "https://www.youtube.com/watch?v=${videoId}"`;
+      const proxyArg = config.ytdlp.proxy ? `--proxy ${config.ytdlp.proxy} ` : '';
+      const command = `yt-dlp ${proxyArg}--remote-components ejs:github --write-auto-sub --sub-lang "${lang}" --sub-format json3 --skip-download -o "${outputBase}" "https://www.youtube.com/watch?v=${videoId}"`;
 
       log.debug({ videoId, lang }, 'Downloading subtitles with yt-dlp');
       await execAsync(command, { timeout: 60000 });

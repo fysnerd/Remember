@@ -194,6 +194,7 @@ model Content {
 
   @@unique([userId, platform, externalId])
   @@index([userId])
+  @@index([userId, status])
   @@index([status])
   @@index([platform, status])
 }
@@ -331,6 +332,7 @@ model Card {
 
   @@unique([quizId, userId])
   @@index([userId, nextReviewAt])
+  @@index([userId, repetitions])
 }
 
 model Review {

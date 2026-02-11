@@ -479,12 +479,24 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
     log.info({ contentId, questionCount: result.questions.length, title: content.title }, 'Quiz generation completed');
     return true;
 
-  } catch (error) {
-    log.error({ err: error, contentId }, 'Error generating quiz');
-    await prisma.content.update({
-      where: { id: contentId },
-      data: { status: ContentStatus.FAILED },
-    });
+  } catch (error: any) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    const isTransient = /429|rate.limit|timeout|ECONNRESET|ECONNREFUSED|ETIMEDOUT|503|502|socket hang up/i.test(errorMsg);
+
+    if (isTransient) {
+      // Revert to SELECTED so the cron worker retries on next run
+      log.warn({ err: error, contentId }, 'Transient error during quiz generation, will retry');
+      await prisma.content.update({
+        where: { id: contentId },
+        data: { status: ContentStatus.SELECTED },
+      });
+    } else {
+      log.error({ err: error, contentId }, 'Permanent error generating quiz');
+      await prisma.content.update({
+        where: { id: contentId },
+        data: { status: ContentStatus.FAILED },
+      });
+    }
     return false;
   }
 }

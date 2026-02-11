@@ -73,6 +73,9 @@ const envSchema = z.object({
   // Admin panel
   ADMIN_EMAIL: z.string().email().optional(),
   ADMIN_PASSWORD: z.string().min(8).optional(),
+
+  // yt-dlp proxy (e.g. socks5://127.0.0.1:40000 for Cloudflare WARP)
+  YTDLP_PROXY: z.string().optional(),
 });
 
 // Parse and validate
@@ -167,5 +170,9 @@ export const config = {
   admin: {
     email: env.ADMIN_EMAIL || '',
     password: env.ADMIN_PASSWORD || '',
+  },
+
+  ytdlp: {
+    proxy: env.YTDLP_PROXY || '',
   },
 } as const;
