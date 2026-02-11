@@ -9,6 +9,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Text, Card, Button } from '../../components/ui';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
+import { Inbox } from 'lucide-react-native';
 import { useThemeDetail } from '../../hooks';
 import { colors, spacing } from '../../theme';
 
@@ -100,7 +101,7 @@ export default function ThemeDetailScreen() {
 
         {/* Content List */}
         {contents.length === 0 ? (
-          <EmptyState message="Aucun contenu dans ce theme" icon="📭" />
+          <EmptyState message="Aucun contenu dans ce theme" icon={Inbox} />
         ) : (
           <View style={styles.list}>
             {contents.map((item) => (

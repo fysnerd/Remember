@@ -11,6 +11,7 @@ import { Text, Badge } from '../../components/ui';
 import { ContentCard, FilterBar, SourcePills, SelectionBar } from '../../components/content';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
+import { BookOpen, Search, Sparkles } from 'lucide-react-native';
 import { useContentList, useInbox, useInboxCount, useTriageMutation, useTopics, useChannels } from '../../hooks';
 import { useContentStore } from '../../stores/contentStore';
 import { colors, spacing, borderRadius, shadows } from '../../theme';
@@ -211,7 +212,7 @@ export default function LibraryScreen() {
                 ))}
               </View>
             ) : (
-              <EmptyState message="Aucun contenu dans votre collection" icon="📚" hasHeader />
+              <EmptyState message="Aucun contenu dans votre collection" icon={BookOpen} hasHeader />
             )
           ) : filteredInboxItems?.length ? (
             <>
@@ -238,9 +239,9 @@ export default function LibraryScreen() {
               </View>
             </>
           ) : inboxSourceFilter !== 'all' && inboxItems?.length ? (
-            <EmptyState message={`Aucun contenu ${inboxSourceFilter === 'youtube' ? 'YouTube' : inboxSourceFilter === 'spotify' ? 'Spotify' : inboxSourceFilter === 'tiktok' ? 'TikTok' : 'Instagram'} à trier`} icon="🔍" hasHeader />
+            <EmptyState message={`Aucun contenu ${inboxSourceFilter === 'youtube' ? 'YouTube' : inboxSourceFilter === 'spotify' ? 'Spotify' : inboxSourceFilter === 'tiktok' ? 'TikTok' : 'Instagram'} à trier`} icon={Search} hasHeader />
           ) : (
-            <EmptyState message="Rien à trier pour le moment" icon="✨" hasHeader />
+            <EmptyState message="Rien à trier pour le moment" icon={Sparkles} hasHeader />
           )}
         </ScrollView>
       )}

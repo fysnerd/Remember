@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { Text, Card } from '../../components/ui';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
+import { FileText } from 'lucide-react-native';
 import { useCompletedItems } from '../../hooks';
 import { colors, spacing } from '../../theme';
 
@@ -35,7 +36,7 @@ export default function ReviewsScreen() {
     return (
       <EmptyState
         message="Aucun mémo disponible. Faites un quiz pour débloquer les mémos !"
-        icon="📝"
+        icon={FileText}
         hasHeader
       />
     );

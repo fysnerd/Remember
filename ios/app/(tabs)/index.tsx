@@ -9,6 +9,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Text, Card } from '../../components/ui';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
+import { Link } from 'lucide-react-native';
 import { ThemeCard } from '../../components/ThemeCard';
 import { useThemes, usePendingThemes, useContentList } from '../../hooks';
 import { colors, spacing, borderRadius } from '../../theme';
@@ -58,7 +59,7 @@ export default function FeedScreen() {
   const suggestions = contentData?.items?.slice(0, 5) ?? [];
 
   if (themeList.length === 0 && suggestions.length === 0) {
-    return <EmptyState message="Connectez vos plateformes pour voir du contenu" icon="🔗" hasHeader />;
+    return <EmptyState message="Connectez vos plateformes pour voir du contenu" icon={Link} hasHeader />;
   }
 
   return (

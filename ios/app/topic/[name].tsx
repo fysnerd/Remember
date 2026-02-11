@@ -7,6 +7,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Text, Card, Button } from '../../components/ui';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
+import { Inbox } from 'lucide-react-native';
 import { useContentList } from '../../hooks';
 import { colors, spacing } from '../../theme';
 
@@ -56,7 +57,7 @@ export default function TopicScreen() {
       />
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         {items.length === 0 ? (
-          <EmptyState message={'Aucun contenu pour "' + decodedName + '"'} icon="📭" hasHeader />
+          <EmptyState message={'Aucun contenu pour "' + decodedName + '"'} icon={Inbox} hasHeader />
         ) : (
           <>
             <View style={styles.list}>
