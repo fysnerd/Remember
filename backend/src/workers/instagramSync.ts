@@ -112,29 +112,17 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
     });
 
     await context.addCookies(playwrightCookies);
-    const page = await context.newPage();
 
-    // Navigate to i.instagram.com (mobile domain) to establish session
-    log.debug({ userId }, 'Navigating to Instagram');
-    await page.waitForTimeout(1000 + Math.random() * 2000);
-    await page.goto('https://i.instagram.com/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.waitForTimeout(3000 + Math.random() * 2000);
+    // Anti-detection jitter: random 5-30s delay before API call
+    // Makes the timing organic (not instant after app open)
+    const jitterMs = 5000 + Math.random() * 25000;
+    log.debug({ userId, jitterMs: Math.round(jitterMs) }, 'Applying jitter before Instagram API call');
+    await new Promise(resolve => setTimeout(resolve, jitterMs));
 
-    // Check if logged in
-    if (page.url().includes('/accounts/login')) {
-      log.error({ userId }, 'Cookies expired for user');
-      await browser.close();
-      await prisma.connectedPlatform.update({
-        where: { id: connectionId },
-        data: { lastSyncError: 'Session expired. Please reconnect.' },
-      });
-      return 0;
-    }
+    // Call API directly without page navigation (avoids Instagram tracking JS)
+    // context.request sends browser cookies but with our own headers
+    log.debug({ userId }, 'Fetching liked posts via API (no page navigation)');
 
-    log.debug({ userId }, 'Session valid, fetching liked posts via Playwright API request');
-
-    // Use context.request: sends cookies from browser context but with our own headers
-    // This avoids the UA mismatch from page.evaluate's browser-controlled fetch
     const response = await context.request.get('https://i.instagram.com/api/v1/feed/liked/', {
       headers: {
         'User-Agent': 'Barcelona 289.0.0.77.109 Android',
@@ -145,10 +133,29 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
     });
 
     const apiResult: { error: string | null; items: any[] } = { error: null, items: [] };
+    const statusCode = response.status();
 
-    if (!response.ok()) {
+    if (statusCode === 401 || statusCode === 403) {
+      // Session expired — mark connection and bail
+      log.warn({ userId, statusCode }, 'Session expired (auth error from API)');
+      await browser.close();
+      await prisma.connectedPlatform.update({
+        where: { id: connectionId },
+        data: { lastSyncError: 'Session expired. Please reconnect.' },
+      });
+      return 0;
+    } else if (statusCode === 429) {
+      // Rate limited — skip this sync silently
+      log.warn({ userId }, 'Rate limited by Instagram (429), skipping');
+      await browser.close();
+      await prisma.connectedPlatform.update({
+        where: { id: connectionId },
+        data: { lastSyncError: 'Rate limited. Will retry later.' },
+      });
+      return 0;
+    } else if (!response.ok()) {
       const text = await response.text().catch(() => '');
-      apiResult.error = `API error ${response.status()}: ${text.substring(0, 200)}`;
+      apiResult.error = `API error ${statusCode}: ${text.substring(0, 200)}`;
     } else {
       const data = await response.json();
       apiResult.items = data.items || [];

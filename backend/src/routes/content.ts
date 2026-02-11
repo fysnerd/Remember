@@ -36,7 +36,8 @@ contentRouter.use(authenticateToken);
 contentRouter.post('/refresh', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.id;
-    const COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+    const COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes (YouTube, Spotify, TikTok)
+    const IG_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes (Instagram — anti-ban)
     const now = new Date();
 
     // Get all connected platforms for this user
@@ -55,7 +56,8 @@ contentRouter.post('/refresh', async (req: Request, res: Response, next: NextFun
     // Filter out platforms that were synced recently (cooldown)
     const eligibleConnections = connections.filter((c) => {
       if (!c.lastSyncAt) return true; // Never synced → eligible
-      return now.getTime() - c.lastSyncAt.getTime() >= COOLDOWN_MS;
+      const cooldown = c.platform === Platform.INSTAGRAM ? IG_COOLDOWN_MS : COOLDOWN_MS;
+      return now.getTime() - c.lastSyncAt.getTime() >= cooldown;
     });
 
     const skippedPlatforms = connections

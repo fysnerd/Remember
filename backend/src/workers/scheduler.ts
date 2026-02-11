@@ -97,11 +97,9 @@ export function startScheduler(): void {
     await runJob('tiktok-transcription', runTikTokTranscriptionWorker);
   });
 
-  // Instagram Sync - Every 30 minutes (Playwright browser automation)
-  cron.schedule('*/30 * * * *', async () => {
-    log.info({ job: 'instagram-sync' }, 'Triggering scheduled job');
-    await runJob('instagram-sync', runInstagramSync);
-  });
+  // Instagram Sync - DISABLED (on-demand only via /content/refresh)
+  // Cron from datacenter causes Instagram ban warnings. Now syncs only when user opens the app.
+  // Manual trigger via POST /api/admin/sync/all { job: 'instagram' } still works.
 
   // Instagram Transcription Worker - Every 2 minutes (optimized)
   // Processes pending Instagram transcriptions (via yt-dlp + Whisper)
@@ -151,7 +149,7 @@ export function startScheduler(): void {
       { name: 'youtube-sync', schedule: '*/15 * * * *' },
       { name: 'spotify-sync', schedule: '*/30 * * * *' },
       { name: 'tiktok-sync', schedule: '*/30 * * * *' },
-      { name: 'instagram-sync', schedule: '*/30 * * * *' },
+      { name: 'instagram-sync', schedule: 'DISABLED (on-demand only)' },
       { name: 'youtube-transcription', schedule: '*/2 * * * *' },
       { name: 'podcast-transcription', schedule: '*/5 * * * *' },
       { name: 'tiktok-transcription', schedule: '*/2 * * * *' },
@@ -273,7 +271,7 @@ export function getSchedulerStatus(): {
       { name: 'youtube-sync', schedule: '*/15 * * * *' },
       { name: 'spotify-sync', schedule: '*/30 * * * *' },
       { name: 'tiktok-sync', schedule: '*/30 * * * *' },
-      { name: 'instagram-sync', schedule: '*/30 * * * *' },
+      { name: 'instagram-sync', schedule: 'DISABLED (on-demand only)' },
       { name: 'youtube-transcription', schedule: '*/2 * * * *' },
       { name: 'podcast-transcription', schedule: '*/5 * * * *' },
       { name: 'tiktok-transcription', schedule: '*/2 * * * *' },
