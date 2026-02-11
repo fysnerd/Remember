@@ -41,6 +41,7 @@ export interface Question {
   options: { id: string; text: string }[];
   correctAnswer: string;
   explanation: string;
+  isSynthesis?: boolean;
 }
 
 export interface Quiz {

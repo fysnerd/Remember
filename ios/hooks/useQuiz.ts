@@ -18,7 +18,9 @@ interface BackendCard {
     content: {
       id: string;
       title: string;
-    };
+    } | null;
+    isSynthesis?: boolean;
+    theme?: { id: string; name: string };
   };
 }
 
@@ -75,6 +77,7 @@ function transformCardsToQuiz(cards: BackendCard[], contentId: string): Quiz {
       options,
       correctAnswer: card.quiz.correctAnswer,
       explanation: card.quiz.explanation || '',
+      isSynthesis: card.quiz.isSynthesis || false,
     };
   });
 
@@ -126,6 +129,8 @@ interface ThemePracticeResponse {
   count: number;
   theme: { id: string; name: string; emoji: string };
   contentCount: number;
+  hasSynthesis?: boolean;
+  synthesisCount?: number;
 }
 
 // Get quiz for a theme (mixed questions from all contents in that theme)
@@ -136,7 +141,13 @@ export function useThemeQuiz(themeId: string) {
       const { data } = await api.post<ThemePracticeResponse>('/reviews/practice/theme', { themeId });
       console.log('[useThemeQuiz] Got', data.count, 'cards from', data.contentCount, 'contents');
       const quiz = transformCardsToQuiz(data.cards, `theme:${themeId}`);
-      return { ...quiz, theme: data.theme, contentCount: data.contentCount };
+      return {
+        ...quiz,
+        theme: data.theme,
+        contentCount: data.contentCount,
+        hasSynthesis: data.hasSynthesis || false,
+        synthesisCount: data.synthesisCount || 0,
+      };
     },
     enabled: !!themeId,
   });
