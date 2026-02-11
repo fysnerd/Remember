@@ -382,6 +382,8 @@ model Theme {
   slug          String
   color         String         @default("#6366F1")
   emoji         String         @default("📚")
+  memo          String?
+  memoGeneratedAt DateTime?
   contentThemes ContentTheme[]
   themeTags     ThemeTag[]
   createdAt     DateTime       @default(now())

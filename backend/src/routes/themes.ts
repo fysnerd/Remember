@@ -5,12 +5,14 @@ import { logger } from '../config/logger.js';
 import { Platform } from '@prisma/client';
 import { z } from 'zod';
 import { generateSlug } from '../utils/slug.js';
+import { generateText } from '../services/llm.js';
 
 const log = logger.child({ route: 'themes' });
 export const themeRouter = Router();
 themeRouter.use(authenticateToken);
 
 const MAX_THEMES_PER_USER = 25;
+const MEMO_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 // ============================================================================
 // Zod Validation Schemas
@@ -344,6 +346,12 @@ themeRouter.post('/:id/content', async (req: Request, res: Response, next: NextF
       skipDuplicates: true,
     });
 
+    // Clear cached memo so next view triggers fresh generation
+    await prisma.theme.update({
+      where: { id: themeId },
+      data: { memo: null, memoGeneratedAt: null },
+    });
+
     log.info({ userId, themeId, added: result.count }, 'Content added to theme');
 
     return res.json({
@@ -385,7 +393,208 @@ themeRouter.delete('/:id/content/:contentId', async (req: Request, res: Response
       where: { themeId, contentId },
     });
 
+    // Clear cached memo so next view triggers fresh generation
+    await prisma.theme.update({
+      where: { id: themeId },
+      data: { memo: null, memoGeneratedAt: null },
+    });
+
     return res.json({ message: 'Content removed from theme' });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// ============================================================================
+// GET /:id/memo -- Get or generate theme synthesis memo (24h cache)
+// ============================================================================
+
+themeRouter.get('/:id/memo', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+    const themeId = req.params.id as string;
+
+    // Look up theme with ownership check
+    const theme = await prisma.theme.findFirst({
+      where: { id: themeId, userId },
+    });
+
+    if (!theme) {
+      return res.status(404).json({ error: 'Theme not found' });
+    }
+
+    // Cache check: memo exists and is less than 24h old
+    if (theme.memo && theme.memoGeneratedAt) {
+      const age = Date.now() - new Date(theme.memoGeneratedAt).getTime();
+      if (age < MEMO_TTL_MS) {
+        // Count content items for response
+        const contentCount = await prisma.contentTheme.count({ where: { themeId } });
+        log.info({ themeId, cached: true, ageHours: Math.round(age / 3600000) }, 'Theme memo cache hit');
+        return res.json({
+          memo: theme.memo,
+          themeName: theme.name,
+          contentCount,
+          generatedAt: theme.memoGeneratedAt.toISOString(),
+          cached: true,
+        });
+      }
+    }
+
+    log.info({ themeId, cached: false }, 'Theme memo cache miss, generating');
+
+    // Query content items in theme via ContentTheme join
+    const contents = await prisma.content.findMany({
+      where: {
+        userId,
+        status: 'READY',
+        contentThemes: { some: { themeId } },
+      },
+      include: {
+        transcript: true,
+      },
+      orderBy: { capturedAt: 'desc' },
+      take: 15, // Cap at 15 memos for LLM prompt size
+    });
+
+    // Collect per-content memos from transcript.segments.memo
+    const contentMemos: string[] = [];
+    for (const content of contents) {
+      const transcriptMeta = content.transcript?.segments as any;
+      if (transcriptMeta?.memo) {
+        contentMemos.push(`**${content.title}**\n${transcriptMeta.memo}`);
+      }
+    }
+
+    if (contentMemos.length === 0) {
+      return res.status(400).json({
+        error: 'Aucun memo disponible pour les contenus de ce theme.',
+        hint: 'Les memos sont generes lors du traitement des quiz.',
+      });
+    }
+
+    // Build synthesis prompt (400 word max, French, following topic memo pattern)
+    const systemPrompt = `Tu es un assistant d'apprentissage expert. A partir des memos individuels fournis, cree un memo de synthese pour le theme "${theme.name}".
+Le memo doit:
+- Synthetiser les points cles communs et complementaires
+- Organiser les concepts de maniere logique et hierarchique
+- Etre structure en sections avec des bullet points
+- Mettre en evidence les connexions entre les differents contenus
+- Faire maximum 400 mots
+- Etre entierement en francais`;
+
+    const userPrompt = `Theme: ${theme.name}
+Nombre de contenus: ${contentMemos.length}
+
+Memos individuels:
+${contentMemos.join('\n\n---\n\n')}
+
+Genere un memo de synthese pour ce theme.`;
+
+    const synthesized = await generateText(userPrompt, { system: systemPrompt, temperature: 0.7 });
+
+    // Cache result in Theme row
+    const now = new Date();
+    await prisma.theme.update({
+      where: { id: themeId },
+      data: { memo: synthesized, memoGeneratedAt: now },
+    });
+
+    return res.json({
+      memo: synthesized,
+      themeName: theme.name,
+      contentCount: contentMemos.length,
+      generatedAt: now.toISOString(),
+      cached: false,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// ============================================================================
+// POST /:id/memo/refresh -- Force-refresh theme synthesis memo
+// ============================================================================
+
+themeRouter.post('/:id/memo/refresh', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+    const themeId = req.params.id as string;
+
+    // Look up theme with ownership check
+    const theme = await prisma.theme.findFirst({
+      where: { id: themeId, userId },
+    });
+
+    if (!theme) {
+      return res.status(404).json({ error: 'Theme not found' });
+    }
+
+    log.info({ themeId }, 'Theme memo force-refresh requested');
+
+    // Query content items in theme via ContentTheme join (always regenerate, bypass cache)
+    const contents = await prisma.content.findMany({
+      where: {
+        userId,
+        status: 'READY',
+        contentThemes: { some: { themeId } },
+      },
+      include: {
+        transcript: true,
+      },
+      orderBy: { capturedAt: 'desc' },
+      take: 15,
+    });
+
+    // Collect per-content memos
+    const contentMemos: string[] = [];
+    for (const content of contents) {
+      const transcriptMeta = content.transcript?.segments as any;
+      if (transcriptMeta?.memo) {
+        contentMemos.push(`**${content.title}**\n${transcriptMeta.memo}`);
+      }
+    }
+
+    if (contentMemos.length === 0) {
+      return res.status(400).json({
+        error: 'Aucun memo disponible pour les contenus de ce theme.',
+        hint: 'Les memos sont generes lors du traitement des quiz.',
+      });
+    }
+
+    // Build synthesis prompt
+    const systemPrompt = `Tu es un assistant d'apprentissage expert. A partir des memos individuels fournis, cree un memo de synthese pour le theme "${theme.name}".
+Le memo doit:
+- Synthetiser les points cles communs et complementaires
+- Organiser les concepts de maniere logique et hierarchique
+- Etre structure en sections avec des bullet points
+- Mettre en evidence les connexions entre les differents contenus
+- Faire maximum 400 mots
+- Etre entierement en francais`;
+
+    const userPrompt = `Theme: ${theme.name}
+Nombre de contenus: ${contentMemos.length}
+
+Memos individuels:
+${contentMemos.join('\n\n---\n\n')}
+
+Genere un memo de synthese pour ce theme.`;
+
+    const synthesized = await generateText(userPrompt, { system: systemPrompt, temperature: 0.7 });
+
+    // Save to cache
+    const now = new Date();
+    await prisma.theme.update({
+      where: { id: themeId },
+      data: { memo: synthesized, memoGeneratedAt: now },
+    });
+
+    return res.json({
+      memo: synthesized,
+      themeName: theme.name,
+      contentCount: contentMemos.length,
+      generatedAt: now.toISOString(),
+      regenerated: true,
+    });
   } catch (error) {
     return next(error);
   }
