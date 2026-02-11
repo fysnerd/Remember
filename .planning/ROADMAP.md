@@ -115,11 +115,11 @@ Plans:
   1. Theme quiz includes synthesis questions that explicitly reference or connect concepts from 2+ different content items in the theme
   2. Synthesis questions are distinguishable from single-content questions (tagged or labeled so the user can see they test cross-content understanding)
   3. Answering a synthesis question correctly requires knowledge that spans at least 2 different source content items (not answerable from one source alone)
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 10-01: Synthesis question generation (prompt engineering, memo aggregation, Quiz scope THEME)
-- [ ] 10-02: iOS integration (synthesis questions in theme quiz flow, visual distinction)
+- [ ] 10-01-PLAN.md -- Backend schema changes (Quiz model extension), synthesis question generation service, theme quiz endpoint extension, cache invalidation
+- [ ] 10-02-PLAN.md -- iOS type updates, hook changes, QuestionCard synthesis badge, theme quiz screen integration
 
 ### Phase 11: Theme Discovery & Onboarding
 **Goal**: First-time users review and refine AI-generated themes before committing, and all users can see their learning progress per theme
