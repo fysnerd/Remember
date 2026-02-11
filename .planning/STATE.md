@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-10)
 
 **Core value:** L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans effort supplementaire de curation.
-**Current focus:** v2.0 Themes-first UX -- Phase 10 in progress (plan 01 complete)
+**Current focus:** v2.0 Themes-first UX -- Phase 10 complete, ready for Phase 11
 
 ## Current Position
 
-Phase: 10 of 11 (Cross-Content Synthesis Quiz)
-Plan: 1 of 2 in current phase (10-01 complete)
-Status: Executing Phase 10
-Last activity: 2026-02-11 -- Completed 10-01 (Synthesis quiz backend: schema + service + endpoint)
+Phase: 10 of 11 (Cross-Content Synthesis Quiz) -- COMPLETE
+Plan: 2 of 2 in current phase (10-02 complete)
+Status: Phase 10 Complete -- Ready for Phase 11
+Last activity: 2026-02-11 -- Completed 10-02 (iOS synthesis quiz UI: types, hooks, badge, screen)
 
-Progress: [###################░] 19/22 plans (v1.0 complete, v2.0 phases 5-9 complete, phase 10 plan 01 done)
+Progress: [####################] 20/22 plans (v1.0 complete, v2.0 phases 5-10 complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 19 (10 v1.0 + 9 v2.0)
+- Total plans completed: 20 (10 v1.0 + 10 v2.0)
 - Average duration: ~14 min (improving with simpler integration plans)
 - Total execution time: ~4 hours 33 min
 
@@ -36,7 +36,7 @@ Progress: [###################░] 19/22 plans (v1.0 complete, v2.0 phases 5-9 c
 | 7. iOS Theme Screens | 2/2 | ~7 min | ~3.5 min |
 | 8. Theme Quiz (Existing Cards) | 1/1 | ~3 min | ~3 min |
 | 9. Theme Memo | 1/1 | ~5 min | ~5 min |
-| 10. Cross-Content Synthesis Quiz | 1/2 | ~5 min | ~5 min |
+| 10. Cross-Content Synthesis Quiz | 2/2 | ~8 min | ~4 min |
 
 **Recent Trend:**
 - v1.0 completed in 2 days (10 plans, 4 phases)
@@ -46,6 +46,8 @@ Progress: [###################░] 19/22 plans (v1.0 complete, v2.0 phases 5-9 c
 - v2.0 phase 8 completed in ~3 min (1 plan: theme quiz API + iOS screen)
 - v2.0 phase 9 completed in ~5 min (1 plan: theme memo API + iOS screen)
 - v2.0 phase 10 plan 01 completed in ~5 min (schema + synthesis service + endpoint extension)
+- v2.0 phase 10 plan 02 completed in ~3 min (iOS types, hooks, QuestionCard badge, theme quiz screen)
+- v2.0 phase 10 complete in ~8 min (2 plans: backend synthesis + iOS UI)
 - Trend: Accelerating (plans completing in 3-5 min)
 
 ## Accumulated Context
@@ -95,6 +97,9 @@ Recent decisions affecting current work:
 - Synthesis quizzes invalidated (deleted) on theme content add/remove
 - Per-memo cap at 2000 chars for synthesis prompt to prevent LLM overflow
 - sourceIndices post-processing filters out single-source LLM questions
+- Indigo (#6366F1) pill badge for synthesis questions matching app primary accent
+- isSynthesis defaults to false throughout chain so non-synthesis questions unchanged
+- No changes to content/topic quiz screens (synthesis only in theme quizzes)
 
 ### Pending Todos
 
@@ -109,6 +114,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Completed 10-01-PLAN.md (Synthesis quiz backend: schema + service + endpoint)
-Next step: Execute 10-02-PLAN.md (iOS synthesis quiz UI)
+Stopped at: Completed 10-02-PLAN.md (iOS synthesis quiz UI: types, hooks, badge, screen)
+Next step: Execute Phase 11 (final phase)
 Resume file: None
