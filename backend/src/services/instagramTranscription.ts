@@ -312,13 +312,11 @@ export async function runInstagramTranscriptionWorker(): Promise<void> {
   // Clean up any expired locks
   await cleanupExpiredLocks();
 
-  // Get Instagram content items that need transcription (SELECTED priority, then INBOX)
+  // Get Instagram content items that need transcription (SELECTED only)
+  // INBOX items are NOT transcribed — they stay visible in triage until the user acts
   const pendingContent = await prisma.content.findMany({
     where: {
-      OR: [
-        { status: ContentStatus.SELECTED },
-        { status: ContentStatus.INBOX },
-      ],
+      status: ContentStatus.SELECTED,
       platform: Platform.INSTAGRAM,
       transcript: null,
     },
