@@ -2,57 +2,53 @@
 
 ## What This Is
 
-Ankora est une plateforme d'apprentissage actif qui transforme le contenu consommé sur les réseaux sociaux (YouTube, Spotify, TikTok, Instagram) en connaissances durables via des quiz générés par IA et la répétition espacée. L'app iOS permet de synchroniser, trier, et réviser son contenu.
+Ankora est une plateforme d'apprentissage actif qui transforme le contenu consomme sur les reseaux sociaux (YouTube, Spotify, TikTok, Instagram) en connaissances durables via des quiz generes par IA et la repetition espacee. L'app iOS organise le contenu par themes auto-generes, avec quiz cross-contenu par theme, memos de synthese, et suivi de progression par theme.
 
 ## Core Value
 
-L'utilisateur apprend durablement à partir de ce qu'il consomme déjà — sans effort supplémentaire de curation.
-
-## Current Milestone: v2.0 Themes-first UX
-
-**Goal:** Transformer la navigation de l'app d'une vue centrée contenu vers une vue centrée thèmes, avec quiz cross-contenu par thème.
-
-**Target features:**
-- Thèmes auto-générés par l'IA (couche au-dessus des tags existants)
-- Home screen avec sections par thème + contenus récents
-- Contenu multi-thème (un contenu peut appartenir à plusieurs thèmes)
-- Gestion manuelle des thèmes (créer, modifier, supprimer, déplacer contenu)
-- Quiz par thème : mix de questions existantes + nouvelles questions de synthèse cross-contenu
+L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans effort supplementaire de curation.
 
 ## Requirements
 
 ### Validated
 
-<!-- Existing app capabilities — shipped and working -->
-
-- ✓ Auth JWT (signup, login, refresh tokens) — pre-v1
-- ✓ OAuth YouTube, Spotify + cookie-based TikTok, Instagram — pre-v1
-- ✓ Content sync from 4 platforms (cron workers) — pre-v1
-- ✓ Transcription pipeline (yt-dlp + Groq Whisper) — pre-v1
-- ✓ Quiz generation per content (Mistral AI) — pre-v1
-- ✓ Spaced repetition review (SM-2 algorithm) — pre-v1
-- ✓ Auto-tagging with Mistral AI — pre-v1
-- ✓ Content inbox + triage flow — pre-v1
-- ✓ Structured logging (Pino) — v1.0
-- ✓ Job execution tracking + AdminJS panel — v1.0
-- ✓ Real-time observability dashboard — v1.0
+- ✓ Auth JWT (signup, login, refresh tokens) -- pre-v1
+- ✓ OAuth YouTube, Spotify + cookie-based TikTok, Instagram -- pre-v1
+- ✓ Content sync from 4 platforms (cron workers) -- pre-v1
+- ✓ Transcription pipeline (yt-dlp + Groq Whisper) -- pre-v1
+- ✓ Quiz generation per content (Mistral AI) -- pre-v1
+- ✓ Spaced repetition review (SM-2 algorithm) -- pre-v1
+- ✓ Auto-tagging with Mistral AI -- pre-v1
+- ✓ Content inbox + triage flow -- pre-v1
+- ✓ Structured logging (Pino) -- v1.0
+- ✓ Job execution tracking + AdminJS panel -- v1.0
+- ✓ Real-time observability dashboard -- v1.0
+- ✓ Theme data model with M:N content-theme relations -- v2.0
+- ✓ Theme CRUD API (7 endpoints, Zod validation, 25-cap) -- v2.0
+- ✓ AI-powered theme auto-generation from tag clusters -- v2.0
+- ✓ Deterministic content classification + LLM fallback -- v2.0
+- ✓ Theme-first home screen with ThemeCard grid -- v2.0
+- ✓ Theme management (create, rename, delete, move content) -- v2.0
+- ✓ Theme-scoped quiz mixing per-content questions -- v2.0
+- ✓ AI-generated theme synthesis memos (24h cache) -- v2.0
+- ✓ Cross-content synthesis quiz (LLM questions connecting 2+ sources) -- v2.0
+- ✓ Theme discovery onboarding (rename/merge/dismiss) -- v2.0
+- ✓ Learning progress visualization (mastery %, due cards) -- v2.0
 
 ### Active
 
-<!-- v2.0 Themes-first UX — to be detailed in REQUIREMENTS.md -->
-
-- [ ] Theme data model and auto-classification
-- [ ] Theme management (CRUD + content assignment)
-- [ ] Theme-based home screen navigation
-- [ ] Theme-based quiz generation (mix + synthesis)
+(None -- next milestone not yet defined. Run `/gsd:new-milestone` to start.)
 
 ### Out of Scope
 
-- Grafana/Prometheus/Datadog — custom dashboard sufficient
-- Multi-admin with roles — solo dev
-- Android app — iOS only for now
-- Social features (sharing, leaderboards) — not the focus
-- Theme collaboration (shared themes between users) — solo learning app
+- Grafana/Prometheus/Datadog -- custom dashboard sufficient
+- Multi-admin with roles -- solo dev
+- Android app -- iOS only for now
+- Social features (sharing, leaderboards) -- not the focus
+- Theme collaboration (shared themes between users) -- solo learning app
+- Hierarchical/nested themes -- Prisma lacks recursive queries, 5-15 themes not enough for hierarchy
+- Vector database for classification -- tag space too small, LLM simpler
+- Theme-specific SM-2 schedules -- SM-2 per-card, overriding fights the algorithm
 
 ## Context
 
@@ -60,26 +56,37 @@ Backend: Node.js v22, Express.js, TypeScript, Prisma, PostgreSQL (Supabase), Pin
 
 iOS app: Expo SDK 54, expo-router, Zustand, TanStack React Query, Axios.
 
-Auto-tagging worker already generates tags via Mistral AI — themes will be a broader categorization layer derived from these tags.
-
-Quiz generation currently works per-content — needs extension to support theme-level quiz mixing and cross-content synthesis questions.
+Shipped v2.0 with ~14,000 LOC across backend + iOS.
+Theme system: 3 new Prisma models (Theme, ContentTheme, ThemeTag), 15+ new API endpoints, 8 new iOS screens.
+Workers: 15 cron jobs including theme classification at */15 schedule.
+Quiz system: per-content + cross-content synthesis questions, 20-card cap per session.
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Themes above tags (not replacing) | Tags provide detail, themes provide navigation. Reuse existing auto-tagging investment | — Pending |
-| Multi-theme content | A video about "Python for finance" belongs in both Dev and Finance themes | — Pending |
-| 100% auto-creation by AI | Lower friction than manual setup. User adjusts after | — Pending |
-| Mix + synthesis quiz mode | Mix reuses existing questions, synthesis creates new cross-content understanding | — Pending |
+| ESM migration | Modern module system, Pino compatibility | ✓ Good |
+| Pino structured logging | JSON logging for observability pipeline | ✓ Good |
+| AdminJS v7 for admin panel | Full CRUD on all models, custom actions | ✓ Good |
+| SSE for dashboard | Real-time without WebSocket complexity | ✓ Good |
+| Themes above tags (not replacing) | Tags provide detail, themes provide navigation | ✓ Good |
+| Multi-theme content (M:N) | Content naturally spans topics | ✓ Good |
+| Explicit join tables | Performance + assignedBy tracking (vs Prisma implicit) | ✓ Good |
+| 100% AI auto-creation | Lower friction, user adjusts via discovery flow | ✓ Good |
+| Deterministic matching before LLM | Saves API costs, consistent results | ✓ Good |
+| Nullable Quiz.contentId for synthesis | Polymorphic ownership without extra tables | ✓ Good |
+| On-demand synthesis generation | Avoids background job for rarely-used feature | ✓ Good |
+| discoveredAt gate (not status enum) | Simpler schema, nullable DateTime sufficient | ✓ Good |
+| Zod validation on theme routes | Consistent with existing project patterns | ✓ Good |
+| 24h memo caching on model fields | Avoid separate cache table, lazy invalidation | ✓ Good |
 
 ## Constraints
 
 - **Single VPS**: Backend + workers on one Hetzner CPX32
-- **Supabase DB**: PostgreSQL via Prisma — schema changes via `prisma db push`
+- **Supabase DB**: PostgreSQL via Prisma -- schema changes via `prisma db push`
 - **Expo SDK 54**: iOS app with OTA updates for JS changes
-- **Mistral AI**: Used for both tagging and quiz gen — themes classification should use same provider
-- **Existing tags**: Must coexist, themes derive from tags
+- **Mistral AI**: Used for tagging, quiz gen, theme classification, and memo synthesis
+- **Existing tags**: Themes derive from tags, both coexist
 
 ---
-*Last updated: 2026-02-10 after v2.0 milestone started*
+*Last updated: 2026-02-11 after v2.0 milestone*
