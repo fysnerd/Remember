@@ -27,7 +27,7 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 - [x] **Phase 6: Theme Classification Worker** -- AI-powered auto-generation and classification of themes from tags (completed 2026-02-10)
 - [x] **Phase 7: iOS Theme Screens & Management** -- Theme-first home screen, detail views, and user management (completed 2026-02-10)
 - [x] **Phase 8: Theme Quiz (Existing Cards)** -- Quiz scoped to a theme using existing per-content questions (completed 2026-02-10)
-- [ ] **Phase 9: Theme Memo** -- AI-generated synthesis memos aggregating knowledge per theme
+- [x] **Phase 9: Theme Memo** -- AI-generated synthesis memos aggregating knowledge per theme (completed 2026-02-11)
 - [ ] **Phase 10: Cross-Content Synthesis Quiz** -- New AI-generated questions connecting concepts across multiple content items
 - [ ] **Phase 11: Theme Discovery & Onboarding** -- First-time theme review flow and learning progress visibility
 
@@ -150,6 +150,6 @@ Phases execute in numeric order: 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11
 | 6. Theme Classification Worker | v2.0 | 2/2 | Complete | 2026-02-10 |
 | 7. iOS Theme Screens & Management | v2.0 | 2/2 | Complete | 2026-02-10 |
 | 8. Theme Quiz (Existing Cards) | v2.0 | 1/1 | Complete | 2026-02-10 |
-| 9. Theme Memo | v2.0 | 0/1 | Not started | - |
+| 9. Theme Memo | v2.0 | 1/1 | Complete | 2026-02-11 |
 | 10. Cross-Content Synthesis Quiz | v2.0 | 0/2 | Not started | - |
 | 11. Theme Discovery & Onboarding | v2.0 | 0/2 | Not started | - |
