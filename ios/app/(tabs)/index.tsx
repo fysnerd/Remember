@@ -10,7 +10,7 @@ import { Text, Card } from '../../components/ui';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
 import { ThemeCard } from '../../components/ThemeCard';
-import { useThemes, useContentList } from '../../hooks';
+import { useThemes, usePendingThemes, useContentList } from '../../hooks';
 import { colors, spacing, borderRadius } from '../../theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -30,7 +30,10 @@ export default function FeedScreen() {
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const { data: themes, isLoading: themesLoading } = useThemes();
+  const { data: pendingThemes } = usePendingThemes();
   const { data: contentData, isLoading: contentLoading } = useContentList();
+
+  const pendingCount = pendingThemes?.length ?? 0;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -66,6 +69,24 @@ export default function FeedScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
       }
     >
+      {/* Discovery banner */}
+      {pendingCount > 0 && (
+        <Pressable
+          onPress={() => router.push('/theme-discovery' as any)}
+          style={styles.discoveryBanner}
+        >
+          <View style={styles.discoveryBannerContent}>
+            <Text variant="body" weight="medium">
+              {pendingCount} nouveau{pendingCount > 1 ? 'x' : ''} theme{pendingCount > 1 ? 's' : ''} detecte{pendingCount > 1 ? 's' : ''}
+            </Text>
+            <Text variant="caption" color="secondary">
+              Revoyez et confirmez vos themes
+            </Text>
+          </View>
+          <Text style={styles.discoveryArrow}>{'>'}</Text>
+        </Pressable>
+      )}
+
       {/* Themes Section - 2 columns grid */}
       {themeList.length > 0 && (
         <View style={styles.section}>
@@ -81,6 +102,8 @@ export default function FeedScreen() {
                   emoji={theme.emoji}
                   color={theme.color}
                   contentCount={theme.contentCount}
+                  masteryPercent={theme.masteryPercent ?? 0}
+                  dueCards={theme.dueCards ?? 0}
                   onPress={() => handleThemePress(theme.id)}
                 />
               </View>
@@ -165,6 +188,23 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   newThemeIcon: {
+    fontSize: 24,
+    color: colors.textSecondary,
+  },
+  discoveryBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  discoveryBannerContent: {
+    flex: 1,
+  },
+  discoveryArrow: {
     fontSize: 24,
     color: colors.textSecondary,
   },

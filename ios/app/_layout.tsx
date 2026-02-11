@@ -142,6 +142,15 @@ export default function RootLayout() {
           }}
         />
         <Stack.Screen
+          name="theme-discovery"
+          options={{
+            headerShown: true,
+            title: 'Decouverte',
+            headerBackTitle: 'Retour',
+            presentation: 'card',
+          }}
+        />
+        <Stack.Screen
           name="theme-create"
           options={{
             headerShown: true,

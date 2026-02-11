@@ -1,7 +1,8 @@
 /**
  * ThemeCard - Pressable card for the home screen theme grid
  *
- * Displays emoji, name, color accent bar, and content count.
+ * Displays emoji, name, color accent bar, content count,
+ * mastery progress bar, and due card count badge.
  */
 
 import { Pressable, View, StyleSheet } from 'react-native';
@@ -14,10 +15,20 @@ interface ThemeCardProps {
   emoji: string;
   color: string;
   contentCount: number;
+  masteryPercent?: number;
+  dueCards?: number;
   onPress: () => void;
 }
 
-export function ThemeCard({ name, emoji, color, contentCount, onPress }: ThemeCardProps) {
+export function ThemeCard({
+  name,
+  emoji,
+  color,
+  contentCount,
+  masteryPercent = 0,
+  dueCards = 0,
+  onPress,
+}: ThemeCardProps) {
   return (
     <Pressable
       onPress={onPress}
@@ -32,7 +43,20 @@ export function ThemeCard({ name, emoji, color, contentCount, onPress }: ThemeCa
         <Text variant="caption" color="secondary">
           {contentCount} contenu{contentCount !== 1 ? 's' : ''}
         </Text>
+        <View style={styles.progressBarContainer}>
+          <View
+            style={[
+              styles.progressBar,
+              { width: `${Math.min(masteryPercent, 100)}%`, backgroundColor: color },
+            ]}
+          />
+        </View>
       </View>
+      {dueCards > 0 && (
+        <View style={styles.dueBadge}>
+          <Text style={styles.dueText}>{dueCards}</Text>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -45,6 +69,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.border,
+    position: 'relative',
     ...shadows.sm,
   },
   cardPressed: {
@@ -67,5 +92,33 @@ const styles = StyleSheet.create({
   name: {
     textAlign: 'center',
     marginBottom: spacing.xs,
+  },
+  progressBarContainer: {
+    height: 3,
+    backgroundColor: colors.borderLight,
+    borderRadius: 2,
+    marginTop: spacing.xs,
+    width: '100%',
+  },
+  progressBar: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  dueBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: colors.accent,
+    borderRadius: borderRadius.full,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  dueText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '600',
   },
 });
