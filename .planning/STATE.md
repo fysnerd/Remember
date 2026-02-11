@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-10)
 
 **Core value:** L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans effort supplementaire de curation.
-**Current focus:** v2.0 Themes-first UX -- Phase 9 complete, ready for Phase 10
+**Current focus:** v2.0 Themes-first UX -- Phase 10 in progress (plan 01 complete)
 
 ## Current Position
 
-Phase: 9 of 11 (Theme Memo) -- COMPLETE
-Plan: 1 of 1 in current phase (all done)
-Status: Phase 9 complete, ready for Phase 10
-Last activity: 2026-02-11 -- Completed 09-01 (Theme memo API + iOS screen)
+Phase: 10 of 11 (Cross-Content Synthesis Quiz)
+Plan: 1 of 2 in current phase (10-01 complete)
+Status: Executing Phase 10
+Last activity: 2026-02-11 -- Completed 10-01 (Synthesis quiz backend: schema + service + endpoint)
 
-Progress: [##################░░] 18/22 plans (v1.0 complete, v2.0 phases 5-9 complete)
+Progress: [###################░] 19/22 plans (v1.0 complete, v2.0 phases 5-9 complete, phase 10 plan 01 done)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 18 (10 v1.0 + 8 v2.0)
+- Total plans completed: 19 (10 v1.0 + 9 v2.0)
 - Average duration: ~14 min (improving with simpler integration plans)
-- Total execution time: ~4 hours 28 min
+- Total execution time: ~4 hours 33 min
 
 **By Phase:**
 
@@ -36,6 +36,7 @@ Progress: [##################░░] 18/22 plans (v1.0 complete, v2.0 phases 5-9
 | 7. iOS Theme Screens | 2/2 | ~7 min | ~3.5 min |
 | 8. Theme Quiz (Existing Cards) | 1/1 | ~3 min | ~3 min |
 | 9. Theme Memo | 1/1 | ~5 min | ~5 min |
+| 10. Cross-Content Synthesis Quiz | 1/2 | ~5 min | ~5 min |
 
 **Recent Trend:**
 - v1.0 completed in 2 days (10 plans, 4 phases)
@@ -44,7 +45,8 @@ Progress: [##################░░] 18/22 plans (v1.0 complete, v2.0 phases 5-9
 - v2.0 phase 7 completed in ~7 min (2 plans: navigation layer + management screens)
 - v2.0 phase 8 completed in ~3 min (1 plan: theme quiz API + iOS screen)
 - v2.0 phase 9 completed in ~5 min (1 plan: theme memo API + iOS screen)
-- Trend: Accelerating (single-plan phases completing in 3-5 min)
+- v2.0 phase 10 plan 01 completed in ~5 min (schema + synthesis service + endpoint extension)
+- Trend: Accelerating (plans completing in 3-5 min)
 
 ## Accumulated Context
 
@@ -87,6 +89,12 @@ Recent decisions affecting current work:
 - Memo button always enabled on theme detail (error handled on memo screen)
 - Cap at 15 content memos per synthesis prompt for LLM context limits
 - 400 word max for theme synthesis (vs 300 for topic memos)
+- Nullable contentId + themeId FK for dual quiz ownership (content vs theme synthesis)
+- On-demand synthesis generation at first theme quiz request, then persisted for SM-2
+- Up to 5 synthesis + 15 per-content cards per session, capped at 20 total
+- Synthesis quizzes invalidated (deleted) on theme content add/remove
+- Per-memo cap at 2000 chars for synthesis prompt to prevent LLM overflow
+- sourceIndices post-processing filters out single-source LLM questions
 
 ### Pending Todos
 
@@ -101,6 +109,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Completed 09-01-PLAN.md (Theme memo API + iOS screen) -- Phase 9 complete
-Next step: Plan and execute Phase 10 (Synthesis Quiz)
+Stopped at: Completed 10-01-PLAN.md (Synthesis quiz backend: schema + service + endpoint)
+Next step: Execute 10-02-PLAN.md (iOS synthesis quiz UI)
 Resume file: None
