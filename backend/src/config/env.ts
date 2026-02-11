@@ -165,7 +165,7 @@ export const config = {
   },
 
   admin: {
-    email: env.ADMIN_EMAIL ?? 'admin@ankora.study',
-    password: env.ADMIN_PASSWORD ?? 'ankora-admin-2026',
+    email: env.ADMIN_EMAIL || '',
+    password: env.ADMIN_PASSWORD || '',
   },
 } as const;

@@ -67,13 +67,43 @@ const PERMANENT_ERROR_PATTERNS = [
 ];
 
 /**
- * Download Instagram reel using yt-dlp (yt-dlp supports Instagram!)
- * Uses execFile with args array to prevent command injection
+ * Build a Netscape-format cookies file from user's Instagram session cookies.
+ * yt-dlp requires this format for authenticated downloads.
  */
-async function downloadInstagramReel(url: string, outputPath: string): Promise<void> {
+async function buildCookiesFile(userId: string, cookiesPath: string): Promise<boolean> {
+  const connection = await prisma.connectedPlatform.findUnique({
+    where: { userId_platform: { userId, platform: Platform.INSTAGRAM } },
+    select: { accessToken: true },
+  });
+
+  if (!connection) return false;
+
+  try {
+    const cookies = JSON.parse(connection.accessToken);
+    const lines = ['# Netscape HTTP Cookie File'];
+    for (const [name, value] of Object.entries(cookies)) {
+      if (value) {
+        lines.push(`.instagram.com\tTRUE\t/\tTRUE\t0\t${name}\t${value}`);
+      }
+    }
+    fs.writeFileSync(cookiesPath, lines.join('\n'));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Download Instagram reel using yt-dlp with user cookies for authentication.
+ * Uses execFile with args array to prevent command injection.
+ */
+async function downloadInstagramReel(url: string, outputPath: string, cookiesPath?: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    // Use execFile with args array to prevent command injection
-    const args = ['--no-warnings', '-f', 'best[ext=mp4]/best', '-o', outputPath, url];
+    const args = ['--no-warnings', '-f', 'best[ext=mp4]/best', '-o', outputPath];
+    if (cookiesPath && fs.existsSync(cookiesPath)) {
+      args.push('--cookies', cookiesPath);
+    }
+    args.push(url);
     execFile('yt-dlp', args, { timeout: 120000 }, (error, _stdout, stderr) => {
       if (error) {
         log.error({ stderr }, 'yt-dlp error');
@@ -218,12 +248,15 @@ export async function processInstagramTranscript(contentId: string): Promise<boo
   const tempDir = os.tmpdir();
   const videoPath = path.join(tempDir, `instagram_${contentId}.mp4`);
   const audioPath = path.join(tempDir, `instagram_${contentId}.mp3`);
+  const cookiesPath = path.join(tempDir, `instagram_cookies_${contentId}.txt`);
   let compressedPath: string | null = null;
 
   try {
-    // Step 1: Download video via yt-dlp (supports Instagram!)
+    // Step 1: Build cookies file + download video via yt-dlp
     log.debug({ externalId: content.externalId, url: content.url }, 'Downloading reel');
-    await downloadInstagramReel(content.url, videoPath);
+    const hasCookies = await buildCookiesFile(content.userId, cookiesPath);
+    log.debug({ hasCookies }, 'Instagram cookies for yt-dlp');
+    await downloadInstagramReel(content.url, videoPath, cookiesPath);
 
     // Step 2: Extract audio via ffmpeg
     log.debug({ externalId: content.externalId }, 'Extracting audio');
@@ -295,7 +328,7 @@ export async function processInstagramTranscript(contentId: string): Promise<boo
     return false;
   } finally {
     // Cleanup in finally block to ensure temp files are always removed
-    cleanupFiles(videoPath, audioPath);
+    cleanupFiles(videoPath, audioPath, cookiesPath);
     if (compressedPath) cleanupFiles(compressedPath);
   }
 }
@@ -369,7 +402,7 @@ export async function runInstagramTranscriptionWorker(): Promise<void> {
  */
 async function processInstagramWithCache(
   workerId: string,
-  content: { id: string; platform: Platform; externalId: string; title: string; url: string }
+  content: { id: string; userId: string; platform: Platform; externalId: string; title: string; url: string }
 ): Promise<'success' | 'cache_hit' | 'failed'> {
   // Try to get or create cache entry with lock
   const result = await getOrCreateCacheWithLock(content.platform, content.externalId, workerId);
@@ -412,12 +445,15 @@ async function processInstagramWithCache(
   const tempDir = os.tmpdir();
   const videoPath = path.join(tempDir, `instagram_${content.id}.mp4`);
   const audioPath = path.join(tempDir, `instagram_${content.id}.mp3`);
+  const cookiesPath = path.join(tempDir, `instagram_cookies_${content.id}.txt`);
   let compressedPath: string | null = null;
 
   try {
-    // Step 1: Download video via yt-dlp
+    // Step 1: Build cookies file + download video via yt-dlp
     log.debug({ externalId: content.externalId, url: content.url }, 'Downloading reel');
-    await downloadInstagramReel(content.url, videoPath);
+    const hasCookies = await buildCookiesFile(content.userId, cookiesPath);
+    log.debug({ hasCookies }, 'Instagram cookies for yt-dlp');
+    await downloadInstagramReel(content.url, videoPath, cookiesPath);
 
     // Step 2: Extract audio via ffmpeg
     log.debug({ externalId: content.externalId }, 'Extracting audio');
@@ -508,7 +544,7 @@ async function processInstagramWithCache(
     return 'failed';
   } finally {
     // Cleanup in finally block to ensure temp files are always removed
-    cleanupFiles(videoPath, audioPath);
+    cleanupFiles(videoPath, audioPath, cookiesPath);
     if (compressedPath) cleanupFiles(compressedPath);
   }
 }

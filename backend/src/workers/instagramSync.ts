@@ -135,33 +135,33 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
     const apiResult: { error: string | null; items: any[] } = { error: null, items: [] };
     const statusCode = response.status();
 
-    if (statusCode === 401 || statusCode === 403) {
-      // Session expired — mark connection and bail
-      log.warn({ userId, statusCode }, 'Session expired (auth error from API)');
+    try {
+      if (statusCode === 401 || statusCode === 403) {
+        // Session expired — mark connection and bail
+        log.warn({ userId, statusCode }, 'Session expired (auth error from API)');
+        await prisma.connectedPlatform.update({
+          where: { id: connectionId },
+          data: { lastSyncError: 'Session expired. Please reconnect.' },
+        });
+        return 0;
+      } else if (statusCode === 429) {
+        // Rate limited — skip this sync silently
+        log.warn({ userId }, 'Rate limited by Instagram (429), skipping');
+        await prisma.connectedPlatform.update({
+          where: { id: connectionId },
+          data: { lastSyncError: 'Rate limited. Will retry later.' },
+        });
+        return 0;
+      } else if (!response.ok()) {
+        const text = await response.text().catch(() => '');
+        apiResult.error = `API error ${statusCode}: ${text.substring(0, 200)}`;
+      } else {
+        const data = await response.json();
+        apiResult.items = data.items || [];
+      }
+    } finally {
       await browser.close();
-      await prisma.connectedPlatform.update({
-        where: { id: connectionId },
-        data: { lastSyncError: 'Session expired. Please reconnect.' },
-      });
-      return 0;
-    } else if (statusCode === 429) {
-      // Rate limited — skip this sync silently
-      log.warn({ userId }, 'Rate limited by Instagram (429), skipping');
-      await browser.close();
-      await prisma.connectedPlatform.update({
-        where: { id: connectionId },
-        data: { lastSyncError: 'Rate limited. Will retry later.' },
-      });
-      return 0;
-    } else if (!response.ok()) {
-      const text = await response.text().catch(() => '');
-      apiResult.error = `API error ${statusCode}: ${text.substring(0, 200)}`;
-    } else {
-      const data = await response.json();
-      apiResult.items = data.items || [];
     }
-
-    await browser.close();
 
     if (apiResult.error) {
       log.error({ userId, error: apiResult.error }, 'API error');
