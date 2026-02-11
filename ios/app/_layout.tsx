@@ -212,6 +212,17 @@ export default function RootLayout() {
             headerTintColor: '#F8FAFC',
           }}
         />
+        <Stack.Screen
+          name="dev-test"
+          options={{
+            headerShown: true,
+            title: 'Foundation Test',
+            headerBackTitle: 'Profile',
+            presentation: 'card',
+            headerStyle: { backgroundColor: '#0A0F1A' },
+            headerTintColor: '#F8FAFC',
+          }}
+        />
       </Stack>
     </QueryClientProvider>
   );

@@ -220,6 +220,17 @@ export default function ProfileScreen() {
           🛠️ Dev Tools (beta)
         </Text>
         <Card padding="md">
+          <Pressable
+            style={styles.foundationTestButton}
+            onPress={() => router.push('/dev-test' as any)}
+          >
+            <Text variant="body" weight="medium">
+              Foundation Test
+            </Text>
+            <Text variant="caption" color="secondary">
+              Validate BlurView, Lucide, Geist
+            </Text>
+          </Pressable>
           <View style={styles.syncGrid}>
             {([
               { id: 'youtube', label: 'YouTube', emoji: '🎬' },
@@ -277,6 +288,15 @@ const styles = StyleSheet.create({
   },
   logoutText: { color: colors.error },
   disconnectText: { color: colors.error },
+  foundationTestButton: {
+    backgroundColor: colors.surfaceElevated,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
   syncGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
