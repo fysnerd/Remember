@@ -10,4 +10,4 @@ export { useQuiz, useTopicQuiz, useThemeQuiz, useSubmitAnswer, useCreateSession,
 export { useReviews, useCompletedItems, useReviewStats } from './useReviews';
 export { useMemo, useTopicMemo, useThemeMemo, useRefreshThemeMemo } from './useMemo';
 export { useOAuthStatus, useRefreshContent } from './useOAuth';
-export { useThemes, useThemeDetail, useCreateTheme, useUpdateTheme, useDeleteTheme, useAddContentToTheme, useRemoveContentFromTheme } from './useThemes';
+export { useThemes, usePendingThemes, useDiscoverThemes, useThemeDetail, useCreateTheme, useUpdateTheme, useDeleteTheme, useAddContentToTheme, useRemoveContentFromTheme } from './useThemes';

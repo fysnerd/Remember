@@ -4,7 +4,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
-import { ThemeListItem, Content } from '../types/content';
+import { ThemeListItem, Content, DiscoverAction } from '../types/content';
 
 interface ThemeDetailResponse {
   theme: ThemeListItem;
@@ -17,13 +17,41 @@ interface ThemeDetailResponse {
   };
 }
 
-// Get all themes for the current user
+// Get all themes for the current user (discovered only by default)
 export function useThemes() {
   return useQuery({
     queryKey: ['themes'],
     queryFn: async () => {
-      const { data } = await api.get<ThemeListItem[]>('/themes');
-      return data;
+      const { data } = await api.get<{ themes: ThemeListItem[] }>('/themes');
+      return data.themes;
+    },
+  });
+}
+
+// Get pending themes (not yet discovered by user)
+export function usePendingThemes() {
+  return useQuery({
+    queryKey: ['themes', 'pending'],
+    queryFn: async () => {
+      const { data } = await api.get<{ themes: ThemeListItem[] }>('/themes', {
+        params: { status: 'pending' },
+      });
+      return data.themes;
+    },
+  });
+}
+
+// Bulk discovery actions (confirm, rename, merge, dismiss)
+export function useDiscoverThemes() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (actions: DiscoverAction[]) => {
+      const { data } = await api.post<{ themes: ThemeListItem[] }>('/themes/discover', { actions });
+      return data.themes;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['themes'] });
     },
   });
 }

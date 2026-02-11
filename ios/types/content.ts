@@ -96,9 +96,20 @@ export interface ThemeListItem {
   quizReadyCount: number; // content items with generated quizzes
   canQuiz: boolean;       // quizReadyCount >= 3
   tags: { id: string; name: string }[];
+  // Progress fields (from 11-01 backend)
+  totalCards: number;
+  masteredCards: number;
+  dueCards: number;
+  masteryPercent: number;
   createdAt: string;
   updatedAt: string;
 }
+
+export type DiscoverAction =
+  | { type: 'confirm'; themeId: string }
+  | { type: 'rename'; themeId: string; newName: string }
+  | { type: 'merge'; sourceThemeId: string; targetThemeId: string }
+  | { type: 'dismiss'; themeId: string };
 
 export interface ThemeRef {
   id: string;
