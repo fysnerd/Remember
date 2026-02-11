@@ -1,27 +1,27 @@
 /**
  * Design tokens for Ankora
  *
- * Refined wireframe aesthetic: intentional, minimal, editorial
- * Black/white/gray with purposeful hierarchy
+ * Night Blue dark mode with Geist font system
+ * Deep navy backgrounds, warm gold accent, editorial typography
  */
 
 export const colors = {
-  // Core palette - true black and white for maximum contrast
-  background: '#FFFFFF',
-  surface: '#FAFAFA',
-  surfaceElevated: '#F5F5F5',
-  text: '#0A0A0A',
-  textSecondary: '#737373',
-  textTertiary: '#A3A3A3',
-  border: '#E5E5E5',
-  borderLight: '#F0F0F0',
-  accent: '#0A0A0A',
+  // Core palette - Night Blue dark mode
+  background: '#0A0F1A',
+  surface: '#111827',
+  surfaceElevated: '#1E293B',
+  text: '#F8FAFC',
+  textSecondary: '#94A3B8',
+  textTertiary: '#64748B',
+  border: '#1E293B',
+  borderLight: '#334155',
+  accent: '#D4A574',
   // Semantic
-  error: '#DC2626',
-  success: '#16A34A',
+  error: '#EF4444',
+  success: '#22C55E',
   // Overlays
-  overlay: 'rgba(0, 0, 0, 0.04)',
-  overlayStrong: 'rgba(0, 0, 0, 0.08)',
+  overlay: 'rgba(0, 0, 0, 0.4)',
+  overlayStrong: 'rgba(0, 0, 0, 0.6)',
 } as const;
 
 export const spacing = {
@@ -34,9 +34,11 @@ export const spacing = {
 } as const;
 
 export const fonts = {
-  regular: 'System',
-  medium: 'System',
-  bold: 'System',
+  light: 'Geist_300Light',
+  regular: 'Geist_400Regular',
+  medium: 'Geist_500Medium',
+  semibold: 'Geist_600SemiBold',
+  bold: 'Geist_700Bold',
 } as const;
 
 export const borderRadius = {

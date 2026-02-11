@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   syncButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.surfaceElevated,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: borderRadius.md,
@@ -293,6 +293,6 @@ const styles = StyleSheet.create({
   syncButtonDisabled: {
     opacity: 0.5,
   },
-  syncButtonText: { color: '#000000' },
+  syncButtonText: { color: colors.text },
   syncHint: { marginTop: spacing.sm, textAlign: 'center' },
 });

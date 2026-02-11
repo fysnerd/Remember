@@ -1,15 +1,27 @@
 /**
- * Root Layout - Providers + Auth Guard + Stack Navigation
+ * Root Layout - Providers + Auth Guard + Font Loading + Stack Navigation
  */
 
 import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
+import {
+  useFonts,
+  Geist_300Light,
+  Geist_400Regular,
+  Geist_500Medium,
+  Geist_600SemiBold,
+  Geist_700Bold,
+} from '@expo-google-fonts/geist';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '../lib/queryClient';
 import { useAuthStore } from '../stores/authStore';
 import { useNotifications } from '../hooks/useNotifications';
 import { useBackgroundSync } from '../hooks/useBackgroundSync';
-import { LoadingScreen } from '../components/LoadingScreen';
+
+// Prevent splash screen from auto-hiding (must be in module scope)
+SplashScreen.preventAutoHideAsync();
 
 // Public routes that don't require auth
 const PUBLIC_ROUTES = ['login', 'signup'];
@@ -18,6 +30,15 @@ export default function RootLayout() {
   const { isAuthenticated, isLoading, checkAuth } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
+
+  // Load Geist fonts
+  const [fontsLoaded] = useFonts({
+    Geist_300Light,
+    Geist_400Regular,
+    Geist_500Medium,
+    Geist_600SemiBold,
+    Geist_700Bold,
+  });
 
   // Register push notifications (after auth)
   useNotifications(isAuthenticated);
@@ -29,6 +50,13 @@ export default function RootLayout() {
   useEffect(() => {
     checkAuth();
   }, []);
+
+  // Hide splash screen when fonts loaded AND auth check done
+  useEffect(() => {
+    if (fontsLoaded && !isLoading) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded, isLoading]);
 
   // Auth guard - redirect based on auth state
   useEffect(() => {
@@ -46,14 +74,20 @@ export default function RootLayout() {
     }
   }, [isAuthenticated, isLoading, segments]);
 
-  // Show loading while checking auth
-  if (isLoading) {
-    return <LoadingScreen />;
+  // Keep splash screen visible while loading
+  if (isLoading || !fontsLoaded) {
+    return null;
   }
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Stack screenOptions={{ headerShown: false }}>
+      <StatusBar style="light" />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: '#0A0F1A' },
+        }}
+      >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="signup" options={{ headerShown: false }} />
@@ -63,6 +97,8 @@ export default function RootLayout() {
             headerShown: true,
             headerBackTitle: 'Feed',
             presentation: 'card',
+            headerStyle: { backgroundColor: '#0A0F1A' },
+            headerTintColor: '#F8FAFC',
           }}
         />
         <Stack.Screen
@@ -71,6 +107,8 @@ export default function RootLayout() {
             headerShown: true,
             headerBackTitle: 'Retour',
             presentation: 'card',
+            headerStyle: { backgroundColor: '#0A0F1A' },
+            headerTintColor: '#F8FAFC',
           }}
         />
         <Stack.Screen
@@ -84,8 +122,10 @@ export default function RootLayout() {
           name="memo/[id]"
           options={{
             headerShown: true,
-            title: 'Mémo',
+            title: 'Memo',
             presentation: 'card',
+            headerStyle: { backgroundColor: '#0A0F1A' },
+            headerTintColor: '#F8FAFC',
           }}
         />
         <Stack.Screen
@@ -107,6 +147,8 @@ export default function RootLayout() {
           options={{
             headerShown: true,
             presentation: 'card',
+            headerStyle: { backgroundColor: '#0A0F1A' },
+            headerTintColor: '#F8FAFC',
           }}
         />
         <Stack.Screen
@@ -114,6 +156,8 @@ export default function RootLayout() {
           options={{
             headerShown: true,
             presentation: 'card',
+            headerStyle: { backgroundColor: '#0A0F1A' },
+            headerTintColor: '#F8FAFC',
           }}
         />
         <Stack.Screen
@@ -122,6 +166,8 @@ export default function RootLayout() {
             headerShown: true,
             title: 'Connexion',
             presentation: 'modal',
+            headerStyle: { backgroundColor: '#0A0F1A' },
+            headerTintColor: '#F8FAFC',
           }}
         />
         <Stack.Screen
@@ -130,6 +176,8 @@ export default function RootLayout() {
             headerShown: true,
             headerBackTitle: 'Feed',
             presentation: 'card',
+            headerStyle: { backgroundColor: '#0A0F1A' },
+            headerTintColor: '#F8FAFC',
           }}
         />
         <Stack.Screen
@@ -139,6 +187,8 @@ export default function RootLayout() {
             title: 'Gerer le theme',
             headerBackTitle: 'Retour',
             presentation: 'card',
+            headerStyle: { backgroundColor: '#0A0F1A' },
+            headerTintColor: '#F8FAFC',
           }}
         />
         <Stack.Screen
@@ -148,6 +198,8 @@ export default function RootLayout() {
             title: 'Decouverte',
             headerBackTitle: 'Retour',
             presentation: 'card',
+            headerStyle: { backgroundColor: '#0A0F1A' },
+            headerTintColor: '#F8FAFC',
           }}
         />
         <Stack.Screen
@@ -156,6 +208,8 @@ export default function RootLayout() {
             headerShown: true,
             title: 'Nouveau theme',
             presentation: 'modal',
+            headerStyle: { backgroundColor: '#0A0F1A' },
+            headerTintColor: '#F8FAFC',
           }}
         />
       </Stack>

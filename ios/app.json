@@ -2,16 +2,17 @@
   "expo": {
     "name": "Ankora",
     "slug": "ankora",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "ankora",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0a0f1a",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0a0f1a"
     },
     "ios": {
       "supportsTablet": true,
@@ -21,6 +22,7 @@
       ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
+        "UIUserInterfaceStyle": "Dark",
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true,
           "NSAllowsArbitraryLoadsInWebContent": true,
@@ -31,7 +33,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#0a0f1a"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.fysnerd.ankora"
