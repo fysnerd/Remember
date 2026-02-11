@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-10)
 
 **Core value:** L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans effort supplementaire de curation.
-**Current focus:** v2.0 Themes-first UX -- Phase 11 in progress
+**Current focus:** v2.0 Themes-first UX -- Phase 11 COMPLETE
 
 ## Current Position
 
-Phase: 11 of 11 (Theme Discovery & Onboarding)
-Plan: 1 of 2 in current phase (11-01 complete)
-Status: Executing Phase 11
-Last activity: 2026-02-11 -- Completed 11-01 (discoveredAt field, status filter, progress aggregation, discovery endpoint)
+Phase: 11 of 11 (Theme Discovery & Onboarding) -- COMPLETE
+Plan: 2 of 2 in current phase (11-02 complete)
+Status: v2.0 Themes-first UX milestone complete
+Last activity: 2026-02-11 -- Completed 11-02 (iOS discovery onboarding UI, ThemeCard progress, home banner)
 
-Progress: [#####################] 21/22 plans (v1.0 complete, v2.0 phases 5-10 complete, 11-01 done)
+Progress: [######################] 22/22 plans (v1.0 complete, v2.0 phases 5-11 complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 21 (10 v1.0 + 11 v2.0)
+- Total plans completed: 22 (10 v1.0 + 12 v2.0)
 - Average duration: ~13 min (improving with simpler integration plans)
-- Total execution time: ~4 hours 38 min
+- Total execution time: ~4 hours 43 min
 
 **By Phase:**
 
@@ -37,7 +37,7 @@ Progress: [#####################] 21/22 plans (v1.0 complete, v2.0 phases 5-10 c
 | 8. Theme Quiz (Existing Cards) | 1/1 | ~3 min | ~3 min |
 | 9. Theme Memo | 1/1 | ~5 min | ~5 min |
 | 10. Cross-Content Synthesis Quiz | 2/2 | ~8 min | ~4 min |
-| 11. Theme Discovery & Onboarding | 1/2 | ~5 min | ~5 min |
+| 11. Theme Discovery & Onboarding | 2/2 | ~10 min | ~5 min |
 
 **Recent Trend:**
 - v1.0 completed in 2 days (10 plans, 4 phases)
@@ -50,6 +50,9 @@ Progress: [#####################] 21/22 plans (v1.0 complete, v2.0 phases 5-10 c
 - v2.0 phase 10 plan 02 completed in ~3 min (iOS types, hooks, QuestionCard badge, theme quiz screen)
 - v2.0 phase 10 complete in ~8 min (2 plans: backend synthesis + iOS UI)
 - v2.0 phase 11 plan 01 completed in ~5 min (discoveredAt schema + status filter + progress + discovery endpoint)
+- v2.0 phase 11 plan 02 completed in ~5 min (iOS discovery UI, ThemeCard progress, home banner)
+- v2.0 phase 11 complete in ~10 min (2 plans: backend discovery + iOS discovery UI)
+- v2.0 MILESTONE COMPLETE: All 12 plans across phases 5-11 delivered
 - Trend: Accelerating (plans completing in 3-5 min)
 
 ## Accumulated Context
@@ -108,6 +111,10 @@ Recent decisions affecting current work:
 - POST /discover registered before POST / to avoid Express path conflict
 - User-created themes set discoveredAt immediately (skip discovery flow)
 - Merge action clears memo cache and synthesis quizzes on target theme
+- Local Maps/Sets for discovery edit state before single bulk API call (avoid per-action roundtrips)
+- Inline TextInput rename on tap (not separate modal) for faster editing in discovery flow
+- Discovery banner non-blocking (above theme grid, not hard redirect)
+- Fixed useThemes to extract data.themes from { themes: [...] } API response wrapper
 
 ### Pending Todos
 
@@ -122,6 +129,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Completed 11-01-PLAN.md (discoveredAt field, status filter, progress, discovery endpoint)
-Next step: Execute 11-02-PLAN.md (iOS discovery onboarding UI)
+Stopped at: Completed 11-02-PLAN.md (iOS discovery onboarding UI) -- Phase 11 complete, v2.0 milestone complete
+Next step: Deploy to production (eas update for iOS, git pull + build on VPS if needed)
 Resume file: None
