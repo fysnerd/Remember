@@ -688,14 +688,24 @@ export async function runPodcastTranscriptionWorker(): Promise<void> {
   await cleanupExpiredLocks();
 
   // Get Spotify content items that need transcription (SELECTED priority, then INBOX)
+  // Exclude items already linked to a cache entry in backoff (nextRetryAt in the future)
+  const now = new Date();
   const pendingContent = await prisma.content.findMany({
     where: {
-      OR: [
-        { status: ContentStatus.SELECTED },
-        { status: ContentStatus.INBOX },
+      AND: [
+        { OR: [
+          { status: ContentStatus.SELECTED },
+          { status: ContentStatus.INBOX },
+        ]},
+        { platform: Platform.SPOTIFY },
+        { transcript: null },
+        { OR: [
+          { transcriptCacheId: null },
+          { transcriptCache: { status: TranscriptCacheStatus.PENDING } },
+          { transcriptCache: { nextRetryAt: null } },
+          { transcriptCache: { nextRetryAt: { lte: now } } },
+        ]},
       ],
-      platform: Platform.SPOTIFY,
-      transcript: null,
     },
     take: 20,
     orderBy: { createdAt: 'asc' },
@@ -758,9 +768,11 @@ async function processPodcastWithCache(
 
   const { cache, acquired } = result;
 
-  // If cache already has transcript (SUCCESS), just link and copy
+  // Always link content to cache so future queries can filter by cache state
+  await linkCacheToContent(content.platform, content.externalId, cache.id);
+
+  // If cache already has transcript (SUCCESS), just copy
   if (cache.status === TranscriptCacheStatus.SUCCESS && cache.text) {
-    await linkCacheToContent(content.platform, content.externalId, cache.id);
     await copyTranscriptToAllSpotifyContent(content.externalId, cache);
     log.debug({ externalId: content.externalId, cacheHit: true }, 'Cache hit for podcast');
     return 'cache_hit';
@@ -769,6 +781,11 @@ async function processPodcastWithCache(
   // If cache is UNAVAILABLE and not retrying, mark content as unsupported
   if (cache.status === TranscriptCacheStatus.UNAVAILABLE && !acquired) {
     await markSpotifyContentUnsupported(content.externalId);
+    return 'failed';
+  }
+
+  // If cache is FAILED and waiting for backoff, skip silently (query should exclude these)
+  if (cache.status === TranscriptCacheStatus.FAILED && !acquired) {
     return 'failed';
   }
 
