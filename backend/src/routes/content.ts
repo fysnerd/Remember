@@ -408,18 +408,12 @@ contentRouter.patch('/tags/:name', async (req: Request, res: Response, next: Nex
       update: {},
     });
 
-    // Migrate user's content from old tag to new tag
-    for (const content of userContentWithTag) {
-      await prisma.content.update({
-        where: { id: content.id },
-        data: {
-          tags: {
-            disconnect: { id: oldTag.id },
-            connect: { id: newTag.id },
-          },
-        },
-      });
-    }
+    // Migrate user's content from old tag to new tag (batch SQL to avoid N+1)
+    const contentIds = userContentWithTag.map((c) => c.id);
+    await prisma.$transaction([
+      prisma.$executeRaw`DELETE FROM "_ContentTags" WHERE "A" = ANY(${contentIds}::text[]) AND "B" = ${oldTag.id}`,
+      prisma.$executeRaw`INSERT INTO "_ContentTags" ("A", "B") SELECT unnest(${contentIds}::text[]), ${newTag.id} ON CONFLICT DO NOTHING`,
+    ]);
 
     return res.json({
       message: `Tag renamed from "${oldTagName}" to "${cleanNewName}"`,
@@ -461,17 +455,9 @@ contentRouter.delete('/tags/:name', async (req: Request, res: Response, next: Ne
       return res.status(404).json({ error: 'You have no content with this tag' });
     }
 
-    // Remove tag from all user's content
-    for (const content of userContentWithTag) {
-      await prisma.content.update({
-        where: { id: content.id },
-        data: {
-          tags: {
-            disconnect: { id: tag.id },
-          },
-        },
-      });
-    }
+    // Remove tag from all user's content (batch SQL to avoid N+1)
+    const contentIds = userContentWithTag.map((c) => c.id);
+    await prisma.$executeRaw`DELETE FROM "_ContentTags" WHERE "A" = ANY(${contentIds}::text[]) AND "B" = ${tag.id}`;
 
     return res.json({
       message: `Tag "${tagName}" removed from ${userContentWithTag.length} content(s)`,
@@ -848,7 +834,7 @@ contentRouter.post('/:id/generate-quiz', async (req: Request, res: Response, nex
       return res.status(404).json({ error: 'Content not found' });
     }
 
-    if (content.status !== 'PENDING' && content.status !== 'FAILED') {
+    if (content.status !== 'SELECTED' && content.status !== 'FAILED') {
       return res.status(400).json({
         error: 'Content is already being processed or completed',
         status: content.status,

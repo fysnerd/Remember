@@ -15,6 +15,7 @@ import { runAutoTaggingWorker } from '../services/tagging.js';
 import { runThemeClassificationWorker, runBackfillThemes } from '../services/themeClassification.js';
 import { trackJobExecution } from './jobExecutionTracker.js';
 import { runCleanupJobExecutions } from './cleanupWorker.js';
+import { cleanupDesktopAuthSessions } from '../routes/oauth.js';
 
 const log = logger.child({ component: 'scheduler' });
 
@@ -145,6 +146,12 @@ export function startScheduler(): void {
     await runJob('cleanup-job-executions', runCleanupJobExecutions);
   });
 
+  // Desktop Auth Session Cleanup - Every minute
+  // Removes expired pending desktop auth sessions (>10 min old)
+  cron.schedule('* * * * *', () => {
+    cleanupDesktopAuthSessions();
+  });
+
   isSchedulerRunning = true;
   log.info({
     jobs: [
@@ -161,6 +168,7 @@ export function startScheduler(): void {
       { name: 'auto-tagging', schedule: '*/15 * * * *' },
       { name: 'theme-classification', schedule: '*/15 * * * *' },
       { name: 'cleanup-job-executions', schedule: '0 3 * * *' },
+      { name: 'desktop-auth-cleanup', schedule: '* * * * *' },
     ]
   }, 'All cron jobs scheduled');
 }

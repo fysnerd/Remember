@@ -173,7 +173,7 @@ model Content {
   commentCount   Int?      // Number of comments (Instagram/TikTok)
 
   // Processing status
-  status        ContentStatus @default(PENDING)
+  status        ContentStatus @default(INBOX)
   transcriptionFailed Boolean @default(false) // True if no subtitles available
 
   // Timestamps
@@ -202,7 +202,6 @@ model Content {
 enum ContentStatus {
   INBOX         // Just imported, pending triage
   ARCHIVED      // User archived, no quiz generation
-  PENDING       // Legacy - migrated to SELECTED
   SELECTED      // User wants to learn, pending transcription
   TRANSCRIBING  // Transcription in progress
   GENERATING    // Quiz generation in progress

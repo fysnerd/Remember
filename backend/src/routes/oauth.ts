@@ -129,8 +129,8 @@ oauthRouter.get('/youtube/callback', async (req: Request, res: Response, next: N
 
     if (!tokenResponse.ok) {
       const errorData = await tokenResponse.text();
-      log.error({ platform: 'youtube', errorData, userId }, 'OAuth token exchange failed');
-      throw new AppError(500, 'Failed to exchange code for tokens');
+      log.error({ platform: 'youtube', errorData, status: tokenResponse.status, userId }, 'OAuth token exchange failed');
+      throw new AppError(502, `YouTube token exchange failed (${tokenResponse.status}): ${errorData.slice(0, 200)}`);
     }
 
     const tokens = await tokenResponse.json() as OAuthTokenResponse;
@@ -281,8 +281,8 @@ oauthRouter.get('/spotify/callback', async (req: Request, res: Response, next: N
 
     if (!tokenResponse.ok) {
       const errorData = await tokenResponse.text();
-      log.error({ platform: 'spotify', errorData, userId }, 'OAuth token exchange failed');
-      throw new AppError(500, 'Failed to exchange code for tokens');
+      log.error({ platform: 'spotify', errorData, status: tokenResponse.status, userId }, 'OAuth token exchange failed');
+      throw new AppError(502, `Spotify token exchange failed (${tokenResponse.status}): ${errorData.slice(0, 200)}`);
     }
 
     const tokens = await tokenResponse.json() as OAuthTokenResponse;
@@ -781,15 +781,20 @@ const pendingDesktopAuth = new Map<string, {
   error?: string;
 }>();
 
-// Clean up old sessions (older than 10 minutes)
-setInterval(() => {
+// Clean up old desktop auth sessions (older than 10 minutes)
+export function cleanupDesktopAuthSessions(): void {
   const now = Date.now();
+  let cleaned = 0;
   for (const [token, session] of pendingDesktopAuth) {
     if (now - session.createdAt > 10 * 60 * 1000) {
       pendingDesktopAuth.delete(token);
+      cleaned++;
     }
   }
-}, 60 * 1000);
+  if (cleaned > 0) {
+    log.debug({ cleaned }, 'Cleaned up expired desktop auth sessions');
+  }
+}
 
 // POST /api/oauth/desktop/start - iOS calls this to get a desktop auth URL
 oauthRouter.post('/desktop/start', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {

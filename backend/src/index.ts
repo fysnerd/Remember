@@ -76,9 +76,15 @@ app.use(express.json());
 // HTTP request logging (after body parsing, before routes)
 app.use(httpLogger);
 
-// Health check
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// Health check (with DB connectivity)
+app.get('/health', async (_req, res) => {
+  try {
+    const { prisma } = await import('./config/database.js');
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'ok', db: 'ok', timestamp: new Date().toISOString() });
+  } catch (error) {
+    res.status(503).json({ status: 'degraded', db: 'error', timestamp: new Date().toISOString() });
+  }
 });
 
 // API Routes
