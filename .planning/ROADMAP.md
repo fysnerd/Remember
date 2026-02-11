@@ -28,7 +28,7 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 - [x] **Phase 7: iOS Theme Screens & Management** -- Theme-first home screen, detail views, and user management (completed 2026-02-10)
 - [x] **Phase 8: Theme Quiz (Existing Cards)** -- Quiz scoped to a theme using existing per-content questions (completed 2026-02-10)
 - [x] **Phase 9: Theme Memo** -- AI-generated synthesis memos aggregating knowledge per theme (completed 2026-02-11)
-- [ ] **Phase 10: Cross-Content Synthesis Quiz** -- New AI-generated questions connecting concepts across multiple content items
+- [x] **Phase 10: Cross-Content Synthesis Quiz** -- New AI-generated questions connecting concepts across multiple content items (completed 2026-02-11)
 - [ ] **Phase 11: Theme Discovery & Onboarding** -- First-time theme review flow and learning progress visibility
 
 ## Phase Details
@@ -105,7 +105,7 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 09-01-PLAN.md -- Theme memo schema fields, GET/POST memo endpoints with 24h cache TTL, iOS memo screen with refresh, memo button on theme detail
+- [x] 09-01-PLAN.md -- Theme memo schema fields, GET/POST memo endpoints with 24h cache TTL, iOS memo screen with refresh, memo button on theme detail
 
 ### Phase 10: Cross-Content Synthesis Quiz
 **Goal**: AI generates new quiz questions that require understanding connections between multiple content items within a theme -- questions that cannot be answered from any single source
@@ -118,8 +118,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 10-01-PLAN.md -- Backend schema changes (Quiz model extension), synthesis question generation service, theme quiz endpoint extension, cache invalidation
-- [ ] 10-02-PLAN.md -- iOS type updates, hook changes, QuestionCard synthesis badge, theme quiz screen integration
+- [x] 10-01-PLAN.md -- Backend schema changes (Quiz model extension), synthesis question generation service, theme quiz endpoint extension, cache invalidation
+- [x] 10-02-PLAN.md -- iOS type updates, hook changes, QuestionCard synthesis badge, theme quiz screen integration
 
 ### Phase 11: Theme Discovery & Onboarding
 **Goal**: First-time users review and refine AI-generated themes before committing, and all users can see their learning progress per theme
@@ -151,5 +151,5 @@ Phases execute in numeric order: 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11
 | 7. iOS Theme Screens & Management | v2.0 | 2/2 | Complete | 2026-02-10 |
 | 8. Theme Quiz (Existing Cards) | v2.0 | 1/1 | Complete | 2026-02-10 |
 | 9. Theme Memo | v2.0 | 1/1 | Complete | 2026-02-11 |
-| 10. Cross-Content Synthesis Quiz | v2.0 | 0/2 | Not started | - |
+| 10. Cross-Content Synthesis Quiz | v2.0 | 2/2 | Complete | 2026-02-11 |
 | 11. Theme Discovery & Onboarding | v2.0 | 0/2 | Not started | - |
