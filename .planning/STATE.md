@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-10)
 
 **Core value:** L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans effort supplementaire de curation.
-**Current focus:** v2.0 Themes-first UX -- Phase 8 complete, ready for Phase 9
+**Current focus:** v2.0 Themes-first UX -- Phase 9 complete, ready for Phase 10
 
 ## Current Position
 
-Phase: 8 of 11 (Theme Quiz - Existing Cards) -- COMPLETE
+Phase: 9 of 11 (Theme Memo) -- COMPLETE
 Plan: 1 of 1 in current phase (all done)
-Status: Phase 8 complete, ready for Phase 9
-Last activity: 2026-02-10 -- Completed 08-01 (Theme quiz endpoint + iOS screen)
+Status: Phase 9 complete, ready for Phase 10
+Last activity: 2026-02-11 -- Completed 09-01 (Theme memo API + iOS screen)
 
-Progress: [#################░░░] 17/22 plans (v1.0 complete, v2.0 phases 5-8 complete)
+Progress: [##################░░] 18/22 plans (v1.0 complete, v2.0 phases 5-9 complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 17 (10 v1.0 + 7 v2.0)
-- Average duration: ~15 min (improving with simpler integration plans)
-- Total execution time: ~4 hours 23 min
+- Total plans completed: 18 (10 v1.0 + 8 v2.0)
+- Average duration: ~14 min (improving with simpler integration plans)
+- Total execution time: ~4 hours 28 min
 
 **By Phase:**
 
@@ -35,6 +35,7 @@ Progress: [#################░░░] 17/22 plans (v1.0 complete, v2.0 phases 5
 | 6. Theme Classification Worker | 2/2 | ~5 min | ~2.5 min |
 | 7. iOS Theme Screens | 2/2 | ~7 min | ~3.5 min |
 | 8. Theme Quiz (Existing Cards) | 1/1 | ~3 min | ~3 min |
+| 9. Theme Memo | 1/1 | ~5 min | ~5 min |
 
 **Recent Trend:**
 - v1.0 completed in 2 days (10 plans, 4 phases)
@@ -42,7 +43,8 @@ Progress: [#################░░░] 17/22 plans (v1.0 complete, v2.0 phases 5
 - v2.0 phase 6 completed in ~5 min (2 plans: service + scheduler/admin integration)
 - v2.0 phase 7 completed in ~7 min (2 plans: navigation layer + management screens)
 - v2.0 phase 8 completed in ~3 min (1 plan: theme quiz API + iOS screen)
-- Trend: Accelerating (single-plan phases completing in ~3 min)
+- v2.0 phase 9 completed in ~5 min (1 plan: theme memo API + iOS screen)
+- Trend: Accelerating (single-plan phases completing in 3-5 min)
 
 ## Accumulated Context
 
@@ -79,6 +81,12 @@ Recent decisions affecting current work:
 - Theme quiz updates SM-2 stats (not practice mode) consistent with topic quiz
 - View memo button on theme quiz summary routes to theme detail (theme memos come in Phase 9)
 - Quiz button always visible on theme detail screen (moved outside content list conditional)
+- Theme memo cached on Theme model fields (memo + memoGeneratedAt) not JSON hack
+- 24h TTL with lazy invalidation at read time for theme memos
+- Cache cleared on content add/remove from theme for freshness
+- Memo button always enabled on theme detail (error handled on memo screen)
+- Cap at 15 content memos per synthesis prompt for LLM context limits
+- 400 word max for theme synthesis (vs 300 for topic memos)
 
 ### Pending Todos
 
@@ -92,7 +100,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-10
-Stopped at: Completed 08-01-PLAN.md (Theme quiz existing cards) -- Phase 8 complete
-Next step: Plan and execute Phase 9 (Theme memos)
+Last session: 2026-02-11
+Stopped at: Completed 09-01-PLAN.md (Theme memo API + iOS screen) -- Phase 9 complete
+Next step: Plan and execute Phase 10 (Synthesis Quiz)
 Resume file: None
