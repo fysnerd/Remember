@@ -39,7 +39,7 @@ Full details: [milestones/v2.0-ROADMAP.md](milestones/v2.0-ROADMAP.md)
 
 **Milestone Goal:** Complete visual transformation from light monochrome to premium Night Blue dark mode with Glass UI components, Geist typography, Lucide icons, and restructured screens.
 
-- [ ] **Phase 12: Foundation Build** - Native dependencies + dark mode base + proof-of-concept validation
+- [x] **Phase 12: Foundation Build** - Native dependencies + dark mode base + proof-of-concept validation -- completed 2026-02-11
 - [ ] **Phase 13: Design System** - Night Blue tokens, Glass components, icon system, restyled primitives
 - [ ] **Phase 14: Screen Rebuild** - Home (daily themes), Explorer (suggestions + library), Revisions, Profile
 - [ ] **Phase 15: Backend Endpoints** - Daily themes selection + AI theme suggestions APIs
@@ -60,8 +60,8 @@ Full details: [milestones/v2.0-ROADMAP.md](milestones/v2.0-ROADMAP.md)
 **Plans**: 2 plans
 
 Plans:
-- [ ] 12-01-PLAN.md -- Install native deps, configure dark mode + Geist font globally, create validation test screen
-- [ ] 12-02-PLAN.md -- Preview build validation on device + production build to TestFlight
+- [x] 12-01-PLAN.md -- Install native deps, configure dark mode + Geist font globally, create validation test screen
+- [x] 12-02-PLAN.md -- Preview build validation on device + production build to TestFlight
 
 ### Phase 13: Design System
 **Goal**: A complete, reusable design system is in place -- Night Blue palette, Glass UI components, Lucide icon wrappers, and all existing UI primitives restyled -- so screens can be rebuilt using these building blocks
@@ -144,7 +144,7 @@ Phase 15 can execute in parallel with 13/14/16 (backend is independent).
 | 9. Theme Memo | v2.0 | 1/1 | Complete | 2026-02-11 |
 | 10. Cross-Content Synthesis Quiz | v2.0 | 2/2 | Complete | 2026-02-11 |
 | 11. Theme Discovery & Onboarding | v2.0 | 2/2 | Complete | 2026-02-11 |
-| 12. Foundation Build | v3.0 | 0/2 | Not started | - |
+| 12. Foundation Build | v3.0 | 2/2 | Complete | 2026-02-11 |
 | 13. Design System | v3.0 | 0/3 | Not started | - |
 | 14. Screen Rebuild | v3.0 | 0/3 | Not started | - |
 | 15. Backend Endpoints | v3.0 | 0/1 | Not started | - |
