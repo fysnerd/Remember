@@ -126,6 +126,7 @@ export default function ThemeQuizScreen() {
               onSelect={(optionId) => {
                 setSelectedAnswer(optionId);
               }}
+              isSynthesis={current.isSynthesis}
             />
             <View style={styles.buttonContainer}>
               <Button

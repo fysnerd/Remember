@@ -18,6 +18,7 @@ interface QuestionCardProps {
   onSelect: (id: string) => void;
   disabled?: boolean;
   correctId?: string;
+  isSynthesis?: boolean;
 }
 
 // Clean option text - remove leading "A) ", "B) ", etc. if present
@@ -32,11 +33,19 @@ export function QuestionCard({
   onSelect,
   disabled = false,
   correctId,
+  isSynthesis = false,
 }: QuestionCardProps) {
   console.log('[QuestionCard] Render with selectedId:', selectedId);
 
   return (
     <View>
+      {isSynthesis && (
+        <View style={styles.synthesisBadge}>
+          <Text variant="caption" weight="medium" style={styles.synthesisBadgeText}>
+            Synthese
+          </Text>
+        </View>
+      )}
       <Text variant="h3" style={styles.question}>
         {question}
       </Text>
@@ -105,5 +114,17 @@ const styles = StyleSheet.create({
   },
   options: {
     gap: 12,
+  },
+  synthesisBadge: {
+    backgroundColor: '#6366F1',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+  },
+  synthesisBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
   },
 });
