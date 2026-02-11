@@ -41,7 +41,7 @@ Requirements for Night Blue Glass UI milestone. Each maps to roadmap phases.
 - [ ] **UX-03**: Freemium-locked content displays lock icon overlay on glass surface
 - [ ] **UX-04**: Haptic feedback fires on key interactions (button press, quiz answer, tab switch)
 
-## Future Requirements (v3.1 — Onboarding & Monetization)
+## Future Requirements (v3.1 -- Onboarding & Monetization)
 
 ### Onboarding
 
@@ -82,31 +82,31 @@ Requirements for Night Blue Glass UI milestone. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FOUND-01 | TBD | Pending |
-| FOUND-02 | TBD | Pending |
-| FOUND-03 | TBD | Pending |
-| DS-01 | TBD | Pending |
-| DS-02 | TBD | Pending |
-| DS-03 | TBD | Pending |
-| DS-04 | TBD | Pending |
-| DS-05 | TBD | Pending |
-| SCREEN-01 | TBD | Pending |
-| SCREEN-02 | TBD | Pending |
-| SCREEN-03 | TBD | Pending |
-| SCREEN-04 | TBD | Pending |
-| SCREEN-05 | TBD | Pending |
-| API-01 | TBD | Pending |
-| API-02 | TBD | Pending |
-| UX-01 | TBD | Pending |
-| UX-02 | TBD | Pending |
-| UX-03 | TBD | Pending |
-| UX-04 | TBD | Pending |
+| FOUND-01 | Phase 12 | Pending |
+| FOUND-02 | Phase 12 | Pending |
+| FOUND-03 | Phase 12 | Pending |
+| DS-01 | Phase 13 | Pending |
+| DS-02 | Phase 13 | Pending |
+| DS-03 | Phase 13 | Pending |
+| DS-04 | Phase 13 | Pending |
+| DS-05 | Phase 13 | Pending |
+| SCREEN-01 | Phase 14 | Pending |
+| SCREEN-02 | Phase 14 | Pending |
+| SCREEN-03 | Phase 14 | Pending |
+| SCREEN-04 | Phase 14 | Pending |
+| SCREEN-05 | Phase 14 | Pending |
+| API-01 | Phase 15 | Pending |
+| API-02 | Phase 15 | Pending |
+| UX-01 | Phase 16 | Pending |
+| UX-02 | Phase 16 | Pending |
+| UX-03 | Phase 16 | Pending |
+| UX-04 | Phase 16 | Pending |
 
 **Coverage:**
 - v3.0 requirements: 19 total
-- Mapped to phases: 0
-- Unmapped: 19
+- Mapped to phases: 19
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-11*
-*Last updated: 2026-02-11 after initial definition*
+*Last updated: 2026-02-11 after roadmap creation*
