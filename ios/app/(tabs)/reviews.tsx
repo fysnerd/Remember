@@ -4,19 +4,13 @@
 
 import { View, ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
+import { BookOpen, FileText } from 'lucide-react-native';
 import { Text, Card } from '../../components/ui';
+import { PlatformIcon } from '../../components/icons';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
-import { FileText } from 'lucide-react-native';
 import { useCompletedItems } from '../../hooks';
 import { colors, spacing } from '../../theme';
-
-const sourceEmoji: Record<string, string> = {
-  youtube: '🎬',
-  spotify: '🎧',
-  tiktok: '📱',
-  instagram: '📷',
-};
 
 export default function ReviewsScreen() {
   const router = useRouter();
@@ -62,9 +56,9 @@ export default function ReviewsScreen() {
             style={styles.card}
           >
             <View style={styles.row}>
-              <Text variant="h2" style={styles.emoji}>
-                📚
-              </Text>
+              <View style={styles.iconContainer}>
+                <BookOpen size={20} color={colors.textSecondary} strokeWidth={1.75} />
+              </View>
               <View style={styles.info}>
                 <Text variant="body" weight="medium">
                   {topic.name}
@@ -86,9 +80,9 @@ export default function ReviewsScreen() {
             style={styles.card}
           >
             <View style={styles.row}>
-              <Text variant="h2" style={styles.emoji}>
-                {sourceEmoji[content.source] || '📄'}
-              </Text>
+              <View style={styles.iconContainer}>
+                <PlatformIcon platform={content.source} size={20} colored />
+              </View>
               <View style={styles.info}>
                 <Text variant="body" weight="medium" numberOfLines={2}>
                   {content.contentTitle}
@@ -123,8 +117,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  emoji: {
-    fontSize: 24,
+  iconContainer: {
     marginRight: spacing.md,
   },
   info: {
