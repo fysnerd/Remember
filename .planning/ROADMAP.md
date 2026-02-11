@@ -102,10 +102,10 @@ Plans:
   1. User can tap "Memo" on a theme detail screen and see a synthesized summary connecting concepts across all content items in the theme
   2. Theme memo is generated on first view and cached; subsequent views within 24 hours return the cached version without re-generation
   3. User can force-refresh the memo to get an updated synthesis reflecting newly added content
-**Plans**: TBD
+**Plans:** 1 plan
 
 Plans:
-- [ ] 09-01: Theme memo API endpoint (aggregation + caching) and iOS memo screen
+- [ ] 09-01-PLAN.md -- Theme memo schema fields, GET/POST memo endpoints with 24h cache TTL, iOS memo screen with refresh, memo button on theme detail
 
 ### Phase 10: Cross-Content Synthesis Quiz
 **Goal**: AI generates new quiz questions that require understanding connections between multiple content items within a theme -- questions that cannot be answered from any single source
