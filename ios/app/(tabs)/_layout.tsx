@@ -3,8 +3,8 @@
  */
 
 import { Tabs } from 'expo-router';
-import { Text as RNText } from 'react-native';
-import { colors } from '../../theme';
+import { StyleSheet, Text as RNText } from 'react-native';
+import { colors, fonts } from '../../theme';
 
 function TabIcon({ name, color }: { name: string; color: string }) {
   const icons: Record<string, string> = {
@@ -25,11 +25,15 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: colors.background,
           borderTopColor: colors.border,
+          borderTopWidth: StyleSheet.hairlineWidth,
         },
         headerStyle: {
           backgroundColor: colors.background,
         },
         headerTintColor: colors.text,
+        headerTitleStyle: {
+          fontFamily: fonts.semibold,
+        },
         headerShadowVisible: false,
       }}
     >

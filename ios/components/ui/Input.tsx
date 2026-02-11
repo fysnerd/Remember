@@ -55,6 +55,7 @@ export function Input({
         secureTextEntry={secureTextEntry}
         autoCapitalize={autoCapitalize}
         keyboardType={keyboardType}
+        keyboardAppearance="dark"
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
       />

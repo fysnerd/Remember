@@ -1,5 +1,9 @@
 /**
  * Text component with typography variants
+ *
+ * Uses fontFamily (not fontWeight) for Geist custom font rendering.
+ * React Native ignores fontWeight on custom fonts -- each weight
+ * must be referenced by its registered fontFamily name.
  */
 
 import { Text as RNText, StyleSheet, StyleProp, TextStyle } from 'react-native';
@@ -7,7 +11,7 @@ import { colors, fonts } from '../../theme';
 
 type TextVariant = 'h1' | 'h2' | 'h3' | 'body' | 'caption' | 'label';
 type TextColor = 'primary' | 'secondary' | 'muted' | 'inverse';
-type TextWeight = 'regular' | 'medium' | 'bold';
+type TextWeight = 'regular' | 'medium' | 'semibold' | 'bold';
 
 interface TextProps {
   variant?: TextVariant;
@@ -19,12 +23,12 @@ interface TextProps {
 }
 
 const variantStyles: Record<TextVariant, TextStyle> = {
-  h1: { fontSize: 28, fontWeight: '700', lineHeight: 36 },
-  h2: { fontSize: 24, fontWeight: '700', lineHeight: 32 },
-  h3: { fontSize: 20, fontWeight: '500', lineHeight: 28 },
-  body: { fontSize: 16, fontWeight: '400', lineHeight: 24 },
-  caption: { fontSize: 14, fontWeight: '400', lineHeight: 20 },
-  label: { fontSize: 12, fontWeight: '400', lineHeight: 16 },
+  h1: { fontSize: 28, fontFamily: fonts.bold, lineHeight: 36 },
+  h2: { fontSize: 24, fontFamily: fonts.bold, lineHeight: 32 },
+  h3: { fontSize: 20, fontFamily: fonts.semibold, lineHeight: 28 },
+  body: { fontSize: 16, fontFamily: fonts.regular, lineHeight: 24 },
+  caption: { fontSize: 14, fontFamily: fonts.regular, lineHeight: 20 },
+  label: { fontSize: 12, fontFamily: fonts.medium, lineHeight: 16 },
 };
 
 const colorMap: Record<TextColor, string> = {
@@ -34,10 +38,11 @@ const colorMap: Record<TextColor, string> = {
   inverse: colors.background,
 };
 
-const weightMap: Record<TextWeight, TextStyle['fontWeight']> = {
-  regular: '400',
-  medium: '500',
-  bold: '700',
+const weightMap: Record<TextWeight, string> = {
+  regular: fonts.regular,
+  medium: fonts.medium,
+  semibold: fonts.semibold,
+  bold: fonts.bold,
 };
 
 export function Text({
@@ -55,7 +60,7 @@ export function Text({
         styles.base,
         variantStyles[variant],
         { color: colorMap[color] },
-        weight && { fontWeight: weightMap[weight] },
+        weight && { fontFamily: weightMap[weight] },
         style,
       ]}
     >
