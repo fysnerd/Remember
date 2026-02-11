@@ -211,14 +211,16 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
     });
     const existingIds = new Set(existingContent.map(c => c.externalId));
 
-    // Save new items (stop at first existing = incremental sync)
-    for (const item of items) {
+    // Insert oldest-liked first so most-recently-liked gets the latest createdAt
+    // (inbox sorts by createdAt desc → most recent like appears first)
+    const itemsReversed = [...items].reverse();
+
+    for (const item of itemsReversed) {
       const externalId = item.pk?.toString() || item.id?.toString() || item.code;
       if (!externalId) continue;
 
       if (existingIds.has(externalId)) {
-        log.info({ userId, externalId }, 'Found existing - incremental sync complete');
-        break;
+        continue; // skip existing (can't break — reversed order)
       }
 
       const shortcode = item.code || externalId;
