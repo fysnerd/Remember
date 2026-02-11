@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   ViewStyle,
+  StyleProp,
 } from 'react-native';
 import { Text } from './Text';
 import { colors, spacing, borderRadius, layout } from '../../theme';
@@ -22,6 +23,7 @@ interface ButtonProps {
   onPress: () => void;
   children: React.ReactNode;
   fullWidth?: boolean;
+  style?: StyleProp<ViewStyle>;
 }
 
 const sizeStyles: Record<ButtonSize, ViewStyle> = {
@@ -38,6 +40,7 @@ export function Button({
   onPress,
   children,
   fullWidth = false,
+  style,
 }: ButtonProps) {
   const isDisabled = disabled || loading;
 
@@ -56,6 +59,7 @@ export function Button({
         fullWidth && styles.fullWidth,
         isDisabled && styles.disabled,
         pressed && styles.pressed,
+        style && style,
       ]}
     >
       {loading ? (
@@ -74,13 +78,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: borderRadius.sm,
+    borderRadius: borderRadius.md,
   },
   primary: {
     backgroundColor: colors.accent,
   },
   secondary: {
     backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   outline: {
     backgroundColor: 'transparent',

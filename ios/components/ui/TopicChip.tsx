@@ -68,9 +68,13 @@ const styles = StyleSheet.create({
   },
   unselected: {
     backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   selected: {
     backgroundColor: colors.accent,
+    borderWidth: 1,
+    borderColor: colors.accent,
   },
   removeButton: {
     marginLeft: spacing.xs,

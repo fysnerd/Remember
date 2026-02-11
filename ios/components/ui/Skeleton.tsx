@@ -65,6 +65,6 @@ export function Skeleton({
 
 const styles = StyleSheet.create({
   skeleton: {
-    backgroundColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
   },
 });

@@ -51,6 +51,8 @@ const styles = StyleSheet.create({
   base: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   pressed: {
     opacity: 0.8,

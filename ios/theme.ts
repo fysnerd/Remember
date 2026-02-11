@@ -80,3 +80,22 @@ export const layout = {
   inputHeight: 48,
   minTouchTarget: 44,
 } as const;
+
+export const glass = {
+  border: 'rgba(255, 255, 255, 0.08)',
+  borderLight: 'rgba(255, 255, 255, 0.12)',
+  borderFocused: 'rgba(212, 165, 116, 0.3)',
+  fill: 'rgba(17, 24, 39, 0.6)',
+  fillElevated: 'rgba(30, 41, 59, 0.5)',
+  shadow: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  intensity: 60,
+  tint: 'systemThinMaterialDark' as const,
+  tabBarTint: 'systemChromeMaterialDark' as const,
+  tabBarIntensity: 80,
+} as const;

@@ -10,7 +10,7 @@ import {
   KeyboardTypeOptions,
 } from 'react-native';
 import { Text } from './Text';
-import { colors, spacing, borderRadius, layout } from '../../theme';
+import { colors, spacing, borderRadius, layout, fonts } from '../../theme';
 
 interface InputProps {
   label?: string;
@@ -82,6 +82,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.sm,
     paddingHorizontal: spacing.md,
     fontSize: 16,
+    fontFamily: fonts.regular,
     color: colors.text,
     backgroundColor: colors.background,
   },
