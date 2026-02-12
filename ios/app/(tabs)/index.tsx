@@ -37,11 +37,16 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['themes'] }),
-      queryClient.invalidateQueries({ queryKey: ['reviews', 'stats'] }),
-    ]);
-    setRefreshing(false);
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['themes'] }),
+        queryClient.invalidateQueries({ queryKey: ['reviews', 'stats'] }),
+      ]);
+    } catch (error) {
+      console.error('[Home] Refresh error:', error);
+    } finally {
+      setRefreshing(false);
+    }
   }, [queryClient]);
 
   const handleThemePress = (themeId: string) => {

@@ -5,6 +5,7 @@
 
 import { View, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Text } from '../ui';
 import { colors, spacing, borderRadius } from '../../theme';
 
@@ -26,10 +27,11 @@ export function SelectionBar({
   loadingIgnore = false,
 }: SelectionBarProps) {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const isLoading = loadingLearn || loadingIgnore;
 
   return (
-    <View style={[styles.container, { paddingBottom: insets.bottom + spacing.sm }]}>
+    <View style={[styles.container, { bottom: tabBarHeight, paddingBottom: insets.bottom + spacing.sm }]}>
       <View style={styles.content}>
         {/* Cancel button */}
         <Pressable
@@ -78,7 +80,6 @@ export function SelectionBar({
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
     backgroundColor: colors.surface,

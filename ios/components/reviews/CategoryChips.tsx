@@ -75,6 +75,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.md,
     borderRadius: borderRadius.full,
+    alignSelf: 'flex-start',
   },
   chipActive: {
     backgroundColor: colors.accent,

@@ -1,7 +1,7 @@
 /**
  * DailyThemeCard - Glass-styled theme card for Home screen
  *
- * Displays emoji, theme name, content count, question count, and due badge.
+ * Displays emoji, theme name, content count, and due badge.
  */
 
 import { View, StyleSheet } from 'react-native';
@@ -25,7 +25,7 @@ export function DailyThemeCard({ theme, onPress }: DailyThemeCardProps) {
             {theme.name}
           </Text>
           <Text variant="caption" color="secondary">
-            {theme.contentCount} contenu{theme.contentCount !== 1 ? 's' : ''} {'\u00B7'} {theme.totalCards} question{theme.totalCards !== 1 ? 's' : ''}
+            {theme.contentCount} contenu{theme.contentCount !== 1 ? 's' : ''}
           </Text>
         </View>
       </View>
