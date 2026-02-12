@@ -1,5 +1,8 @@
 /**
  * Profile Tab - User info, OAuth platforms, Settings
+ *
+ * Glass UI rebuild: GlassCard for all sections, user name fallback chain,
+ * platform connect/disconnect with full OAuth flow preserved.
  */
 
 import { useState } from 'react';
@@ -8,14 +11,15 @@ import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { User } from 'lucide-react-native';
-import { Text, Card, Button } from '../../components/ui';
+import { User, ChevronRight, Wrench } from 'lucide-react-native';
+import { Text, Button } from '../../components/ui';
+import { GlassCard } from '../../components/glass/GlassCard';
 import { PlatformIcon } from '../../components/icons';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { useAuthStore } from '../../stores/authStore';
 import { useOAuthStatus } from '../../hooks';
 import api from '../../lib/api';
-import { colors, spacing, borderRadius } from '../../theme';
+import { colors, spacing, borderRadius, glass } from '../../theme';
 
 const platformConfig = [
   { id: 'youtube', name: 'YouTube' },
@@ -38,7 +42,7 @@ export default function ProfileScreen() {
     setSyncingPlatform(platform);
     try {
       await api.post(`/admin/sync/${platform}`);
-      Alert.alert('Sync lancé', `Le sync ${label} a été déclenché. Les nouveaux contenus apparaîtront bientôt.`);
+      Alert.alert('Sync lance', `Le sync ${label} a ete declenche. Les nouveaux contenus apparaitront bientot.`);
       queryClient.invalidateQueries({ queryKey: ['content'] });
       queryClient.invalidateQueries({ queryKey: ['inbox'] });
     } catch (error) {
@@ -96,12 +100,12 @@ export default function ProfileScreen() {
 
   const handleDisconnect = (platformId: string, platformName: string) => {
     Alert.alert(
-      'Déconnecter ' + platformName,
-      'Voulez-vous vraiment déconnecter ce compte ? Votre contenu importé sera conservé.',
+      'Deconnecter ' + platformName,
+      'Voulez-vous vraiment deconnecter ce compte ? Votre contenu importe sera conserve.',
       [
         { text: 'Annuler', style: 'cancel' },
         {
-          text: 'Déconnecter',
+          text: 'Deconnecter',
           style: 'destructive',
           onPress: async () => {
             setLoadingPlatform(platformId);
@@ -110,7 +114,7 @@ export default function ProfileScreen() {
               refreshOAuthStatus();
             } catch (error) {
               console.error('Disconnect error:', error);
-              Alert.alert('Erreur', 'Impossible de déconnecter le compte');
+              Alert.alert('Erreur', 'Impossible de deconnecter le compte');
             } finally {
               setLoadingPlatform(null);
             }
@@ -138,40 +142,46 @@ export default function ProfileScreen() {
     status: oauthStatus?.[p.id as keyof typeof oauthStatus] ?? null,
   }));
 
+  // User name fallback chain: name > email prefix > 'Utilisateur'
+  const displayName = user?.name || user?.email?.split('@')[0] || 'Utilisateur';
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.lg }]}>
       {/* User Info */}
-      <Card padding="lg" style={styles.userCard}>
+      <GlassCard padding="lg" style={styles.userCard}>
         <View style={styles.userRow}>
           <View style={styles.avatar}>
             <User size={28} color={colors.textSecondary} strokeWidth={1.75} />
           </View>
           <View style={styles.userInfo}>
             <Text variant="body" weight="medium">
-              {user?.email || 'user@example.com'}
+              {displayName}
             </Text>
             <Text variant="caption" color="secondary">
-              Plan: {user?.plan || 'FREE'}
+              {user?.email || ''}
+            </Text>
+            <Text variant="label" color="secondary" style={styles.planBadge}>
+              {user?.plan || 'FREE'}
             </Text>
           </View>
         </View>
-      </Card>
+      </GlassCard>
 
       {/* Connected Platforms */}
       <View style={styles.section}>
         <Text variant="h3" style={styles.sectionTitle}>
-          Plateformes connectées
+          Plateformes connectees
         </Text>
-        <Card padding="none">
+        <GlassCard padding="none">
           {platforms.map((platform, index) => {
             const isConnected = platform.status !== null;
-            const isLoading = loadingPlatform === platform.id;
+            const isPlatformLoading = loadingPlatform === platform.id;
             return (
               <Pressable
                 key={platform.id}
                 style={[styles.platformRow, index < platforms.length - 1 && styles.platformBorder]}
                 onPress={() => handlePlatformPress(platform.id, platform.name, isConnected)}
-                disabled={isLoading}
+                disabled={isPlatformLoading}
               >
                 <View style={styles.platformIcon}>
                   <PlatformIcon platform={platform.id} size={20} colored />
@@ -179,13 +189,13 @@ export default function ProfileScreen() {
                 <Text variant="body" style={styles.platformName}>
                   {platform.name}
                 </Text>
-                {isLoading ? (
+                {isPlatformLoading ? (
                   <Text variant="caption" color="secondary">
                     ...
                   </Text>
                 ) : isConnected ? (
                   <Text variant="caption" weight="medium" style={styles.disconnectText}>
-                    Déconnecter
+                    Deconnecter
                   </Text>
                 ) : (
                   <Text variant="caption" color="secondary">
@@ -195,35 +205,36 @@ export default function ProfileScreen() {
               </Pressable>
             );
           })}
-        </Card>
+        </GlassCard>
       </View>
 
       {/* Settings */}
       <View style={styles.section}>
         <Text variant="h3" style={styles.sectionTitle}>
-          Paramètres
+          Parametres
         </Text>
-        <Card padding="none">
+        <GlassCard padding="none">
           <Pressable style={[styles.settingsRow, styles.platformBorder]}>
-            <Text variant="body">À propos</Text>
-            <Text variant="body" color="secondary">
-              ›
-            </Text>
+            <Text variant="body">A propos</Text>
+            <ChevronRight size={16} color={colors.textSecondary} strokeWidth={1.75} />
           </Pressable>
           <Pressable style={styles.settingsRow} onPress={handleLogout}>
             <Text variant="body" style={styles.logoutText}>
-              Déconnexion
+              Deconnexion
             </Text>
           </Pressable>
-        </Card>
+        </GlassCard>
       </View>
 
       {/* DEV Tools - Remove in production */}
       <View style={styles.section}>
-        <Text variant="h3" style={[styles.sectionTitle, { color: 'red' }]}>
-          🛠️ Dev Tools (beta)
-        </Text>
-        <Card padding="md">
+        <View style={styles.devTitleRow}>
+          <Wrench size={16} color={colors.error} strokeWidth={1.75} />
+          <Text variant="h3" style={[styles.sectionTitle, { color: colors.error, marginBottom: 0 }]}>
+            Dev Tools (beta)
+          </Text>
+        </View>
+        <GlassCard padding="md">
           <Pressable
             style={styles.foundationTestButton}
             onPress={() => router.push('/dev-test' as any)}
@@ -260,7 +271,7 @@ export default function ProfileScreen() {
           <Text variant="caption" color="secondary" style={styles.syncHint}>
             Sync individuel par plateforme
           </Text>
-        </Card>
+        </GlassCard>
       </View>
     </ScrollView>
   );
@@ -275,16 +286,23 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
   },
   userInfo: { flex: 1 },
+  planBadge: { marginTop: spacing.xs },
   section: { marginBottom: spacing.xl },
   sectionTitle: { marginBottom: spacing.md },
+  devTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
   platformRow: { flexDirection: 'row', alignItems: 'center', padding: spacing.md },
-  platformBorder: { borderBottomWidth: 1, borderBottomColor: colors.border },
+  platformBorder: { borderBottomWidth: 1, borderBottomColor: glass.border },
   platformIcon: { marginRight: spacing.md },
   platformName: { flex: 1 },
   settingsRow: {
