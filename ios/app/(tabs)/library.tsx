@@ -1,6 +1,8 @@
 /**
- * Library Tab - Collection + Triage (2-column grid with thumbnails)
- * Supports multi-select via long press for batch triage
+ * Explorer Tab - Suggestions + Library (two-level tab architecture)
+ * Top-level: Suggestions | Bibliotheque
+ * Library sub-tabs: Ma collection | A trier
+ * Supports search, filters, and batch triage
  */
 
 import { useState, useCallback, useMemo } from 'react';
@@ -10,12 +12,13 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Text, Badge } from '../../components/ui';
 import { ContentCard, FilterBar, SourcePills, SelectionBar } from '../../components/content';
+import { SearchInput } from '../../components/explorer/SearchInput';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
 import { BookOpen, Search, Sparkles } from 'lucide-react-native';
-import { useContentList, useInbox, useInboxCount, useTriageMutation, useTopics, useChannels } from '../../hooks';
+import { useContentList, useInbox, useInboxCount, useTriageMutation, useTopics, useChannels, useDebouncedValue } from '../../hooks';
 import { useContentStore } from '../../stores/contentStore';
-import { colors, spacing, borderRadius, shadows } from '../../theme';
+import { colors, spacing } from '../../theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_GAP = spacing.sm;
@@ -32,6 +35,10 @@ export default function LibraryScreen() {
 
   // Store state
   const {
+    activeExplorerTab,
+    setActiveExplorerTab,
+    searchQuery,
+    setSearchQuery,
     activeLibraryTab,
     setActiveLibraryTab,
     sourceFilter,
@@ -44,14 +51,18 @@ export default function LibraryScreen() {
     setInboxSourceFilter,
   } = useContentStore();
 
-  // Build filters for API
+  // Debounce search for API calls
+  const debouncedSearch = useDebouncedValue(searchQuery, 300);
+
+  // Build filters for API (include search)
   const filters = useMemo(() => {
-    const f: { source?: string; topic?: string; channel?: string } = {};
+    const f: { source?: string; topic?: string; channel?: string; search?: string } = {};
     if (sourceFilter !== 'all') f.source = sourceFilter;
     if (topicFilter) f.topic = topicFilter;
     if (channelFilter) f.channel = channelFilter;
+    if (debouncedSearch) f.search = debouncedSearch;
     return f;
-  }, [sourceFilter, topicFilter, channelFilter]);
+  }, [sourceFilter, topicFilter, channelFilter, debouncedSearch]);
 
   // Data fetching
   const { data: inboxCount } = useInboxCount();
@@ -131,40 +142,58 @@ export default function LibraryScreen() {
     handleToggleSelection(id);
   };
 
-  const isLoading = activeLibraryTab === 'collection' ? collectionLoading : inboxLoading;
+  const isLibraryLoading = activeLibraryTab === 'collection' ? collectionLoading : inboxLoading;
 
-  return (
-    <View style={styles.container}>
-      {/* Tab Toggle - Clean underline style */}
-      <View style={styles.tabBar}>
+  // --- Render: Suggestions tab content ---
+  const renderSuggestionsTab = () => (
+    <EmptyState
+      message="Des suggestions personnalisees arrivent bientot"
+      icon={Sparkles}
+      hasHeader
+    />
+  );
+
+  // --- Render: Library tab content ---
+  const renderLibraryTab = () => (
+    <>
+      {/* Search bar */}
+      <View style={styles.searchContainer}>
+        <SearchInput
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+      </View>
+
+      {/* Library sub-tabs: Collection / Triage */}
+      <View style={styles.subTabBar}>
         <Pressable
-          style={styles.tab}
+          style={styles.subTab}
           onPress={() => setActiveLibraryTab('collection')}
         >
           <Text
-            variant="body"
+            variant="caption"
             weight={activeLibraryTab === 'collection' ? 'medium' : 'regular'}
-            style={activeLibraryTab === 'collection' ? styles.tabTextActive : styles.tabTextInactive}
+            style={activeLibraryTab === 'collection' ? styles.subTabTextActive : styles.subTabTextInactive}
           >
             Ma collection
           </Text>
-          {activeLibraryTab === 'collection' && <View style={styles.tabIndicator} />}
+          {activeLibraryTab === 'collection' && <View style={styles.subTabIndicator} />}
         </Pressable>
         <Pressable
-          style={styles.tab}
+          style={styles.subTab}
           onPress={() => setActiveLibraryTab('triage')}
         >
-          <View style={styles.tabWithBadge}>
+          <View style={styles.subTabWithBadge}>
             <Text
-              variant="body"
+              variant="caption"
               weight={activeLibraryTab === 'triage' ? 'medium' : 'regular'}
-              style={activeLibraryTab === 'triage' ? styles.tabTextActive : styles.tabTextInactive}
+              style={activeLibraryTab === 'triage' ? styles.subTabTextActive : styles.subTabTextInactive}
             >
-              À trier
+              A trier
             </Text>
             {(inboxCount ?? 0) > 0 && <Badge count={inboxCount ?? 0} size="sm" />}
           </View>
-          {activeLibraryTab === 'triage' && <View style={styles.tabIndicator} />}
+          {activeLibraryTab === 'triage' && <View style={styles.subTabIndicator} />}
         </Pressable>
       </View>
 
@@ -187,7 +216,7 @@ export default function LibraryScreen() {
         />
       )}
 
-      {isLoading ? (
+      {isLibraryLoading ? (
         <LoadingScreen />
       ) : (
         <ScrollView
@@ -220,7 +249,7 @@ export default function LibraryScreen() {
             <>
               {/* Instruction message */}
               <Text variant="caption" style={styles.instruction}>
-                Sélectionnez le contenu à garder
+                Selectionnez le contenu a garder
               </Text>
               <View style={[styles.grid, selectionMode && styles.gridWithBar]}>
                 {filteredInboxItems.map((item) => (
@@ -241,15 +270,52 @@ export default function LibraryScreen() {
               </View>
             </>
           ) : inboxSourceFilter !== 'all' && inboxItems?.length ? (
-            <EmptyState message={`Aucun contenu ${inboxSourceFilter === 'youtube' ? 'YouTube' : inboxSourceFilter === 'spotify' ? 'Spotify' : inboxSourceFilter === 'tiktok' ? 'TikTok' : 'Instagram'} à trier`} icon={Search} hasHeader />
+            <EmptyState message={`Aucun contenu ${inboxSourceFilter === 'youtube' ? 'YouTube' : inboxSourceFilter === 'spotify' ? 'Spotify' : inboxSourceFilter === 'tiktok' ? 'TikTok' : 'Instagram'} a trier`} icon={Search} hasHeader />
           ) : (
-            <EmptyState message="Rien à trier pour le moment" icon={Sparkles} hasHeader />
+            <EmptyState message="Rien a trier pour le moment" icon={Sparkles} hasHeader />
           )}
         </ScrollView>
       )}
+    </>
+  );
 
-      {/* Selection bar - appears when items selected */}
-      {selectionMode && (
+  return (
+    <View style={styles.container}>
+      {/* Top-level tabs: Suggestions | Bibliotheque */}
+      <View style={styles.topTabBar}>
+        <Pressable
+          style={styles.topTab}
+          onPress={() => setActiveExplorerTab('suggestions')}
+        >
+          <Text
+            variant="body"
+            weight={activeExplorerTab === 'suggestions' ? 'medium' : 'regular'}
+            style={activeExplorerTab === 'suggestions' ? styles.topTabTextActive : styles.topTabTextInactive}
+          >
+            Suggestions
+          </Text>
+          {activeExplorerTab === 'suggestions' && <View style={styles.topTabIndicator} />}
+        </Pressable>
+        <Pressable
+          style={styles.topTab}
+          onPress={() => setActiveExplorerTab('library')}
+        >
+          <Text
+            variant="body"
+            weight={activeExplorerTab === 'library' ? 'medium' : 'regular'}
+            style={activeExplorerTab === 'library' ? styles.topTabTextActive : styles.topTabTextInactive}
+          >
+            Bibliotheque
+          </Text>
+          {activeExplorerTab === 'library' && <View style={styles.topTabIndicator} />}
+        </Pressable>
+      </View>
+
+      {/* Tab content */}
+      {activeExplorerTab === 'suggestions' ? renderSuggestionsTab() : renderLibraryTab()}
+
+      {/* Selection bar - appears when items selected in triage */}
+      {selectionMode && activeExplorerTab === 'library' && (
         <SelectionBar
           selectedCount={selectedIds.size}
           onLearn={handleBatchLearn}
@@ -268,8 +334,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  // Tab bar - underline style
-  tabBar: {
+
+  // --- Top-level tabs (Suggestions | Bibliotheque) ---
+  topTabBar: {
     flexDirection: 'row',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
@@ -278,31 +345,65 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
   },
-  tab: {
+  topTab: {
     paddingVertical: spacing.sm,
     position: 'relative',
   },
-  tabTextActive: {
+  topTabTextActive: {
     color: colors.text,
   },
-  tabTextInactive: {
+  topTabTextInactive: {
     color: colors.textTertiary,
   },
-  tabIndicator: {
+  topTabIndicator: {
     position: 'absolute',
     bottom: -spacing.md,
     left: 0,
     right: 0,
     height: 2,
-    backgroundColor: colors.text,
+    backgroundColor: colors.accent,
     borderRadius: 1,
   },
-  tabWithBadge: {
+
+  // --- Search ---
+  searchContainer: {
+    marginHorizontal: spacing.lg,
+    marginVertical: spacing.sm,
+  },
+
+  // --- Library sub-tabs (Collection | Triage) ---
+  subTabBar: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.lg,
+    gap: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  subTab: {
+    paddingVertical: spacing.xs,
+    position: 'relative',
+  },
+  subTabTextActive: {
+    color: colors.text,
+  },
+  subTabTextInactive: {
+    color: colors.textTertiary,
+  },
+  subTabIndicator: {
+    position: 'absolute',
+    bottom: -spacing.xs,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: colors.accent,
+    borderRadius: 1,
+  },
+  subTabWithBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
   },
-  // Content area
+
+  // --- Content area ---
   content: {
     padding: spacing.lg,
     paddingTop: spacing.md,
@@ -313,7 +414,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     textAlign: 'center',
   },
-  // Grid
+
+  // --- Grid ---
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
