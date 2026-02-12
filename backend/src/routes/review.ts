@@ -1092,8 +1092,10 @@ reviewRouter.post('/session/:id/memo', async (req: Request, res: Response, next:
       return res.status(400).json({ error: 'Session not completed yet' });
     }
 
-    // If memo already generated, return it
-    if (session.aiMemo) {
+    const forceRegenerate = req.body.force === true;
+
+    // If memo already generated and not forcing, return it
+    if (session.aiMemo && !forceRegenerate) {
       return res.json({ memo: session.aiMemo, generatedAt: session.memoGeneratedAt });
     }
 

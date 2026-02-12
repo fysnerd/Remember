@@ -1,12 +1,83 @@
 /**
- * Reviews hooks - history, stats, completed items
+ * Reviews hooks - history, stats, completed items, sessions
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 import type { ReviewStats } from '../types/content';
 
-// Completed content/topic item
+// ============================================================================
+// Quiz Session types
+// ============================================================================
+
+export interface QuizSessionContent {
+  id: string;
+  title: string;
+  platform: string;
+  thumbnailUrl: string | null;
+}
+
+export interface QuizSessionItem {
+  id: string;
+  completedAt: string;
+  totalCount: number;
+  correctCount: number;
+  accuracy: number;
+  hasMemo: boolean;
+  contents: QuizSessionContent[];
+}
+
+// ============================================================================
+// Completed sessions (new - for revisions tab)
+// ============================================================================
+
+export function useCompletedSessions() {
+  return useQuery({
+    queryKey: ['reviews', 'sessions'],
+    queryFn: async () => {
+      const { data } = await api.get<{ sessions: QuizSessionItem[] }>('/reviews/sessions');
+      return data.sessions;
+    },
+  });
+}
+
+// ============================================================================
+// Session detail
+// ============================================================================
+
+export function useSessionDetail(sessionId: string | undefined) {
+  return useQuery({
+    queryKey: ['session', sessionId],
+    queryFn: async () => {
+      const { data } = await api.get(`/reviews/session/${sessionId}`);
+      return data;
+    },
+    enabled: !!sessionId,
+  });
+}
+
+// ============================================================================
+// Generate session memo
+// ============================================================================
+
+export function useGenerateSessionMemo() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ sessionId, force }: { sessionId: string; force?: boolean }) => {
+      const { data } = await api.post(`/reviews/session/${sessionId}/memo`, { force });
+      return data as { memo: string; generatedAt: string };
+    },
+    onSuccess: (_data, { sessionId }) => {
+      queryClient.invalidateQueries({ queryKey: ['reviews', 'sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+}
+
+// ============================================================================
+// Legacy hooks (still used elsewhere)
+// ============================================================================
+
 interface CompletedContentItem {
   id: string;
   contentId: string;
@@ -37,7 +108,6 @@ interface CompletedItemsResponse {
   themes: CompletedThemeItem[];
 }
 
-// Get contents and topics that have been quizzed
 export function useCompletedItems() {
   return useQuery({
     queryKey: ['reviews', 'completed'],
@@ -48,7 +118,6 @@ export function useCompletedItems() {
   });
 }
 
-// Review stats (streak, counts)
 export function useReviewStats() {
   return useQuery({
     queryKey: ['reviews', 'stats'],
@@ -59,7 +128,6 @@ export function useReviewStats() {
   });
 }
 
-// Legacy - keep for backwards compatibility
 export function useReviews() {
   return useCompletedItems();
 }
