@@ -13,6 +13,7 @@ import { runQuizGenerationWorker } from '../services/quizGeneration.js';
 import { runReminderWorker } from './reminderWorker.js';
 import { runAutoTaggingWorker } from '../services/tagging.js';
 import { runThemeClassificationWorker, runBackfillThemes } from '../services/themeClassification.js';
+import { runEmbeddingWorker, runEmbeddingBackfill } from '../services/embeddingGeneration.js';
 import { trackJobExecution } from './jobExecutionTracker.js';
 import { runCleanupJobExecutions } from './cleanupWorker.js';
 import { cleanupDesktopAuthSessions } from '../routes/oauth.js';
@@ -139,6 +140,13 @@ export function startScheduler(): void {
     await runJob('theme-classification', runThemeClassificationWorker);
   });
 
+  // Embedding Generation Worker - Every 5 minutes
+  // Generates vector embeddings for TranscriptCache entries
+  cron.schedule('*/5 * * * *', async () => {
+    log.info({ job: 'embedding-generation' }, 'Triggering scheduled job');
+    await runJob('embedding-generation', runEmbeddingWorker);
+  });
+
   // Job Execution Cleanup - Daily at 3:00 AM
   // Deletes execution records older than 30 days
   cron.schedule('0 3 * * *', async () => {
@@ -167,6 +175,7 @@ export function startScheduler(): void {
       { name: 'reminder', schedule: '*/5 * * * *' },
       { name: 'auto-tagging', schedule: '*/15 * * * *' },
       { name: 'theme-classification', schedule: '*/15 * * * *' },
+      { name: 'embedding-generation', schedule: '*/5 * * * *' },
       { name: 'cleanup-job-executions', schedule: '0 3 * * *' },
       { name: 'desktop-auth-cleanup', schedule: '* * * * *' },
     ]
@@ -205,7 +214,7 @@ export async function runAllSyncsNow(): Promise<void> {
  * Run a specific job manually
  */
 export async function triggerJob(
-  jobName: 'youtube' | 'spotify' | 'tiktok' | 'instagram' | 'transcription' | 'podcast-transcription' | 'tiktok-transcription' | 'instagram-transcription' | 'quiz-generation' | 'reminder' | 'auto-tagging' | 'theme-classification' | 'theme-backfill',
+  jobName: 'youtube' | 'spotify' | 'tiktok' | 'instagram' | 'transcription' | 'podcast-transcription' | 'tiktok-transcription' | 'instagram-transcription' | 'quiz-generation' | 'reminder' | 'auto-tagging' | 'theme-classification' | 'theme-backfill' | 'embedding-generation' | 'embedding-backfill',
   triggerSource: 'SCHEDULED' | 'MANUAL' = 'SCHEDULED'
 ): Promise<{ success: boolean; message: string }> {
   switch (jobName) {
@@ -261,6 +270,14 @@ export async function triggerJob(
       await runJob('theme-backfill', runBackfillThemes, triggerSource);
       return { success: true, message: 'Theme backfill completed' };
 
+    case 'embedding-generation':
+      await runJob('embedding-generation', runEmbeddingWorker, triggerSource);
+      return { success: true, message: 'Embedding generation worker completed' };
+
+    case 'embedding-backfill':
+      await runJob('embedding-backfill', runEmbeddingBackfill, triggerSource);
+      return { success: true, message: 'Embedding backfill completed' };
+
     default:
       return { success: false, message: `Unknown job: ${jobName}` };
   }
@@ -290,6 +307,7 @@ export function getSchedulerStatus(): {
       { name: 'reminder', schedule: '*/5 * * * *' },
       { name: 'auto-tagging', schedule: '*/15 * * * *' },
       { name: 'theme-classification', schedule: '*/15 * * * *' },
+      { name: 'embedding-generation', schedule: '*/5 * * * *' },
       { name: 'cleanup-job-executions', schedule: '0 3 * * *' },
     ],
   };

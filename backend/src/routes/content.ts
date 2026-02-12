@@ -12,7 +12,7 @@ import { syncUserYouTube } from '../workers/youtubeSync.js';
 import { syncUserSpotify } from '../workers/spotifySync.js';
 import { syncTikTokForUser } from '../workers/tiktokSync.js';
 import { syncInstagramForUser } from '../workers/instagramSync.js';
-import { generateText } from '../services/llm.js';
+import { generateText, generateEmbedding } from '../services/llm.js';
 import { logger } from '../config/logger.js';
 
 const log = logger.child({ route: 'content' });
@@ -188,14 +188,42 @@ contentRouter.get('/', async (req: Request, res: Response, next: NextFunction) =
       where.status = { not: ContentStatus.INBOX };
     }
 
-    // Full-text search on title, description, and transcript
+    // Hybrid search: keyword + vector (for queries >= 3 chars)
+    let vectorMatchIds: string[] = [];
     if (search && typeof search === 'string' && search.trim()) {
       const searchTerm = search.trim();
+
+      // Always do keyword search
       where.OR = [
         { title: { contains: searchTerm, mode: 'insensitive' } },
         { description: { contains: searchTerm, mode: 'insensitive' } },
         { transcript: { text: { contains: searchTerm, mode: 'insensitive' } } },
       ];
+
+      // For longer queries, also do vector search and merge results
+      if (searchTerm.length >= 3) {
+        try {
+          const queryEmbedding = await generateEmbedding(searchTerm);
+          const vectorResults = await prisma.$queryRaw<{ contentId: string; similarity: number }[]>`
+            SELECT c.id as "contentId", 1 - (tc.embedding <=> ${JSON.stringify(queryEmbedding)}::vector) as similarity
+            FROM "TranscriptCache" tc
+            JOIN "Content" c ON c."transcriptCacheId" = tc.id AND c."userId" = ${req.user!.id}
+            WHERE tc.embedding IS NOT NULL
+              AND 1 - (tc.embedding <=> ${JSON.stringify(queryEmbedding)}::vector) > 0.3
+            ORDER BY tc.embedding <=> ${JSON.stringify(queryEmbedding)}::vector
+            LIMIT 50
+          `;
+          vectorMatchIds = vectorResults.map(r => r.contentId);
+        } catch (err) {
+          // Graceful fallback: if embedding fails, keyword search still works
+          log.warn({ err, search: searchTerm }, 'Vector search failed, falling back to keyword-only');
+        }
+      }
+
+      // Merge: keyword OR vector match
+      if (vectorMatchIds.length > 0) {
+        where.OR.push({ id: { in: vectorMatchIds } });
+      }
     }
 
     // Tags filter (comma-separated tag names)
@@ -812,6 +840,60 @@ contentRouter.get('/:id', async (req: Request, res: Response, next: NextFunction
     return res.json({
       ...contentData,
       themes: contentThemes.map((ct) => ct.theme),
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// GET /api/content/:id/similar - Get semantically similar content
+contentRouter.get('/:id/similar', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const contentId = req.params.id as string;
+    const userId = req.user!.id;
+    const limit = Math.min(parseInt(req.query.limit as string) || 5, 20);
+
+    // Get the content and its transcript cache
+    const content = await prisma.content.findFirst({
+      where: { id: contentId, userId },
+      select: { id: true, transcriptCacheId: true },
+    });
+
+    if (!content) {
+      return res.status(404).json({ error: 'Content not found' });
+    }
+
+    if (!content.transcriptCacheId) {
+      return res.json({ contentId, similar: [] });
+    }
+
+    // Find similar content via cosine similarity on TranscriptCache embeddings
+    const similar = await prisma.$queryRaw<{
+      id: string;
+      title: string;
+      platform: string;
+      thumbnailUrl: string | null;
+      channelName: string | null;
+      similarity: number;
+    }[]>`
+      SELECT c.id, c.title, c.platform, c."thumbnailUrl", c."channelName",
+             1 - (tc2.embedding <=> tc1.embedding) as similarity
+      FROM "TranscriptCache" tc1
+      JOIN "TranscriptCache" tc2 ON tc2.id != tc1.id AND tc2.embedding IS NOT NULL
+      JOIN "Content" c ON c."transcriptCacheId" = tc2.id AND c."userId" = ${userId}
+      WHERE tc1.id = ${content.transcriptCacheId}
+        AND tc1.embedding IS NOT NULL
+        AND c.id != ${contentId}
+      ORDER BY tc2.embedding <=> tc1.embedding
+      LIMIT ${limit}
+    `;
+
+    return res.json({
+      contentId,
+      similar: similar.map(s => ({
+        ...s,
+        similarity: Math.round(s.similarity * 1000) / 1000,
+      })),
     });
   } catch (error) {
     return next(error);

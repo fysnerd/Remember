@@ -41,6 +41,11 @@ interface AnthropicResponse {
   usage?: { input_tokens: number; output_tokens: number };
 }
 
+interface MistralEmbeddingResponse {
+  data: { embedding: number[] }[];
+  usage?: { prompt_tokens: number; total_tokens: number };
+}
+
 /**
  * Unified LLM client that supports multiple providers
  */
@@ -200,6 +205,38 @@ class LLMClient {
       },
     };
   }
+
+  /**
+   * Generate embeddings using Mistral Embed API.
+   * Always uses Mistral regardless of the configured chat provider.
+   */
+  async generateEmbeddings(texts: string[]): Promise<number[][]> {
+    const apiKey = config.llm.mistralApiKey;
+    if (!apiKey) {
+      throw new Error('MISTRAL_API_KEY is required for embeddings');
+    }
+
+    const response = await fetch('https://api.mistral.ai/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'mistral-embed',
+        input: texts,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Mistral Embed API error: ${error}`);
+    }
+
+    const data = await response.json() as MistralEmbeddingResponse;
+    log.info({ count: texts.length, tokens: data.usage?.total_tokens ?? 0 }, 'Embeddings generated');
+    return data.data.map(d => d.embedding);
+  }
 }
 
 // Export singleton instance
@@ -210,6 +247,18 @@ export function getLLMClient(): LLMClient {
     llmClient = new LLMClient();
   }
   return llmClient;
+}
+
+// Convenience functions for embeddings
+export async function generateEmbedding(text: string): Promise<number[]> {
+  const client = getLLMClient();
+  const results = await client.generateEmbeddings([text]);
+  return results[0];
+}
+
+export async function generateEmbeddingsBatch(texts: string[]): Promise<number[][]> {
+  const client = getLLMClient();
+  return client.generateEmbeddings(texts);
 }
 
 // Convenience function for simple completions

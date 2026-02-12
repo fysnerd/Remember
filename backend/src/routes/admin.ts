@@ -2,6 +2,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { triggerJob, getSchedulerStatus, runAllSyncsNow } from '../workers/scheduler.js';
+import { prisma } from '../config/database.js';
 import { logger } from '../config/logger.js';
 
 const log = logger.child({ route: 'admin' });
@@ -142,6 +143,54 @@ adminRouter.post('/sync/theme-backfill', async (_req: Request, res: Response, ne
   try {
     const result = await triggerJob('theme-backfill');
     res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/sync/embedding-generation - Trigger embedding generation worker manually
+adminRouter.post('/sync/embedding-generation', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await triggerJob('embedding-generation', 'MANUAL');
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/sync/embedding-backfill - Trigger embedding backfill (runs in background)
+adminRouter.post('/sync/embedding-backfill', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Start backfill in background, don't await
+    triggerJob('embedding-backfill', 'MANUAL').catch(err => log.error({ err }, 'Embedding backfill failed'));
+    res.json({ success: true, message: 'Embedding backfill started in background' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/admin/embeddings/status - Get embedding coverage stats
+adminRouter.get('/embeddings/status', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const stats = await prisma.$queryRaw<{ total: bigint; with_embedding: bigint; without_embedding: bigint }[]>`
+      SELECT
+        COUNT(*) as total,
+        COUNT(embedding) as with_embedding,
+        COUNT(*) - COUNT(embedding) as without_embedding
+      FROM "TranscriptCache"
+      WHERE text IS NOT NULL AND length(text) > 50
+    `;
+
+    const total = Number(stats[0].total);
+    const withEmbedding = Number(stats[0].with_embedding);
+    const withoutEmbedding = Number(stats[0].without_embedding);
+
+    res.json({
+      total,
+      withEmbedding,
+      withoutEmbedding,
+      coveragePercent: total > 0 ? Math.round((withEmbedding / total) * 100) : 0,
+    });
   } catch (error) {
     next(error);
   }
