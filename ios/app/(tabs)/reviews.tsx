@@ -1,8 +1,5 @@
 /**
  * Reviews Tab - Revisions screen with category filter chips, search, and GlassCard items
- *
- * Shows completed content/topics that have been quizzed, with client-side
- * filtering by platform category and full-text search.
  */
 
 import { useState, useCallback } from 'react';
@@ -78,22 +75,8 @@ export default function ReviewsScreen() {
 
   return (
     <Animated.View entering={FadeIn.duration(200)} style={styles.container}>
-      {/* Search bar */}
-      <View style={styles.searchContainer}>
-        <SearchInput
-          value={searchText}
-          onChangeText={setSearchText}
-          placeholder="Rechercher un memo..."
-        />
-      </View>
-
-      {/* Category filter chips */}
-      <CategoryChips selected={selectedCategory} onSelect={setSelectedCategory} />
-
-      {/* Revision list */}
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarHeight + spacing.lg }]}
+        contentContainerStyle={{ paddingBottom: tabBarHeight + spacing.lg }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -102,6 +85,19 @@ export default function ReviewsScreen() {
           />
         }
       >
+        {/* Search bar */}
+        <View style={styles.searchContainer}>
+          <SearchInput
+            value={searchText}
+            onChangeText={setSearchText}
+            placeholder="Rechercher un memo..."
+          />
+        </View>
+
+        {/* Category filter chips */}
+        <CategoryChips selected={selectedCategory} onSelect={setSelectedCategory} />
+
+        {/* Revision list */}
         {hasFilteredResults ? (
           <View style={styles.list}>
             {displayedContents.map((content) => (
@@ -137,18 +133,11 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     marginBottom: spacing.sm,
   },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: spacing.lg,
-    paddingTop: 0,
-  },
   list: {
+    paddingHorizontal: spacing.lg,
     gap: spacing.md,
   },
   emptyFilterContainer: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacing.xxl * 2,
