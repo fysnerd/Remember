@@ -63,7 +63,7 @@ export function useThemeDetail(id: string | undefined, page?: number, platform?:
     queryFn: async () => {
       const params = new URLSearchParams();
       if (page) params.set('page', String(page));
-      params.set('limit', '20');
+      params.set('limit', '100');
       if (platform) params.set('platform', platform);
       const query = params.toString();
       const { data } = await api.get<ThemeDetailResponse>(`/themes/${id}${query ? `?${query}` : ''}`);

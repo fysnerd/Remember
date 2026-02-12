@@ -1,25 +1,39 @@
 /**
- * Theme Detail Screen - Shows theme info and its content items
+ * Theme Detail Screen - Grid layout with multi-select and swipe-to-delete
  */
 
 import { useState, useCallback } from 'react';
-import { View, ScrollView, StyleSheet, RefreshControl } from 'react-native';
+import { View, ScrollView, StyleSheet, RefreshControl, Dimensions, Pressable, ActivityIndicator } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { Inbox } from 'lucide-react-native';
-import { Text, Card, Button } from '../../components/ui';
-import { PlatformIcon } from '../../components/icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Inbox, Trash2, Brain, X } from 'lucide-react-native';
+import { Text, Button } from '../../components/ui';
+import { SwipeableContentCard } from '../../components/content';
+import { ContentCard } from '../../components/content';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
-import { useThemeDetail } from '../../hooks';
-import { colors, spacing } from '../../theme';
+import { useThemeDetail, useRemoveContentFromTheme } from '../../hooks';
+import { colors, spacing, borderRadius } from '../../theme';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const GRID_GAP = spacing.sm;
+const GRID_PADDING = spacing.lg;
+const COLUMN_WIDTH = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP) / 2;
 
 export default function ThemeDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   const { data, isLoading } = useThemeDetail(id);
+  const removeContent = useRemoveContentFromTheme();
+
+  const selectionMode = selectedIds.size > 0;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -28,7 +42,53 @@ export default function ThemeDetailScreen() {
   }, [queryClient, id]);
 
   const handleContentPress = (contentId: string) => {
-    router.push({ pathname: '/content/[id]', params: { id: contentId } });
+    if (selectionMode) {
+      toggleSelection(contentId);
+    } else {
+      router.push({ pathname: '/content/[id]', params: { id: contentId } });
+    }
+  };
+
+  const handleLongPress = (contentId: string) => {
+    if (!selectionMode) {
+      setSelectedIds(new Set([contentId]));
+    }
+  };
+
+  const toggleSelection = (contentId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(contentId)) {
+        next.delete(contentId);
+      } else {
+        next.add(contentId);
+      }
+      return next;
+    });
+  };
+
+  const handleCancelSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  const handleRemoveContent = (contentId: string) => {
+    if (!id) return;
+    setRemovingIds((prev) => new Set(prev).add(contentId));
+    removeContent.mutate(
+      { themeId: id, contentId },
+      { onSettled: () => setRemovingIds((prev) => { const next = new Set(prev); next.delete(contentId); return next; }) }
+    );
+  };
+
+  const handleBatchRemove = async () => {
+    if (!id || selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    setRemovingIds(new Set(ids));
+    for (const contentId of ids) {
+      await removeContent.mutateAsync({ themeId: id, contentId }).catch(() => {});
+    }
+    setRemovingIds(new Set());
+    setSelectedIds(new Set());
   };
 
   const handleStartQuiz = () => {
@@ -38,6 +98,16 @@ export default function ThemeDetailScreen() {
         params: { id },
       });
     }
+  };
+
+  const handleStartSelectionQuiz = () => {
+    if (selectedIds.size === 0) return;
+    // Navigate to a custom quiz with selected content IDs
+    const contentIdsParam = Array.from(selectedIds).join(',');
+    router.push({
+      pathname: '/quiz/theme/[id]' as any,
+      params: { id, contentIds: contentIdsParam },
+    });
   };
 
   const handleViewMemo = () => {
@@ -59,7 +129,7 @@ export default function ThemeDetailScreen() {
   const quizReadyCount = theme?.quizReadyCount ?? 0;
 
   return (
-    <>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <Stack.Screen
         options={{
           title: theme?.name ?? '',
@@ -68,7 +138,7 @@ export default function ThemeDetailScreen() {
       />
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, selectionMode && { paddingBottom: 100 + insets.bottom }]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
         }
@@ -84,67 +154,111 @@ export default function ThemeDetailScreen() {
           </Text>
         </View>
 
-        {/* Content List */}
-        {contents.length === 0 ? (
-          <EmptyState message="Aucun contenu dans ce theme" icon={Inbox} />
-        ) : (
-          <View style={styles.list}>
-            {contents.map((item) => (
-              <Card
-                key={item.id}
-                padding="md"
-                onPress={() => handleContentPress(item.id)}
-                style={styles.card}
-              >
-                <View style={styles.row}>
-                  <View style={styles.iconContainer}>
-                    <PlatformIcon platform={item.source} size={20} colored />
-                  </View>
-                  <View style={styles.info}>
-                    <Text variant="body" weight="medium" numberOfLines={2}>
-                      {item.title}
-                    </Text>
-                    {item.channelName && (
-                      <Text variant="caption" color="secondary">
-                        {item.channelName}
-                      </Text>
-                    )}
-                  </View>
-                </View>
-              </Card>
-            ))}
-          </View>
-        )}
-
-        {/* Action buttons - always visible */}
+        {/* Action buttons - Quiz & Memo */}
         <View style={styles.actionButtons}>
           <Button
             variant="primary"
-            fullWidth
             onPress={handleStartQuiz}
             disabled={!canQuiz}
+            style={styles.actionBtn}
           >
-            {canQuiz
-              ? `Quiz ${theme?.name}`
-              : `Quiz (${quizReadyCount}/3 contenus)`}
+            {canQuiz ? 'Quiz' : `Quiz (${quizReadyCount}/3)`}
           </Button>
-          {!canQuiz && (
-            <Text variant="caption" color="secondary" style={styles.quizHint}>
-              Il faut au moins 3 contenus avec quiz pour lancer un quiz theme.
-            </Text>
-          )}
-          <View style={{ marginTop: spacing.sm }}>
-            <Button
-              variant="secondary"
-              fullWidth
-              onPress={handleViewMemo}
+          <Button
+            variant="secondary"
+            onPress={handleViewMemo}
+            style={styles.actionBtn}
+          >
+            Memo
+          </Button>
+        </View>
+        {!canQuiz && (
+          <Text variant="caption" color="secondary" style={styles.quizHint}>
+            Il faut au moins 3 contenus avec quiz pour lancer un quiz theme.
+          </Text>
+        )}
+
+        {/* Content Grid */}
+        {contents.length === 0 ? (
+          <EmptyState message="Aucun contenu dans ce theme" icon={Inbox} />
+        ) : (
+          <View style={styles.grid}>
+            {contents.map((item) => (
+              <View key={item.id} style={styles.gridItem}>
+                {selectionMode ? (
+                  <ContentCard
+                    id={item.id}
+                    title={item.title}
+                    source={item.source}
+                    thumbnailUrl={item.thumbnailUrl}
+                    channelName={item.channelName}
+                    duration={item.duration}
+                    onPress={() => handleContentPress(item.id)}
+                    onLongPress={() => handleLongPress(item.id)}
+                    isSelected={selectedIds.has(item.id)}
+                    selectionMode={true}
+                  />
+                ) : (
+                  <SwipeableContentCard
+                    id={item.id}
+                    title={item.title}
+                    source={item.source}
+                    thumbnailUrl={item.thumbnailUrl}
+                    channelName={item.channelName}
+                    duration={item.duration}
+                    onPress={() => handleContentPress(item.id)}
+                    onLongPress={() => handleLongPress(item.id)}
+                    onDelete={() => handleRemoveContent(item.id)}
+                  />
+                )}
+              </View>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Selection bar */}
+      {selectionMode && (
+        <View style={[styles.selectionBar, { paddingBottom: insets.bottom + spacing.sm }]}>
+          <View style={styles.selectionContent}>
+            <Pressable
+              style={({ pressed }) => [styles.selectionCancelBtn, pressed && styles.pressed]}
+              onPress={handleCancelSelection}
             >
-              Memo {theme?.name}
-            </Button>
+              <X size={18} color={colors.textSecondary} />
+            </Pressable>
+
+            <Text variant="body" weight="medium" style={styles.selectionCount}>
+              {selectedIds.size} selectionne{selectedIds.size > 1 ? 's' : ''}
+            </Text>
+
+            <View style={styles.selectionActions}>
+              <Pressable
+                style={({ pressed }) => [styles.selectionActionBtn, styles.removeBtn, pressed && styles.pressed]}
+                onPress={handleBatchRemove}
+                disabled={removingIds.size > 0}
+              >
+                {removingIds.size > 0 ? (
+                  <ActivityIndicator size="small" color={colors.error} />
+                ) : (
+                  <>
+                    <Trash2 size={14} color={colors.error} />
+                    <Text style={styles.removeText}>Retirer</Text>
+                  </>
+                )}
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.selectionActionBtn, styles.quizBtn, pressed && styles.pressed]}
+                onPress={handleStartSelectionQuiz}
+              >
+                <Brain size={14} color={colors.background} />
+                <Text style={styles.quizText}>Quiz</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
-      </ScrollView>
-    </>
+      )}
+    </GestureHandlerRootView>
   );
 }
 
@@ -154,12 +268,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   content: {
-    padding: spacing.lg,
+    padding: GRID_PADDING,
     paddingBottom: spacing.xl,
   },
   header: {
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
   headerEmoji: {
     fontSize: 48,
@@ -168,27 +282,87 @@ const styles = StyleSheet.create({
   headerName: {
     marginBottom: spacing.xs,
   },
-  list: {
-    gap: spacing.md,
-  },
-  card: {
-    marginBottom: 0,
-  },
-  row: {
+
+  // Action buttons row
+  actionButtons: {
     flexDirection: 'row',
-    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
-  iconContainer: {
-    marginRight: spacing.md,
-  },
-  info: {
+  actionBtn: {
     flex: 1,
   },
-  actionButtons: {
-    marginTop: spacing.xl,
-  },
   quizHint: {
-    marginTop: spacing.xs,
     textAlign: 'center',
+    marginBottom: spacing.lg,
+  },
+
+  // Grid
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: GRID_GAP,
+    marginTop: spacing.md,
+  },
+  gridItem: {
+    width: COLUMN_WIDTH,
+  },
+
+  // Selection bar
+  selectionBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+  },
+  selectionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  selectionCancelBtn: {
+    padding: spacing.sm,
+  },
+  selectionCount: {
+    flex: 1,
+    textAlign: 'center',
+  },
+  selectionActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  selectionActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  removeBtn: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.error,
+  },
+  quizBtn: {
+    backgroundColor: colors.accent,
+  },
+  removeText: {
+    color: colors.error,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  quizText: {
+    color: colors.background,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  pressed: {
+    opacity: 0.7,
   },
 });
