@@ -5,25 +5,25 @@
 See: .planning/PROJECT.md (updated 2026-02-11)
 
 **Core value:** L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans effort supplementaire de curation.
-**Current focus:** v3.0 Night Blue Glass UI -- Phase 13: Design System
+**Current focus:** v3.0 Night Blue Glass UI -- Phase 14: Screen Rebuild
 
 ## Current Position
 
-Phase: 13 (Design System) -- COMPLETE
-Plan: 3 of 3 in current phase (ALL DONE)
-Status: Phase 13 complete, ready for next phase
-Last activity: 2026-02-11 -- Completed 13-03 (Lucide icon system + emoji elimination)
+Phase: 14 (Screen Rebuild) -- IN PROGRESS
+Plan: 1 of 3 in current phase
+Status: Completed 14-01 (Home screen rebuild), continuing with 14-02
+Last activity: 2026-02-12 -- Completed 14-01 (Home screen rebuild)
 
-Progress: [#####░░░░░] 5/11 plans (v3.0)
+Progress: [######░░░░] 6/11 plans (v3.0)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 27 (10 v1.0 + 12 v2.0 + 5 v3.0)
+- Total plans completed: 28 (10 v1.0 + 12 v2.0 + 6 v3.0)
 - v1.0: ~25 min/plan avg (4 phases, 10 plans)
 - v2.0: ~3.75 min/plan avg (7 phases, 12 plans)
-- v3.0: 13.6 min/plan avg (2 phases, 5 plans)
-- Total execution time: ~5 hours 58 min across all milestones
+- v3.0: 11.7 min/plan avg (3 phases, 6 plans)
+- Total execution time: ~6 hours across all milestones
 
 | Phase | Plan | Duration | Tasks | Files |
 |-------|------|----------|-------|-------|
@@ -32,6 +32,7 @@ Progress: [#####░░░░░] 5/11 plans (v3.0)
 | 13-01 | Night Blue tokens + UI restyle | 3 min | 2 | 8 |
 | 13-02 | Glass components + glass tab bar | 4 min | 2 | 11 |
 | 13-03 | Lucide icon system + emoji elimination | 19 min | 2 | 25 |
+| 14-01 | Home screen rebuild (greeting + daily themes) | 2 min | 2 | 5 |
 
 ## Accumulated Context
 
@@ -55,6 +56,9 @@ Recent decisions affecting current work:
 - [13-03]: PlatformIcon uses generic Lucide concept icons (Play, Headphones, Music, Camera) -- no brand icons in Lucide
 - [13-03]: EmptyState accepts LucideIcon prop instead of emoji string -- breaking but cleaner pattern
 - [13-03]: useBottomTabBarHeight added to all tab screens for absolute tab bar padding
+- [14-01]: useDailyThemes sorts by dueCards desc with updatedAt tiebreaker as Phase 15 stub
+- [14-01]: Discovery banner restyled with GlassCard instead of opaque Card with accent border
+- [14-01]: Home screen components extracted to ios/components/home/ directory
 
 ### Pending Todos
 
@@ -69,7 +73,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-11
-Stopped at: Completed 13-03-PLAN.md (Lucide icon system + emoji elimination) -- Phase 13 COMPLETE
-Next step: Begin next phase (Phase 14 or 15 per ROADMAP)
+Last session: 2026-02-12
+Stopped at: Completed 14-01-PLAN.md (Home screen rebuild)
+Next step: Execute 14-02-PLAN.md (Explorer screen rebuild)
 Resume file: None
