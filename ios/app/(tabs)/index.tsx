@@ -16,7 +16,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { GreetingHeader } from '../../components/home/GreetingHeader';
 import { QuizRecommendationCard } from '../../components/home/QuizRecommendationCard';
 import { STAGGER_DELAY, STAGGER_CAP } from '../../lib/animations';
-import { useQuizRecommendations, useReviewStats } from '../../hooks';
+import { useQuizRecommendations } from '../../hooks';
 import { useSubscription } from '../../hooks/useSubscription';
 import { useAuthStore } from '../../stores/authStore';
 import { colors, spacing } from '../../theme';
@@ -29,7 +29,6 @@ export default function HomeScreen() {
 
   const { user } = useAuthStore();
   const { data: recommendations, isLoading } = useQuizRecommendations();
-  const { data: stats } = useReviewStats();
   const { data: subscription } = useSubscription();
   const isFree = subscription?.plan !== 'PRO';
 
@@ -38,10 +37,7 @@ export default function HomeScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['home', 'recommendations'] }),
-        queryClient.invalidateQueries({ queryKey: ['reviews', 'stats'] }),
-      ]);
+      await queryClient.invalidateQueries({ queryKey: ['home', 'recommendations'] });
     } catch (error) {
       console.error('[Home] Refresh error:', error);
     } finally {
@@ -76,7 +72,7 @@ export default function HomeScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
       }
     >
-      <GreetingHeader userName={userName} stats={stats} />
+      <GreetingHeader userName={userName} />
 
       <View style={styles.cardsList}>
         {items.map((rec, index) => (

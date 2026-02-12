@@ -8,7 +8,6 @@ import { colors, spacing } from '../../theme';
 
 interface GreetingHeaderProps {
   userName?: string;
-  stats?: { todayCount: number; streak: number };
 }
 
 function getGreeting(): string {
@@ -18,7 +17,7 @@ function getGreeting(): string {
   return 'Bonsoir';
 }
 
-export function GreetingHeader({ userName, stats }: GreetingHeaderProps) {
+export function GreetingHeader({ userName }: GreetingHeaderProps) {
   const greeting = getGreeting();
 
   return (
@@ -26,20 +25,6 @@ export function GreetingHeader({ userName, stats }: GreetingHeaderProps) {
       <Text variant="h2">
         {greeting}, {userName || 'there'}
       </Text>
-
-      {stats != null && (
-        <View style={styles.statsRow}>
-          <Text variant="caption" color="secondary">
-            {stats.todayCount} revision{stats.todayCount !== 1 ? 's' : ''} aujourd'hui
-          </Text>
-          <Text variant="caption" color="secondary" style={styles.statsDot}>
-            {'\u00B7'}
-          </Text>
-          <Text variant="caption" color="secondary">
-            Serie: {stats.streak} jour{stats.streak !== 1 ? 's' : ''}
-          </Text>
-        </View>
-      )}
     </View>
   );
 }
@@ -47,13 +32,5 @@ export function GreetingHeader({ userName, stats }: GreetingHeaderProps) {
 const styles = StyleSheet.create({
   container: {
     marginBottom: spacing.xl,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.sm,
-  },
-  statsDot: {
-    marginHorizontal: spacing.xs,
   },
 });
