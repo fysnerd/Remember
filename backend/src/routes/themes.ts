@@ -5,7 +5,8 @@ import { logger } from '../config/logger.js';
 import { Platform, Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { generateSlug } from '../utils/slug.js';
-import { generateText } from '../services/llm.js';
+import { generateText, getLLMClient } from '../services/llm.js';
+import { llmLimiter } from '../utils/rateLimiter.js';
 
 const log = logger.child({ route: 'themes' });
 export const themeRouter = Router();
@@ -43,6 +44,174 @@ const discoverActionSchema = z.discriminatedUnion('type', [
 
 const discoverSchema = z.object({
   actions: z.array(discoverActionSchema).min(1).max(50),
+});
+
+const FALLBACK_SUGGESTIONS = [
+  { name: 'Developpement personnel', emoji: '🧠', description: 'Techniques de productivite et croissance personnelle' },
+  { name: 'Sciences et technologie', emoji: '🔬', description: 'Decouvertes scientifiques et innovations technologiques' },
+  { name: 'Histoire et culture', emoji: '🏛️', description: 'Evenements historiques et patrimoine culturel' },
+  { name: 'Sante et bien-etre', emoji: '💪', description: 'Nutrition, exercice et sante mentale' },
+  { name: 'Economie et finance', emoji: '📊', description: 'Marches financiers et principes economiques' },
+  { name: 'Art et creation', emoji: '🎨', description: 'Expression artistique et processus creatifs' },
+  { name: 'Philosophie et reflexion', emoji: '💭', description: 'Grandes questions philosophiques et pensee critique' },
+  { name: 'Environnement et nature', emoji: '🌿', description: 'Ecologie, biodiversite et developpement durable' },
+];
+
+function isRecent(date: Date): boolean {
+  return Date.now() - new Date(date).getTime() < 24 * 60 * 60 * 1000;
+}
+
+// ============================================================================
+// GET /daily -- Top 3 themes scored by due cards, new content, and recency
+// ============================================================================
+
+themeRouter.get('/daily', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+
+    // Single query: themes with progress + new content count
+    const themesWithScores = await prisma.$queryRaw<{
+      id: string;
+      name: string;
+      slug: string;
+      color: string;
+      emoji: string;
+      memo: string | null;
+      memoGeneratedAt: Date | null;
+      discoveredAt: Date | null;
+      createdAt: Date;
+      updatedAt: Date;
+      contentCount: bigint;
+      totalCards: bigint;
+      masteredCards: bigint;
+      dueCards: bigint;
+      newContentCount: bigint;
+    }[]>`
+      SELECT
+        t.id, t.name, t.slug, t.color, t.emoji, t.memo,
+        t."memoGeneratedAt", t."discoveredAt", t."createdAt", t."updatedAt",
+        COALESCE(COUNT(DISTINCT ct.id), 0) AS "contentCount",
+        COALESCE(COUNT(card.id), 0) AS "totalCards",
+        COALESCE(COUNT(card.id) FILTER (WHERE card.repetitions >= 3), 0) AS "masteredCards",
+        COALESCE(COUNT(card.id) FILTER (WHERE card."nextReviewAt" <= NOW()), 0) AS "dueCards",
+        COALESCE(COUNT(DISTINCT ct.id) FILTER (WHERE ct."assignedAt" > NOW() - INTERVAL '7 days'), 0) AS "newContentCount"
+      FROM "Theme" t
+      LEFT JOIN "ContentTheme" ct ON ct."themeId" = t.id
+      LEFT JOIN "Quiz" q ON q."contentId" = ct."contentId" AND q."isSynthesis" = false
+      LEFT JOIN "Card" card ON card."quizId" = q.id AND card."userId" = ${userId}
+      WHERE t."userId" = ${userId} AND t."discoveredAt" IS NOT NULL
+      GROUP BY t.id
+    `;
+
+    // Score and sort
+    const scored = themesWithScores.map(t => ({
+      ...t,
+      score: Number(t.dueCards) * 3 + Number(t.newContentCount) * 2 + (isRecent(t.updatedAt) ? 1 : 0),
+    }));
+
+    scored.sort((a, b) => b.score - a.score);
+
+    // Return top 3
+    const daily = scored.slice(0, 3).map(t => ({
+      id: t.id,
+      name: t.name,
+      slug: t.slug,
+      color: t.color,
+      emoji: t.emoji,
+      contentCount: Number(t.contentCount),
+      totalCards: Number(t.totalCards),
+      masteredCards: Number(t.masteredCards),
+      dueCards: Number(t.dueCards),
+      masteryPercent: Number(t.totalCards) > 0 ? Math.round(Number(t.masteredCards) / Number(t.totalCards) * 100) : 0,
+      tags: [], // daily view doesn't need tags
+      createdAt: t.createdAt,
+      updatedAt: t.updatedAt,
+    }));
+
+    return res.json({ themes: daily });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// ============================================================================
+// GET /suggestions -- AI-generated theme ideas based on user's content
+// ============================================================================
+
+themeRouter.get('/suggestions', async (req: Request, res: Response, _next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+
+    // Gather context: existing themes + tag cloud
+    const [existingThemes, userTags] = await Promise.all([
+      prisma.theme.findMany({
+        where: { userId, discoveredAt: { not: null } },
+        select: { name: true },
+      }),
+      prisma.$queryRaw<{ name: string; count: bigint }[]>`
+        SELECT t.name, COUNT(ct."B") as count
+        FROM "Tag" t
+        JOIN "_ContentTags" ct ON ct."B" = t.id
+        JOIN "Content" c ON c.id = ct."A"
+        WHERE c."userId" = ${userId}
+        GROUP BY t.name
+        ORDER BY count DESC
+        LIMIT 30
+      `,
+    ]);
+
+    // Edge case: no tags at all
+    if (userTags.length === 0) {
+      return res.json({ suggestions: FALLBACK_SUGGESTIONS, fallback: true });
+    }
+
+    const existingNames = existingThemes.map(t => t.name);
+    const tagList = userTags.map(t => `${t.name} (${Number(t.count)})`).join(', ');
+
+    const llm = getLLMClient();
+    const response = await llmLimiter(() => llm.chatCompletion({
+      messages: [
+        {
+          role: 'system',
+          content: `Tu es un expert en apprentissage. Suggere 8 themes d'etude bases sur les centres d'interet de l'utilisateur.
+Chaque suggestion doit avoir un nom en francais (2-4 mots), un emoji, et une description courte (1 phrase).
+Les suggestions doivent etre DIFFERENTES des themes existants.
+Reponds UNIQUEMENT en JSON valide.`,
+        },
+        {
+          role: 'user',
+          content: `Themes existants: ${existingNames.join(', ') || 'aucun'}
+Tags et frequences: ${tagList}
+
+Genere 8 suggestions de nouveaux themes. Format:
+{ "suggestions": [{ "name": "...", "emoji": "...", "description": "..." }] }`,
+        },
+      ],
+      temperature: 0.7,
+      maxTokens: 1000,
+      jsonMode: true,
+    }));
+
+    // Parse and validate
+    const parsed = JSON.parse(response.content?.trim() || '{}');
+    if (!parsed.suggestions || !Array.isArray(parsed.suggestions)) {
+      return res.json({ suggestions: FALLBACK_SUGGESTIONS, fallback: true });
+    }
+
+    const validated = parsed.suggestions
+      .filter((s: any) => s.name && typeof s.name === 'string')
+      .slice(0, 8)
+      .map((s: any) => ({
+        name: String(s.name).trim(),
+        emoji: typeof s.emoji === 'string' ? s.emoji : '📚',
+        description: typeof s.description === 'string' ? s.description.trim() : '',
+      }));
+
+    return res.json({ suggestions: validated, fallback: false });
+  } catch (error) {
+    log.error({ err: error }, 'Theme suggestions generation failed');
+    return res.json({ suggestions: FALLBACK_SUGGESTIONS, fallback: true });
+  }
 });
 
 // ============================================================================
