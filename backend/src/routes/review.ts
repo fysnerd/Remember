@@ -885,6 +885,77 @@ reviewRouter.get('/session/preview', async (req: Request, res: Response, next: N
   }
 });
 
+// GET /api/reviews/sessions - Get all completed quiz sessions
+reviewRouter.get('/sessions', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+    const limit = Math.min(parseInt(asString(req.query.limit as string) || '50'), 100);
+    const offset = parseInt(asString(req.query.offset as string) || '0');
+
+    const sessions = await prisma.quizSession.findMany({
+      where: {
+        userId,
+        completedAt: { not: null },
+      },
+      orderBy: { completedAt: 'desc' },
+      skip: offset,
+      take: limit,
+      include: {
+        reviews: {
+          include: {
+            card: {
+              include: {
+                quiz: {
+                  include: {
+                    content: {
+                      select: {
+                        id: true,
+                        title: true,
+                        platform: true,
+                        thumbnailUrl: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const items = sessions.map(session => {
+      // Extract unique contents
+      const contentMap = new Map<string, { id: string; title: string; platform: string; thumbnailUrl: string | null }>();
+      for (const review of session.reviews) {
+        const content = review.card.quiz.content;
+        if (!content) continue;
+        if (!contentMap.has(content.id)) {
+          contentMap.set(content.id, content);
+        }
+      }
+
+      const totalCount = session.totalCount ?? session.reviews.length;
+      const correctCount = session.correctCount ?? 0;
+      const accuracy = totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
+
+      return {
+        id: session.id,
+        completedAt: session.completedAt,
+        totalCount,
+        correctCount,
+        accuracy,
+        hasMemo: !!session.aiMemo,
+        contents: Array.from(contentMap.values()),
+      };
+    });
+
+    return res.json({ sessions: items });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 // GET /api/reviews/session/:id - Get session details
 reviewRouter.get('/session/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
