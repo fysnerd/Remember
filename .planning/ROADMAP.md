@@ -4,7 +4,7 @@
 
 - ✅ **v1.0 Admin & Observability** -- Phases 1-4 (shipped 2026-02-10)
 - ✅ **v2.0 Themes-first UX** -- Phases 5-11 (shipped 2026-02-11)
-- 🚧 **v3.0 Night Blue Glass UI** -- Phases 12-16 (in progress)
+- ✅ **v3.0 Night Blue Glass UI** -- Phases 12-16 (shipped 2026-02-12)
 
 ## Phases
 
@@ -35,7 +35,7 @@ Full details: [milestones/v2.0-ROADMAP.md](milestones/v2.0-ROADMAP.md)
 
 </details>
 
-### 🚧 v3.0 Night Blue Glass UI (In Progress)
+### ✅ v3.0 Night Blue Glass UI -- SHIPPED 2026-02-12
 
 **Milestone Goal:** Complete visual transformation from light monochrome to premium Night Blue dark mode with Glass UI components, Geist typography, Lucide icons, and restructured screens.
 
@@ -43,7 +43,7 @@ Full details: [milestones/v2.0-ROADMAP.md](milestones/v2.0-ROADMAP.md)
 - [x] **Phase 13: Design System** - Night Blue tokens, Glass components, icon system, restyled primitives -- completed 2026-02-11
 - [x] **Phase 14: Screen Rebuild** - Home (daily themes), Explorer (suggestions + library), Revisions, Profile -- completed 2026-02-12
 - [x] **Phase 15: Backend Endpoints** - Daily themes selection + AI theme suggestions APIs -- completed 2026-02-12
-- [ ] **Phase 16: UX Polish** - Micro-interactions, loading animations, freemium overlays, haptics
+- [x] **Phase 16: UX Polish** - Micro-interactions, loading animations, freemium overlays, haptics -- completed 2026-02-12
 
 ## Phase Details
 
@@ -122,8 +122,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 16-01-PLAN.md -- Haptics utility + animation constants + Reanimated migration + screen transitions + haptic feedback on buttons/tabs/quiz + tab screen entering animations
-- [ ] 16-02-PLAN.md -- GlassLockOverlay component + freemium lock overlays on Home (3rd daily theme) and Explorer (suggestion cards 5+)
+- [x] 16-01-PLAN.md -- Haptics utility + animation constants + Reanimated migration + screen transitions + haptic feedback on buttons/tabs/quiz + tab screen entering animations
+- [x] 16-02-PLAN.md -- GlassLockOverlay component + freemium lock overlays on Home (3rd daily theme) and Explorer (suggestion cards 5+)
 
 ## Progress
 
@@ -148,4 +148,4 @@ Phase 15 can execute in parallel with 13/14/16 (backend is independent).
 | 13. Design System | v3.0 | 3/3 | Complete | 2026-02-11 |
 | 14. Screen Rebuild | v3.0 | 3/3 | Complete | 2026-02-12 |
 | 15. Backend Endpoints | v3.0 | 1/1 | Complete | 2026-02-12 |
-| 16. UX Polish | v3.0 | 0/2 | Not started | - |
+| 16. UX Polish | v3.0 | 2/2 | Complete | 2026-02-12 |
