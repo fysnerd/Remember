@@ -8,6 +8,7 @@ import { processTikTokTranscript } from '../services/tiktokTranscription.js';
 import { processInstagramTranscript } from '../services/instagramTranscription.js';
 import { processContentQuiz, regenerateQuiz } from '../services/quizGeneration.js';
 import { autoTagContent } from '../services/tagging.js';
+import { classifyContentForUser } from '../services/themeClassification.js';
 import { syncUserYouTube } from '../workers/youtubeSync.js';
 import { syncUserSpotify } from '../workers/spotifySync.js';
 import { syncTikTokForUser } from '../workers/tiktokSync.js';
@@ -600,6 +601,15 @@ contentRouter.get('/inbox/count', async (req: Request, res: Response, next: Next
   }
 });
 
+// Pipeline helper: quiz → auto-tag → theme classification (fire-and-forget)
+async function quizThenClassify(contentId: string, userId: string): Promise<void> {
+  await processContentQuiz(contentId);
+  const tags = await autoTagContent(contentId);
+  if (tags.length > 0) {
+    await classifyContentForUser(contentId, userId);
+  }
+}
+
 // POST /api/content/triage/bulk - Bulk triage multiple items
 // Optimized: Triggers immediate quiz generation for items with existing transcripts
 contentRouter.post('/triage/bulk', async (req: Request, res: Response, next: NextFunction) => {
@@ -649,45 +659,36 @@ contentRouter.post('/triage/bulk', async (req: Request, res: Response, next: Nex
       });
       processed = result.count;
 
-      // OPTIMIZATION: If "learn", trigger immediate processing for items with transcripts
+      // OPTIMIZATION: If "learn", trigger immediate processing pipeline
+      // quiz → auto-tag → theme classification (all chained)
       if (action === 'learn') {
+        const userId = req.user!.id;
         for (const content of ownedContent) {
           if (content.transcript && content.quizzes.length === 0) {
-            // Has transcript, no quiz yet - generate immediately
-            log.debug({ contentId: content.id, userId: req.user!.id }, 'Bulk triage: triggering immediate quiz for transcribed content');
-            processContentQuiz(content.id).catch((error) => {
-              log.error({ err: error, contentId: content.id, userId: req.user!.id }, 'Bulk triage quiz generation failed');
+            // Has transcript, no quiz yet - generate quiz + tag + classify
+            log.debug({ contentId: content.id, userId }, 'Bulk triage: triggering immediate pipeline');
+            quizThenClassify(content.id, userId).catch((error) => {
+              log.error({ err: error, contentId: content.id, userId }, 'Bulk triage pipeline failed');
             });
             processingStarted++;
           } else if (!content.transcript) {
-            // No transcript - trigger full pipeline
-            if (content.platform === Platform.YOUTUBE) {
-              processContentTranscript(content.id)
+            // No transcript - trigger full pipeline: transcribe → quiz → tag → classify
+            const transcribe = content.platform === Platform.YOUTUBE
+              ? processContentTranscript
+              : content.platform === Platform.SPOTIFY
+              ? processPodcastTranscript
+              : content.platform === Platform.TIKTOK
+              ? processTikTokTranscript
+              : content.platform === Platform.INSTAGRAM
+              ? processInstagramTranscript
+              : null;
+
+            if (transcribe) {
+              transcribe(content.id)
                 .then(async (success) => {
-                  if (success) await processContentQuiz(content.id);
+                  if (success) await quizThenClassify(content.id, userId);
                 })
-                .catch((err) => log.error({ err, contentId: content.id }, 'Bulk triage transcription failed'));
-              processingStarted++;
-            } else if (content.platform === Platform.SPOTIFY) {
-              processPodcastTranscript(content.id)
-                .then(async (success) => {
-                  if (success) await processContentQuiz(content.id);
-                })
-                .catch((err) => log.error({ err, contentId: content.id }, 'Bulk triage podcast transcription failed'));
-              processingStarted++;
-            } else if (content.platform === Platform.TIKTOK) {
-              processTikTokTranscript(content.id)
-                .then(async (success) => {
-                  if (success) await processContentQuiz(content.id);
-                })
-                .catch((err) => log.error({ err, contentId: content.id }, 'Bulk triage tiktok transcription failed'));
-              processingStarted++;
-            } else if (content.platform === Platform.INSTAGRAM) {
-              processInstagramTranscript(content.id)
-                .then(async (success) => {
-                  if (success) await processContentQuiz(content.id);
-                })
-                .catch((err) => log.error({ err, contentId: content.id }, 'Bulk triage instagram transcription failed'));
+                .catch((err) => log.error({ err, contentId: content.id }, 'Bulk triage pipeline failed'));
               processingStarted++;
             }
           }
