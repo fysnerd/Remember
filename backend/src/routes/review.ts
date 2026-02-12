@@ -674,67 +674,60 @@ reviewRouter.post('/practice/theme', async (req: Request, res: Response, next: N
       },
     });
 
-    // On-demand synthesis generation if no synthesis cards exist
+    // Background synthesis generation if no synthesis cards exist (non-blocking)
     if (synthesisCards.length === 0) {
-      const contentWithMemos = await prisma.content.findMany({
-        where: {
-          id: { in: contentIds },
-          transcript: { isNot: null },
-        },
-        include: { transcript: true },
-        take: 15,
-      });
-
-      const contentMemos = contentWithMemos
-        .filter(c => {
-          const segments = c.transcript?.segments as any;
-          return segments?.memo;
-        })
-        .map(c => ({
-          id: c.id,
-          title: c.title,
-          memo: (c.transcript!.segments as any).memo as string,
-        }));
-
-      if (contentMemos.length >= 2) {
-        const { generateSynthesisQuestions } = await import('../services/quizGeneration.js');
-        const result = await generateSynthesisQuestions(theme.name, contentMemos, 5);
-
-        if (result.questions.length > 0) {
-          for (const q of result.questions) {
-            const quiz = await prisma.quiz.create({
-              data: {
-                themeId,
-                contentId: null,
-                isSynthesis: true,
-                question: q.question,
-                type: 'MULTIPLE_CHOICE',
-                options: q.options,
-                correctAnswer: q.correctAnswer,
-                explanation: q.explanation,
-              },
-            });
-            await prisma.card.create({
-              data: { quizId: quiz.id, userId },
-            });
-          }
-
-          // Re-fetch synthesis cards after creation
-          synthesisCards = await prisma.card.findMany({
+      // Fire-and-forget: generate synthesis in background for next quiz session
+      (async () => {
+        try {
+          const contentWithMemos = await prisma.content.findMany({
             where: {
-              userId,
-              quiz: { themeId, isSynthesis: true },
+              id: { in: contentIds },
+              transcript: { isNot: null },
             },
-            include: {
-              quiz: {
-                include: {
-                  theme: { select: { id: true, name: true } },
-                },
-              },
-            },
+            include: { transcript: true },
+            take: 15,
           });
+
+          const contentMemos = contentWithMemos
+            .filter(c => {
+              const segments = c.transcript?.segments as any;
+              return segments?.memo;
+            })
+            .map(c => ({
+              id: c.id,
+              title: c.title,
+              memo: (c.transcript!.segments as any).memo as string,
+            }));
+
+          if (contentMemos.length >= 2) {
+            const { generateSynthesisQuestions } = await import('../services/quizGeneration.js');
+            const result = await generateSynthesisQuestions(theme.name, contentMemos, 5);
+
+            if (result.questions.length > 0) {
+              for (const q of result.questions) {
+                const quiz = await prisma.quiz.create({
+                  data: {
+                    themeId,
+                    contentId: null,
+                    isSynthesis: true,
+                    question: q.question,
+                    type: 'MULTIPLE_CHOICE',
+                    options: q.options,
+                    correctAnswer: q.correctAnswer,
+                    explanation: q.explanation,
+                  },
+                });
+                await prisma.card.create({
+                  data: { quizId: quiz.id, userId },
+                });
+              }
+              log.info({ themeId, count: result.questions.length }, 'Background synthesis generation complete');
+            }
+          }
+        } catch (err) {
+          log.error({ err, themeId }, 'Background synthesis generation failed');
         }
-      }
+      })();
     }
 
     // Mix: up to 5 synthesis + remaining per-content, total capped at 20
