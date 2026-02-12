@@ -8,7 +8,7 @@
 import { Tabs } from 'expo-router';
 import { StyleSheet } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { House, BookOpen, Brain, User } from 'lucide-react-native';
+import { House, Compass, Brain, User } from 'lucide-react-native';
 import { TabIcon } from '../../components/icons';
 import { haptics } from '../../lib/haptics';
 import { colors, fonts, glass } from '../../theme';
@@ -53,28 +53,28 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Feed',
+          title: 'Home',
           tabBarIcon: ({ color, size }) => <TabIcon icon={House} color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="library"
         options={{
-          title: 'Biblioth\u00e8que',
-          tabBarIcon: ({ color, size }) => <TabIcon icon={BookOpen} color={color} size={size} />,
+          title: 'Explorer',
+          tabBarIcon: ({ color, size }) => <TabIcon icon={Compass} color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="reviews"
         options={{
-          title: 'M\u00e9mos',
+          title: 'Revisions',
           tabBarIcon: ({ color, size }) => <TabIcon icon={Brain} color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: 'Profil',
           tabBarIcon: ({ color, size }) => <TabIcon icon={User} color={color} size={size} />,
         }}
       />

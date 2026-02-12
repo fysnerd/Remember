@@ -45,8 +45,7 @@ export default function ReviewsScreen() {
   }
 
   const contents = data?.items ?? [];
-  const topics = data?.topics ?? [];
-  const hasItems = contents.length > 0 || topics.length > 0;
+  const hasItems = contents.length > 0;
 
   if (!hasItems) {
     return (
@@ -65,30 +64,16 @@ export default function ReviewsScreen() {
 
   // Client-side filtering: search text
   const searchLower = debouncedSearch.toLowerCase();
-  const searchedContents = debouncedSearch
+  const displayedContents = debouncedSearch
     ? filteredContents.filter((item) =>
         item.contentTitle.toLowerCase().includes(searchLower)
       )
     : filteredContents;
 
-  const searchedTopics = debouncedSearch
-    ? topics.filter((topic) =>
-        topic.name.toLowerCase().includes(searchLower)
-      )
-    : topics;
-
-  // If category filter is active, hide topics (topics are not platform-specific)
-  const displayedTopics = selectedCategory === 'all' ? searchedTopics : [];
-  const displayedContents = searchedContents;
-
-  const hasFilteredResults = displayedTopics.length > 0 || displayedContents.length > 0;
+  const hasFilteredResults = displayedContents.length > 0;
 
   const handleContentMemo = (contentId: string) => {
     router.push(`/memo/${contentId}`);
-  };
-
-  const handleTopicMemo = (topicName: string) => {
-    router.push({ pathname: '/memo/topic/[name]', params: { name: encodeURIComponent(topicName) } });
   };
 
   return (
@@ -119,17 +104,6 @@ export default function ReviewsScreen() {
       >
         {hasFilteredResults ? (
           <View style={styles.list}>
-            {/* Topics first */}
-            {displayedTopics.map((topic) => (
-              <RevisionCard
-                key={topic.id}
-                title={topic.name}
-                subtitle={`${topic.contentCount} contenu${topic.contentCount > 1 ? 's' : ''} \u00b7 Theme`}
-                onPress={() => handleTopicMemo(topic.name)}
-              />
-            ))}
-
-            {/* Then content items */}
             {displayedContents.map((content) => (
               <RevisionCard
                 key={content.id}

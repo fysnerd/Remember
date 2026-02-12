@@ -3,10 +3,10 @@
  */
 
 import { useState, useCallback } from 'react';
-import { View, ScrollView, StyleSheet, Pressable, RefreshControl } from 'react-native';
+import { View, ScrollView, StyleSheet, RefreshControl } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { Inbox, Settings } from 'lucide-react-native';
+import { Inbox } from 'lucide-react-native';
 import { Text, Card, Button } from '../../components/ui';
 import { PlatformIcon } from '../../components/icons';
 import { LoadingScreen } from '../../components/LoadingScreen';
@@ -29,10 +29,6 @@ export default function ThemeDetailScreen() {
 
   const handleContentPress = (contentId: string) => {
     router.push({ pathname: '/content/[id]', params: { id: contentId } });
-  };
-
-  const handleManageTheme = () => {
-    router.push({ pathname: '/theme/manage/[id]' as any, params: { id: id! } });
   };
 
   const handleStartQuiz = () => {
@@ -67,12 +63,7 @@ export default function ThemeDetailScreen() {
       <Stack.Screen
         options={{
           title: theme?.name ?? '',
-          headerBackTitle: 'Feed',
-          headerRight: () => (
-            <Pressable onPress={handleManageTheme} hitSlop={8} style={styles.settingsButton}>
-              <Settings size={20} color={colors.text} strokeWidth={1.75} />
-            </Pressable>
-          ),
+          headerBackTitle: 'Home',
         }}
       />
       <ScrollView
@@ -165,9 +156,6 @@ const styles = StyleSheet.create({
   content: {
     padding: spacing.lg,
     paddingBottom: spacing.xl,
-  },
-  settingsButton: {
-    paddingHorizontal: spacing.sm,
   },
   header: {
     alignItems: 'center',

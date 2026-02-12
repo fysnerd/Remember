@@ -5,12 +5,11 @@
 import { useState } from 'react';
 import { View, ScrollView, StyleSheet, Image, Linking, Pressable, Modal, FlatList } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { Text, Button, TopicChip } from '../../components/ui';
+import { Text, Button } from '../../components/ui';
 import { PlatformIcon } from '../../components/icons';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { ErrorState } from '../../components/ErrorState';
-import { TopicEditModal } from '../../components/TopicEditModal';
-import { useContent, useUpdateContentTopics, useThemes, useAddContentToTheme } from '../../hooks';
+import { useContent, useThemes, useAddContentToTheme } from '../../hooks';
 import { colors, spacing, borderRadius } from '../../theme';
 
 const sourceLabel: Record<string, string> = {
@@ -36,9 +35,7 @@ export default function ContentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { data: content, isLoading, error, refetch } = useContent(id!);
-  const [showTopicModal, setShowTopicModal] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
-  const updateTopics = useUpdateContentTopics();
   const { data: allThemes } = useThemes();
   const addContentToTheme = useAddContentToTheme();
 
@@ -61,15 +58,6 @@ export default function ContentDetailScreen() {
   const handleOpenSource = () => {
     if (content.url) {
       Linking.openURL(content.url);
-    }
-  };
-
-  const handleRemoveTopic = async (topicToRemove: string) => {
-    const newTopics = content.topics.filter((t) => t !== topicToRemove);
-    try {
-      await updateTopics.mutateAsync({ contentId: id!, tags: newTopics });
-    } catch (error) {
-      console.error('Failed to remove topic:', error);
     }
   };
 
@@ -116,35 +104,12 @@ export default function ContentDetailScreen() {
           )}
         </View>
 
-        {/* Topics */}
-        <View style={styles.section}>
-          <Text variant="body" weight="medium" style={styles.sectionTitle}>
-            Topics
-          </Text>
-          <View style={styles.topics}>
-            {content.topics && content.topics.length > 0 ? (
-              content.topics.map((topic) => (
-                <TopicChip
-                  key={topic}
-                  label={topic}
-                  onRemove={() => handleRemoveTopic(topic)}
-                />
-              ))
-            ) : (
-              <Text variant="caption" color="secondary">
-                Aucun topic
-              </Text>
-            )}
-            <TopicChip label="+" onPress={() => setShowTopicModal(true)} />
-          </View>
-        </View>
-
         {/* Themes */}
         <View style={styles.section}>
           <Text variant="body" weight="medium" style={styles.sectionTitle}>
             Themes
           </Text>
-          <View style={styles.topics}>
+          <View style={styles.themes}>
             {content.themes && content.themes.length > 0 ? (
               content.themes.map((theme) => (
                 <Pressable
@@ -185,14 +150,6 @@ export default function ContentDetailScreen() {
           </Button>
         </View>
       </ScrollView>
-
-      {/* Topic Edit Modal */}
-      <TopicEditModal
-        visible={showTopicModal}
-        onClose={() => setShowTopicModal(false)}
-        contentId={id!}
-        currentTopics={content.topics || []}
-      />
 
       {/* Add to Theme Modal */}
       <Modal
@@ -246,19 +203,6 @@ export default function ContentDetailScreen() {
                 Aucun theme. Creez-en un d'abord.
               </Text>
             }
-            ListFooterComponent={
-              <Pressable
-                onPress={() => {
-                  setShowThemeModal(false);
-                  router.push('/theme-create' as any);
-                }}
-                style={styles.modalCreateLink}
-              >
-                <Text variant="body" style={styles.modalCreateLinkText}>
-                  + Creer un theme
-                </Text>
-              </Pressable>
-            }
           />
         </View>
       </Modal>
@@ -303,7 +247,7 @@ const styles = StyleSheet.create({
   },
   section: { marginBottom: spacing.lg },
   sectionTitle: { marginBottom: spacing.sm },
-  topics: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  themes: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   actions: { gap: spacing.md, marginTop: spacing.lg },
   themeChip: {
     borderWidth: 1,
@@ -354,13 +298,5 @@ const styles = StyleSheet.create({
   modalEmpty: {
     textAlign: 'center',
     paddingVertical: spacing.xl,
-  },
-  modalCreateLink: {
-    paddingVertical: spacing.lg,
-    alignItems: 'center',
-  },
-  modalCreateLinkText: {
-    color: colors.accent,
-    textDecorationLine: 'underline',
   },
 });

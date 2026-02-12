@@ -94,16 +94,6 @@ export default function RootLayout() {
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="signup" options={{ headerShown: false }} />
         <Stack.Screen
-          name="topic/[name]"
-          options={{
-            headerShown: true,
-            headerBackTitle: 'Feed',
-            presentation: 'card',
-            headerStyle: { backgroundColor: '#0A0F1A' },
-            headerTintColor: '#F8FAFC',
-          }}
-        />
-        <Stack.Screen
           name="content/[id]"
           options={{
             headerShown: true,
@@ -133,26 +123,10 @@ export default function RootLayout() {
           }}
         />
         <Stack.Screen
-          name="quiz/topic/[name]"
-          options={{
-            headerShown: false,
-            presentation: 'card',
-          }}
-        />
-        <Stack.Screen
           name="quiz/theme/[id]"
           options={{
             headerShown: false,
             presentation: 'card',
-          }}
-        />
-        <Stack.Screen
-          name="memo/topic/[name]"
-          options={{
-            headerShown: true,
-            presentation: 'card',
-            headerStyle: { backgroundColor: '#0A0F1A' },
-            headerTintColor: '#F8FAFC',
           }}
         />
         <Stack.Screen
@@ -180,52 +154,7 @@ export default function RootLayout() {
           name="theme/[id]"
           options={{
             headerShown: true,
-            headerBackTitle: 'Feed',
-            presentation: 'card',
-            headerStyle: { backgroundColor: '#0A0F1A' },
-            headerTintColor: '#F8FAFC',
-          }}
-        />
-        <Stack.Screen
-          name="theme/manage/[id]"
-          options={{
-            headerShown: true,
-            title: 'Gerer le theme',
-            headerBackTitle: 'Retour',
-            presentation: 'card',
-            headerStyle: { backgroundColor: '#0A0F1A' },
-            headerTintColor: '#F8FAFC',
-          }}
-        />
-        <Stack.Screen
-          name="theme-discovery"
-          options={{
-            headerShown: true,
-            title: 'Decouverte',
-            headerBackTitle: 'Retour',
-            presentation: 'card',
-            headerStyle: { backgroundColor: '#0A0F1A' },
-            headerTintColor: '#F8FAFC',
-          }}
-        />
-        <Stack.Screen
-          name="theme-create"
-          options={{
-            headerShown: true,
-            title: 'Nouveau theme',
-            presentation: 'modal',
-            animation: 'slide_from_bottom',
-            animationDuration: 300,
-            headerStyle: { backgroundColor: '#0A0F1A' },
-            headerTintColor: '#F8FAFC',
-          }}
-        />
-        <Stack.Screen
-          name="dev-test"
-          options={{
-            headerShown: true,
-            title: 'Foundation Test',
-            headerBackTitle: 'Profile',
+            headerBackTitle: 'Home',
             presentation: 'card',
             headerStyle: { backgroundColor: '#0A0F1A' },
             headerTintColor: '#F8FAFC',

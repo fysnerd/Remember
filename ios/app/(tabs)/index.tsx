@@ -2,22 +2,22 @@
  * Home Tab - Daily learning experience with greeting, stats, and 3 daily theme cards
  */
 
-import { useState, useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { View, ScrollView, StyleSheet, RefreshControl } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { ChevronRight, Link2 } from 'lucide-react-native';
+import { Link2 } from 'lucide-react-native';
 import { Text } from '../../components/ui';
-import { GlassCard } from '../../components/glass/GlassCard';
 import { GlassLockOverlay } from '../../components/glass';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
 import { GreetingHeader } from '../../components/home/GreetingHeader';
 import { DailyThemeCard } from '../../components/home/DailyThemeCard';
 import { STAGGER_DELAY, STAGGER_CAP } from '../../lib/animations';
-import { useDailyThemes, usePendingThemes, useReviewStats } from '../../hooks';
+import { useDailyThemes, useReviewStats } from '../../hooks';
+import { useSubscription } from '../../hooks/useSubscription';
 import { useAuthStore } from '../../stores/authStore';
 import { colors, spacing } from '../../theme';
 
@@ -30,9 +30,9 @@ export default function HomeScreen() {
   const { user } = useAuthStore();
   const { data: dailyThemes, isLoading: themesLoading } = useDailyThemes();
   const { data: stats } = useReviewStats();
-  const { data: pendingThemes } = usePendingThemes();
+  const { data: subscription } = useSubscription();
+  const isFree = subscription?.plan !== 'PRO';
 
-  const pendingCount = pendingThemes?.length ?? 0;
   const userName = user?.name || user?.email?.split('@')[0] || 'there';
 
   const onRefresh = useCallback(async () => {
@@ -73,25 +73,6 @@ export default function HomeScreen() {
     >
       <GreetingHeader userName={userName} stats={stats} />
 
-      {/* Discovery banner */}
-      {pendingCount > 0 && (
-        <Animated.View entering={FadeInDown.duration(250)}>
-          <GlassCard padding="md" onPress={() => router.push('/theme-discovery' as any)}>
-            <View style={styles.discoveryRow}>
-              <View style={styles.discoveryContent}>
-                <Text variant="body" weight="medium">
-                  {pendingCount} nouveau{pendingCount > 1 ? 'x' : ''} theme{pendingCount > 1 ? 's' : ''} detecte{pendingCount > 1 ? 's' : ''}
-                </Text>
-                <Text variant="caption" color="secondary">
-                  Revoyez et confirmez vos themes
-                </Text>
-              </View>
-              <ChevronRight size={24} color={colors.textSecondary} strokeWidth={1.75} />
-            </View>
-          </GlassCard>
-        </Animated.View>
-      )}
-
       {/* Daily themes section */}
       <Text variant="h3" style={styles.sectionTitle}>
         Themes du jour
@@ -103,7 +84,7 @@ export default function HomeScreen() {
             key={theme.id}
             entering={FadeInDown.delay(Math.min(index, STAGGER_CAP) * STAGGER_DELAY).duration(250)}
           >
-            <GlassLockOverlay locked={index >= 2}>
+            <GlassLockOverlay locked={isFree && index >= 2}>
               <DailyThemeCard
                 theme={theme}
                 onPress={() => handleThemePress(theme.id)}
@@ -123,13 +104,6 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing.lg,
-  },
-  discoveryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  discoveryContent: {
-    flex: 1,
   },
   sectionTitle: {
     marginTop: spacing.lg,

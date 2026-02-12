@@ -1,8 +1,7 @@
 /**
- * Explorer Tab - Suggestions + Library (two-level tab architecture)
- * Top-level: Suggestions | Bibliotheque
- * Library sub-tabs: Ma collection | A trier
- * Supports search, filters, and batch triage
+ * Explorer Tab - Suggestions + Bibliotheque (two top-level tabs)
+ * Suggestions: 8 thematic topics (all locked if FREE)
+ * Bibliotheque: inbox content to triage with source filter, search, and batch actions
  */
 
 import { useState, useCallback, useMemo } from 'react';
@@ -12,14 +11,15 @@ import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Text, Badge, Skeleton } from '../../components/ui';
-import { ContentCard, FilterBar, SourcePills, SelectionBar } from '../../components/content';
+import { ContentCard, SourcePills, SelectionBar } from '../../components/content';
 import { SearchInput } from '../../components/explorer/SearchInput';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
-import { BookOpen, Search, Sparkles } from 'lucide-react-native';
+import { Search, Sparkles } from 'lucide-react-native';
 import { SuggestionCard } from '../../components/explorer/SuggestionCard';
 import { GlassLockOverlay } from '../../components/glass';
-import { useContentList, useInbox, useInboxCount, useTriageMutation, useTopics, useChannels, useDebouncedValue, useThemeSuggestions } from '../../hooks';
+import { useInbox, useInboxCount, useTriageMutation, useDebouncedValue, useThemeSuggestions } from '../../hooks';
+import { useSubscription } from '../../hooks/useSubscription';
 import { useContentStore } from '../../stores/contentStore';
 import { colors, spacing } from '../../theme';
 
@@ -42,51 +42,44 @@ export default function LibraryScreen() {
     setActiveExplorerTab,
     searchQuery,
     setSearchQuery,
-    activeLibraryTab,
-    setActiveLibraryTab,
     sourceFilter,
-    topicFilter,
-    channelFilter,
     setSourceFilter,
-    setTopicFilter,
-    setChannelFilter,
-    inboxSourceFilter,
-    setInboxSourceFilter,
   } = useContentStore();
 
-  // Debounce search for API calls
-  const debouncedSearch = useDebouncedValue(searchQuery, 300);
+  // Subscription
+  const { data: subscription } = useSubscription();
+  const isFree = subscription?.plan !== 'PRO';
 
-  // Build filters for API (include search)
-  const filters = useMemo(() => {
-    const f: { source?: string; topic?: string; channel?: string; search?: string } = {};
-    if (sourceFilter !== 'all') f.source = sourceFilter;
-    if (topicFilter) f.topic = topicFilter;
-    if (channelFilter) f.channel = channelFilter;
-    if (debouncedSearch) f.search = debouncedSearch;
-    return f;
-  }, [sourceFilter, topicFilter, channelFilter, debouncedSearch]);
+  // Debounce search for filtering
+  const debouncedSearch = useDebouncedValue(searchQuery, 300);
 
   // Data fetching
   const { data: inboxCount } = useInboxCount();
-  const { data: collectionData, isLoading: collectionLoading } = useContentList(filters);
   const { data: inboxItems, isLoading: inboxLoading } = useInbox();
-  const { data: topics = [] } = useTopics();
-  const { data: channels = [] } = useChannels();
   const triageMutation = useTriageMutation();
   const { data: suggestionsData, isLoading: suggestionsLoading, error: suggestionsError } = useThemeSuggestions();
 
   const selectionMode = selectedIds.size > 0;
 
-  // Filter inbox items by source (client-side filtering)
+  // Filter inbox items by source + search (client-side filtering)
   const filteredInboxItems = useMemo(() => {
-    if (!inboxItems || inboxSourceFilter === 'all') return inboxItems;
-    return inboxItems.filter((item) => item.source === inboxSourceFilter);
-  }, [inboxItems, inboxSourceFilter]);
+    let items = inboxItems;
+    if (!items) return items;
+    if (sourceFilter !== 'all') {
+      items = items.filter((item) => item.source === sourceFilter);
+    }
+    if (debouncedSearch) {
+      const searchLower = debouncedSearch.toLowerCase();
+      items = items.filter((item) =>
+        item.title.toLowerCase().includes(searchLower) ||
+        (item.channelName && item.channelName.toLowerCase().includes(searchLower))
+      );
+    }
+    return items;
+  }, [inboxItems, sourceFilter, debouncedSearch]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await queryClient.invalidateQueries({ queryKey: ['content'] });
     await queryClient.invalidateQueries({ queryKey: ['inbox'] });
     setRefreshing(false);
   }, [queryClient]);
@@ -137,16 +130,9 @@ export default function LibraryScreen() {
     );
   };
 
-  const handleContentPress = (id: string) => {
-    router.push(`/content/${id}`);
-  };
-
   const handleInboxItemPress = (id: string) => {
-    // In triage tab, tap always toggles selection
     handleToggleSelection(id);
   };
-
-  const isLibraryLoading = activeLibraryTab === 'collection' ? collectionLoading : inboxLoading;
 
   // --- Render: Suggestions tab content ---
   const renderSuggestionsTab = () => {
@@ -178,7 +164,7 @@ export default function LibraryScreen() {
           Suggestions pour toi
         </Text>
         {suggestionsData.suggestions.map((suggestion, index) => (
-          <GlassLockOverlay key={`${suggestion.name}-${index}`} locked={index >= 4}>
+          <GlassLockOverlay key={`${suggestion.name}-${index}`} locked={isFree}>
             <SuggestionCard
               title={`${suggestion.emoji} ${suggestion.name}`}
               description={suggestion.description}
@@ -189,7 +175,7 @@ export default function LibraryScreen() {
     );
   };
 
-  // --- Render: Library tab content ---
+  // --- Render: Bibliotheque tab content (inbox only) ---
   const renderLibraryTab = () => (
     <>
       {/* Search bar */}
@@ -200,59 +186,13 @@ export default function LibraryScreen() {
         />
       </View>
 
-      {/* Library sub-tabs: Collection / Triage */}
-      <View style={styles.subTabBar}>
-        <Pressable
-          style={styles.subTab}
-          onPress={() => setActiveLibraryTab('collection')}
-        >
-          <Text
-            variant="caption"
-            weight={activeLibraryTab === 'collection' ? 'medium' : 'regular'}
-            style={activeLibraryTab === 'collection' ? styles.subTabTextActive : styles.subTabTextInactive}
-          >
-            Ma collection
-          </Text>
-          {activeLibraryTab === 'collection' && <View style={styles.subTabIndicator} />}
-        </Pressable>
-        <Pressable
-          style={styles.subTab}
-          onPress={() => setActiveLibraryTab('triage')}
-        >
-          <View style={styles.subTabWithBadge}>
-            <Text
-              variant="caption"
-              weight={activeLibraryTab === 'triage' ? 'medium' : 'regular'}
-              style={activeLibraryTab === 'triage' ? styles.subTabTextActive : styles.subTabTextInactive}
-            >
-              A trier
-            </Text>
-            {(inboxCount ?? 0) > 0 && <Badge count={inboxCount ?? 0} size="sm" />}
-          </View>
-          {activeLibraryTab === 'triage' && <View style={styles.subTabIndicator} />}
-        </Pressable>
-      </View>
+      {/* Source filter pills */}
+      <SourcePills
+        selectedSource={sourceFilter}
+        onSourceChange={setSourceFilter}
+      />
 
-      {/* Filters - collection tab has full FilterBar, triage tab has SourcePills */}
-      {activeLibraryTab === 'collection' ? (
-        <FilterBar
-          selectedSource={sourceFilter}
-          selectedTopic={topicFilter}
-          selectedChannel={channelFilter}
-          topics={topics}
-          channels={channels}
-          onSourceChange={setSourceFilter}
-          onTopicChange={setTopicFilter}
-          onChannelChange={setChannelFilter}
-        />
-      ) : (
-        <SourcePills
-          selectedSource={inboxSourceFilter}
-          onSourceChange={setInboxSourceFilter}
-        />
-      )}
-
-      {isLibraryLoading ? (
+      {inboxLoading ? (
         <LoadingScreen />
       ) : (
         <ScrollView
@@ -261,27 +201,7 @@ export default function LibraryScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
           }
         >
-          {activeLibraryTab === 'collection' ? (
-            collectionData?.items?.length ? (
-              <View style={styles.grid}>
-                {collectionData.items.map((item) => (
-                  <View key={item.id} style={styles.gridItem}>
-                    <ContentCard
-                      id={item.id}
-                      title={item.title}
-                      source={item.source}
-                      thumbnailUrl={item.thumbnailUrl}
-                      channelName={item.channelName}
-                      duration={item.duration}
-                      onPress={() => handleContentPress(item.id)}
-                    />
-                  </View>
-                ))}
-              </View>
-            ) : (
-              <EmptyState message="Aucun contenu dans votre collection" icon={BookOpen} hasHeader />
-            )
-          ) : filteredInboxItems?.length ? (
+          {filteredInboxItems?.length ? (
             <>
               {/* Instruction message */}
               <Text variant="caption" style={styles.instruction}>
@@ -305,8 +225,10 @@ export default function LibraryScreen() {
                 ))}
               </View>
             </>
-          ) : inboxSourceFilter !== 'all' && inboxItems?.length ? (
-            <EmptyState message={`Aucun contenu ${inboxSourceFilter === 'youtube' ? 'YouTube' : inboxSourceFilter === 'spotify' ? 'Spotify' : inboxSourceFilter === 'tiktok' ? 'TikTok' : 'Instagram'} a trier`} icon={Search} hasHeader />
+          ) : sourceFilter !== 'all' && inboxItems?.length ? (
+            <EmptyState message={`Aucun contenu ${sourceFilter === 'youtube' ? 'YouTube' : sourceFilter === 'spotify' ? 'Spotify' : sourceFilter === 'tiktok' ? 'TikTok' : 'Instagram'} a trier`} icon={Search} hasHeader />
+          ) : debouncedSearch && inboxItems?.length ? (
+            <EmptyState message="Aucun resultat pour cette recherche" icon={Search} hasHeader />
           ) : (
             <EmptyState message="Rien a trier pour le moment" icon={Sparkles} hasHeader />
           )}
@@ -336,13 +258,16 @@ export default function LibraryScreen() {
           style={styles.topTab}
           onPress={() => setActiveExplorerTab('library')}
         >
-          <Text
-            variant="body"
-            weight={activeExplorerTab === 'library' ? 'medium' : 'regular'}
-            style={activeExplorerTab === 'library' ? styles.topTabTextActive : styles.topTabTextInactive}
-          >
-            Bibliotheque
-          </Text>
+          <View style={styles.topTabWithBadge}>
+            <Text
+              variant="body"
+              weight={activeExplorerTab === 'library' ? 'medium' : 'regular'}
+              style={activeExplorerTab === 'library' ? styles.topTabTextActive : styles.topTabTextInactive}
+            >
+              Bibliotheque
+            </Text>
+            {(inboxCount ?? 0) > 0 && <Badge count={inboxCount ?? 0} size="sm" />}
+          </View>
           {activeExplorerTab === 'library' && <View style={styles.topTabIndicator} />}
         </Pressable>
       </View>
@@ -400,43 +325,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
     borderRadius: 1,
   },
+  topTabWithBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
 
   // --- Search ---
   searchContainer: {
     marginHorizontal: spacing.lg,
     marginVertical: spacing.sm,
-  },
-
-  // --- Library sub-tabs (Collection | Triage) ---
-  subTabBar: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.lg,
-    gap: spacing.lg,
-    paddingBottom: spacing.sm,
-  },
-  subTab: {
-    paddingVertical: spacing.xs,
-    position: 'relative',
-  },
-  subTabTextActive: {
-    color: colors.text,
-  },
-  subTabTextInactive: {
-    color: colors.textTertiary,
-  },
-  subTabIndicator: {
-    position: 'absolute',
-    bottom: -spacing.xs,
-    left: 0,
-    right: 0,
-    height: 2,
-    backgroundColor: colors.accent,
-    borderRadius: 1,
-  },
-  subTabWithBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
   },
 
   // --- Suggestions ---

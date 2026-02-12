@@ -4,7 +4,6 @@
 
 import { create } from 'zustand';
 
-type LibraryTab = 'collection' | 'triage';
 type ExplorerTab = 'suggestions' | 'library';
 type SourceFilter = 'all' | 'youtube' | 'spotify' | 'tiktok' | 'instagram';
 
@@ -17,22 +16,12 @@ interface ContentStoreState {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
 
-  // Library sub-tab state
-  activeLibraryTab: LibraryTab;
-  setActiveLibraryTab: (tab: LibraryTab) => void;
-
-  // Collection filter state
+  // Filter state
   sourceFilter: SourceFilter;
-  topicFilter: string | null;
-  channelFilter: string | null;
+  themeFilter: string | null;
   setSourceFilter: (source: SourceFilter) => void;
-  setTopicFilter: (topic: string | null) => void;
-  setChannelFilter: (channel: string | null) => void;
+  setThemeFilter: (theme: string | null) => void;
   resetFilters: () => void;
-
-  // Inbox filter state (separate from collection)
-  inboxSourceFilter: SourceFilter;
-  setInboxSourceFilter: (source: SourceFilter) => void;
 }
 
 export const useContentStore = create<ContentStoreState>((set) => ({
@@ -42,17 +31,9 @@ export const useContentStore = create<ContentStoreState>((set) => ({
   searchQuery: '',
   setSearchQuery: (query) => set({ searchQuery: query }),
 
-  activeLibraryTab: 'collection',
-  setActiveLibraryTab: (tab) => set({ activeLibraryTab: tab }),
-
   sourceFilter: 'all',
-  topicFilter: null,
-  channelFilter: null,
+  themeFilter: null,
   setSourceFilter: (source) => set({ sourceFilter: source }),
-  setTopicFilter: (topic) => set({ topicFilter: topic }),
-  setChannelFilter: (channel) => set({ channelFilter: channel }),
-  resetFilters: () => set({ sourceFilter: 'all', topicFilter: null, channelFilter: null }),
-
-  inboxSourceFilter: 'all',
-  setInboxSourceFilter: (source) => set({ inboxSourceFilter: source }),
+  setThemeFilter: (theme) => set({ themeFilter: theme }),
+  resetFilters: () => set({ sourceFilter: 'all', themeFilter: null }),
 }));
