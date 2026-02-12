@@ -111,6 +111,20 @@ export type DiscoverAction =
   | { type: 'merge'; sourceThemeId: string; targetThemeId: string }
   | { type: 'dismiss'; themeId: string };
 
+export interface QuizRecommendation {
+  id: string;
+  type: 'content' | 'theme';
+  title: string;
+  subtitle: string;
+  thumbnailUrl: string | null;
+  emoji: string | null;
+  color: string | null;
+  questionCount: number;
+  dueCount: number;
+  platform: string | null;
+  reason: string;
+}
+
 export interface ThemeRef {
   id: string;
   name: string;

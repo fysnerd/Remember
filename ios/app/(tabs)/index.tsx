@@ -1,5 +1,5 @@
 /**
- * Home Tab - Daily learning experience with greeting, stats, and 3 daily theme cards
+ * Home Tab - Daily learning experience with greeting, stats, and 3 quiz recommendation cards
  */
 
 import { useCallback, useState } from 'react';
@@ -14,9 +14,9 @@ import { GlassLockOverlay } from '../../components/glass';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
 import { GreetingHeader } from '../../components/home/GreetingHeader';
-import { DailyThemeCard } from '../../components/home/DailyThemeCard';
+import { QuizRecommendationCard } from '../../components/home/QuizRecommendationCard';
 import { STAGGER_DELAY, STAGGER_CAP } from '../../lib/animations';
-import { useDailyThemes, useReviewStats } from '../../hooks';
+import { useQuizRecommendations, useReviewStats } from '../../hooks';
 import { useSubscription } from '../../hooks/useSubscription';
 import { useAuthStore } from '../../stores/authStore';
 import { colors, spacing } from '../../theme';
@@ -28,7 +28,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const { user } = useAuthStore();
-  const { data: dailyThemes, isLoading: themesLoading } = useDailyThemes();
+  const { data: recommendations, isLoading } = useQuizRecommendations();
   const { data: stats } = useReviewStats();
   const { data: subscription } = useSubscription();
   const isFree = subscription?.plan !== 'PRO';
@@ -39,7 +39,7 @@ export default function HomeScreen() {
     setRefreshing(true);
     try {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['themes'] }),
+        queryClient.invalidateQueries({ queryKey: ['home', 'recommendations'] }),
         queryClient.invalidateQueries({ queryKey: ['reviews', 'stats'] }),
       ]);
     } catch (error) {
@@ -49,17 +49,21 @@ export default function HomeScreen() {
     }
   }, [queryClient]);
 
-  const handleThemePress = (themeId: string) => {
-    router.push({ pathname: '/theme/[id]' as any, params: { id: themeId } });
+  const handleRecommendationPress = (rec: { id: string; type: 'content' | 'theme' }) => {
+    if (rec.type === 'content') {
+      router.push({ pathname: '/quiz/[id]' as any, params: { id: rec.id } });
+    } else {
+      router.push({ pathname: '/quiz/theme/[id]' as any, params: { id: rec.id } });
+    }
   };
 
-  if (themesLoading) {
+  if (isLoading) {
     return <LoadingScreen />;
   }
 
-  const themeList = dailyThemes ?? [];
+  const items = recommendations ?? [];
 
-  if (themeList.length === 0) {
+  if (items.length === 0) {
     return <EmptyState message="Connectez vos plateformes pour commencer" icon={Link2} hasHeader />;
   }
 
@@ -74,16 +78,16 @@ export default function HomeScreen() {
     >
       <GreetingHeader userName={userName} stats={stats} />
 
-      <View style={styles.themesList}>
-        {themeList.map((theme, index) => (
+      <View style={styles.cardsList}>
+        {items.map((rec, index) => (
           <Animated.View
-            key={theme.id}
+            key={rec.id}
             entering={FadeInDown.delay(Math.min(index, STAGGER_CAP) * STAGGER_DELAY).duration(250)}
           >
             <GlassLockOverlay locked={isFree && index >= 2}>
-              <DailyThemeCard
-                theme={theme}
-                onPress={() => handleThemePress(theme.id)}
+              <QuizRecommendationCard
+                recommendation={rec}
+                onPress={() => handleRecommendationPress(rec)}
               />
             </GlassLockOverlay>
           </Animated.View>
@@ -102,7 +106,7 @@ const styles = StyleSheet.create({
   content: {
     padding: spacing.lg,
   },
-  themesList: {
+  cardsList: {
     gap: spacing.lg,
   },
 });

@@ -155,20 +155,21 @@ export function useThemeQuiz(themeId: string) {
 
 interface CreateSessionParams {
   contentId?: string;
+  contentIds?: string[];
   topicName?: string;
 }
 
-// Create a quiz session (for content or topic)
+// Create a quiz session (for content, multiple contents, or topic)
 export function useCreateSession() {
   return useMutation({
-    mutationFn: async ({ contentId, topicName }: CreateSessionParams) => {
+    mutationFn: async ({ contentId, contentIds, topicName }: CreateSessionParams) => {
       const payload: any = { mode: 'practice' };
 
-      if (contentId) {
+      if (contentIds && contentIds.length > 0) {
+        payload.contentIds = contentIds;
+      } else if (contentId) {
         payload.contentIds = [contentId];
       }
-      // Note: For topics, we don't have tagIds readily available
-      // The session will track reviews by sessionId regardless
 
       const { data } = await api.post<SessionResponse>('/reviews/session', payload);
       console.log('[useCreateSession] Created session:', data.session.id);
@@ -233,6 +234,8 @@ export function useCompleteSession() {
       queryClient.invalidateQueries({ queryKey: ['reviews'] });
       // Refresh daily themes so due card counts update after quiz session
       queryClient.invalidateQueries({ queryKey: ['themes', 'daily'] });
+      // Refresh home recommendations after quiz completion
+      queryClient.invalidateQueries({ queryKey: ['home', 'recommendations'] });
     },
   });
 }
