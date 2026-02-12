@@ -2,7 +2,7 @@
  * Theme Detail Screen - Grid layout with multi-select and swipe-to-delete
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { View, ScrollView, StyleSheet, RefreshControl, Dimensions, Pressable, ActivityIndicator } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -15,6 +15,8 @@ import { ContentCard } from '../../components/content';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
 import { useThemeDetail, useRemoveContentFromTheme } from '../../hooks';
+import { haptics } from '../../lib/haptics';
+import api from '../../lib/api';
 import { colors, spacing, borderRadius } from '../../theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -80,33 +82,44 @@ export default function ThemeDetailScreen() {
     );
   };
 
-  const handleBatchRemove = async () => {
-    if (!id || selectedIds.size === 0) return;
+  const batchRemovingRef = useRef(false);
+  const handleBatchRemove = useCallback(async () => {
+    if (!id || selectedIds.size === 0 || batchRemovingRef.current) return;
+    batchRemovingRef.current = true;
+    haptics.warning();
     const ids = Array.from(selectedIds);
     setRemovingIds(new Set(ids));
-    for (const contentId of ids) {
-      await removeContent.mutateAsync({ themeId: id, contentId }).catch(() => {});
+    try {
+      // Call API directly in parallel to avoid React Query mutation state issues
+      await Promise.allSettled(
+        ids.map((contentId) => api.delete(`/themes/${id}/content/${contentId}`))
+      );
+      // Invalidate queries once after all deletions
+      await queryClient.invalidateQueries({ queryKey: ['themes', id] });
+      queryClient.invalidateQueries({ queryKey: ['themes'] });
+      queryClient.invalidateQueries({ queryKey: ['content'] });
+    } finally {
+      setRemovingIds(new Set());
+      setSelectedIds(new Set());
+      batchRemovingRef.current = false;
     }
-    setRemovingIds(new Set());
-    setSelectedIds(new Set());
-  };
+  }, [id, selectedIds, queryClient]);
 
   const handleStartQuiz = () => {
     if (id) {
       router.push({
-        pathname: '/quiz/theme/[id]' as any,
-        params: { id },
+        pathname: '/quiz/preview/[id]' as any,
+        params: { id, type: 'theme' },
       });
     }
   };
 
   const handleStartSelectionQuiz = () => {
     if (selectedIds.size === 0) return;
-    // Navigate to a custom quiz with selected content IDs
     const contentIdsParam = Array.from(selectedIds).join(',');
     router.push({
-      pathname: '/quiz/theme/[id]' as any,
-      params: { id, contentIds: contentIdsParam },
+      pathname: '/quiz/preview/[id]' as any,
+      params: { id, type: 'theme', contentIds: contentIdsParam },
     });
   };
 

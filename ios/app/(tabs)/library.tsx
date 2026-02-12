@@ -3,7 +3,7 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { View, ScrollView, StyleSheet, Pressable, RefreshControl, Dimensions } from 'react-native';
+import { View, ScrollView, StyleSheet, Pressable, RefreshControl, Dimensions, Alert } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -16,7 +16,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { Search, BookOpen, Sparkles } from 'lucide-react-native';
 import { ThemeGridCard } from '../../components/explorer/ThemeGridCard';
 import { GlassLockOverlay } from '../../components/glass';
-import { useInbox, useInboxCount, useTriageMutation, useDebouncedValue, useThemes } from '../../hooks';
+import { useInbox, useInboxCount, useTriageMutation, useDebouncedValue, useThemes, useDeleteTheme } from '../../hooks';
 import { useSubscription } from '../../hooks/useSubscription';
 import { useContentStore } from '../../stores/contentStore';
 import { colors, spacing } from '../../theme';
@@ -57,6 +57,7 @@ export default function LibraryScreen() {
   const { data: inboxItems, isLoading: inboxLoading } = useInbox();
   const triageMutation = useTriageMutation();
   const { data: themes, isLoading: themesLoading } = useThemes();
+  const deleteThemeMutation = useDeleteTheme();
 
   const selectionMode = selectedIds.size > 0;
 
@@ -140,6 +141,21 @@ export default function LibraryScreen() {
     router.push({ pathname: '/theme/[id]' as any, params: { id: themeId } });
   };
 
+  const handleThemeLongPress = (themeId: string, themeName: string) => {
+    Alert.alert(
+      'Supprimer le theme',
+      `Voulez-vous supprimer "${themeName}" ? Les contenus ne seront pas supprimes.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: () => deleteThemeMutation.mutate(themeId),
+        },
+      ]
+    );
+  };
+
   // --- Render: Mes themes tab content (2-column grid) ---
   const renderThemesTab = () => {
     if (themesLoading) {
@@ -182,6 +198,7 @@ export default function LibraryScreen() {
                   contentCount={theme.contentCount}
                   dueCards={theme.dueCards}
                   onPress={() => handleThemePress(theme.id)}
+                  onLongPress={() => handleThemeLongPress(theme.id, theme.name)}
                 />
               </GlassLockOverlay>
             </Animated.View>

@@ -9,6 +9,7 @@ interface GlassCardProps {
   children: React.ReactNode;
   padding?: GlassCardPadding;
   onPress?: () => void;
+  onLongPress?: () => void;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -23,6 +24,7 @@ export function GlassCard({
   children,
   padding = 'md',
   onPress,
+  onLongPress,
   style,
 }: GlassCardProps) {
   const content = (
@@ -31,9 +33,14 @@ export function GlassCard({
     </GlassSurface>
   );
 
-  if (onPress) {
+  if (onPress || onLongPress) {
     return (
-      <Pressable onPress={() => { haptics.light(); onPress(); }} style={({ pressed }) => pressed && { opacity: 0.8 }}>
+      <Pressable
+        onPress={onPress ? () => { haptics.light(); onPress(); } : undefined}
+        onLongPress={onLongPress ? () => { haptics.warning(); onLongPress(); } : undefined}
+        delayLongPress={500}
+        style={({ pressed }) => pressed && { opacity: 0.8 }}
+      >
         {content}
       </Pressable>
     );

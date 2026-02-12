@@ -13,11 +13,12 @@ interface ThemeGridCardProps {
   contentCount: number;
   dueCards: number;
   onPress: () => void;
+  onLongPress?: () => void;
 }
 
-export function ThemeGridCard({ emoji, name, contentCount, dueCards, onPress }: ThemeGridCardProps) {
+export function ThemeGridCard({ emoji, name, contentCount, dueCards, onPress, onLongPress }: ThemeGridCardProps) {
   return (
-    <GlassCard padding="md" onPress={onPress} style={styles.card}>
+    <GlassCard padding="md" onPress={onPress} onLongPress={onLongPress} style={styles.card}>
       <Text style={styles.emoji}>{emoji}</Text>
       <Text style={styles.name} numberOfLines={2}>
         {name}
