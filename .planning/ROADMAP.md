@@ -42,7 +42,7 @@ Full details: [milestones/v2.0-ROADMAP.md](milestones/v2.0-ROADMAP.md)
 - [x] **Phase 12: Foundation Build** - Native dependencies + dark mode base + proof-of-concept validation -- completed 2026-02-11
 - [x] **Phase 13: Design System** - Night Blue tokens, Glass components, icon system, restyled primitives -- completed 2026-02-11
 - [x] **Phase 14: Screen Rebuild** - Home (daily themes), Explorer (suggestions + library), Revisions, Profile -- completed 2026-02-12
-- [ ] **Phase 15: Backend Endpoints** - Daily themes selection + AI theme suggestions APIs
+- [x] **Phase 15: Backend Endpoints** - Daily themes selection + AI theme suggestions APIs -- completed 2026-02-12
 - [ ] **Phase 16: UX Polish** - Micro-interactions, loading animations, freemium overlays, haptics
 
 ## Phase Details
@@ -108,7 +108,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 15-01-PLAN.md -- Daily themes + AI suggestions endpoints + iOS hooks + Explorer wiring
+- [x] 15-01-PLAN.md -- Daily themes + AI suggestions endpoints + iOS hooks + Explorer wiring
 
 ### Phase 16: UX Polish
 **Goal**: The app feels premium and alive with micro-interactions, loading animations, freemium visual indicators, and haptic feedback on key actions
@@ -147,5 +147,5 @@ Phase 15 can execute in parallel with 13/14/16 (backend is independent).
 | 12. Foundation Build | v3.0 | 2/2 | Complete | 2026-02-11 |
 | 13. Design System | v3.0 | 3/3 | Complete | 2026-02-11 |
 | 14. Screen Rebuild | v3.0 | 3/3 | Complete | 2026-02-12 |
-| 15. Backend Endpoints | v3.0 | 0/1 | Not started | - |
+| 15. Backend Endpoints | v3.0 | 1/1 | Complete | 2026-02-12 |
 | 16. UX Polish | v3.0 | 0/2 | Not started | - |
