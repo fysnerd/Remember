@@ -5,25 +5,25 @@
 See: .planning/PROJECT.md (updated 2026-02-11)
 
 **Core value:** L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans effort supplementaire de curation.
-**Current focus:** v3.0 Night Blue Glass UI -- Phase 14: Screen Rebuild
+**Current focus:** v3.0 Night Blue Glass UI -- Phase 14 complete, ready for Phase 15
 
 ## Current Position
 
-Phase: 14 (Screen Rebuild) -- IN PROGRESS
-Plan: 2 of 3 in current phase
-Status: Completed 14-02 (Explorer screen rebuild), continuing with 14-03
-Last activity: 2026-02-12 -- Completed 14-02 (Explorer screen rebuild)
+Phase: 14 (Screen Rebuild) -- COMPLETE
+Plan: 3 of 3 in current phase (ALL DONE)
+Status: Phase 14 complete, ready for next phase
+Last activity: 2026-02-12 -- Completed 14-03 (Revisions + Profile screen rebuild)
 
-Progress: [#######░░░] 7/11 plans (v3.0)
+Progress: [########░░] 8/11 plans (v3.0)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 29 (10 v1.0 + 12 v2.0 + 7 v3.0)
+- Total plans completed: 30 (10 v1.0 + 12 v2.0 + 8 v3.0)
 - v1.0: ~25 min/plan avg (4 phases, 10 plans)
 - v2.0: ~3.75 min/plan avg (7 phases, 12 plans)
-- v3.0: 10.3 min/plan avg (3 phases, 7 plans)
-- Total execution time: ~6 hours 2 min across all milestones
+- v3.0: 9.5 min/plan avg (3 phases, 8 plans)
+- Total execution time: ~6 hours 6 min across all milestones
 
 | Phase | Plan | Duration | Tasks | Files |
 |-------|------|----------|-------|-------|
@@ -34,6 +34,7 @@ Progress: [#######░░░] 7/11 plans (v3.0)
 | 13-03 | Lucide icon system + emoji elimination | 19 min | 2 | 25 |
 | 14-01 | Home screen rebuild (greeting + daily themes) | 2 min | 2 | 5 |
 | 14-02 | Explorer screen rebuild (search + two-level tabs) | 2 min | 2 | 7 |
+| 14-03 | Revisions + Profile screen rebuild | 4 min | 2 | 4 |
 
 ## Accumulated Context
 
@@ -64,6 +65,11 @@ Recent decisions affecting current work:
 - [14-02]: Sub-tabs use variant=caption for lighter visual weight than top-level tabs
 - [14-02]: SearchInput is custom BlurView+TextInput (not GlassInput) to support left icon layout
 - [14-02]: Default activeExplorerTab is 'library' since suggestions are placeholder until Phase 15
+- [14-03]: Topics hidden when platform category filter active (topics are cross-platform)
+- [14-03]: Client-side filtering for Revisions (/reviews API has no server-side search/filter)
+- [14-03]: User name fallback chain: name > email prefix > 'Utilisateur' (matches Home screen)
+- [14-03]: glass.border for GlassCard internal row separators instead of colors.border
+- [14-03]: Wrench Lucide icon replaces emoji in Dev Tools section title
 
 ### Pending Todos
 
@@ -79,6 +85,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-12
-Stopped at: Completed 14-02-PLAN.md (Explorer screen rebuild)
-Next step: Execute 14-03-PLAN.md (remaining screen rebuilds)
+Stopped at: Completed 14-03-PLAN.md (Revisions + Profile screen rebuild) -- Phase 14 COMPLETE
+Next step: Begin next phase (Phase 15 or 16 per ROADMAP)
 Resume file: None
