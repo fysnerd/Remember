@@ -11,6 +11,7 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { ChevronRight, Link2 } from 'lucide-react-native';
 import { Text } from '../../components/ui';
 import { GlassCard } from '../../components/glass/GlassCard';
+import { GlassLockOverlay } from '../../components/glass';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
 import { GreetingHeader } from '../../components/home/GreetingHeader';
@@ -97,10 +98,12 @@ export default function HomeScreen() {
             key={theme.id}
             entering={FadeInDown.delay(Math.min(index, STAGGER_CAP) * STAGGER_DELAY).duration(250)}
           >
-            <DailyThemeCard
-              theme={theme}
-              onPress={() => handleThemePress(theme.id)}
-            />
+            <GlassLockOverlay locked={index >= 2}>
+              <DailyThemeCard
+                theme={theme}
+                onPress={() => handleThemePress(theme.id)}
+              />
+            </GlassLockOverlay>
           </Animated.View>
         ))}
       </View>

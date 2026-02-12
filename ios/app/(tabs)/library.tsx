@@ -18,6 +18,7 @@ import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
 import { BookOpen, Search, Sparkles } from 'lucide-react-native';
 import { SuggestionCard } from '../../components/explorer/SuggestionCard';
+import { GlassLockOverlay } from '../../components/glass';
 import { useContentList, useInbox, useInboxCount, useTriageMutation, useTopics, useChannels, useDebouncedValue, useThemeSuggestions } from '../../hooks';
 import { useContentStore } from '../../stores/contentStore';
 import { colors, spacing } from '../../theme';
@@ -177,11 +178,12 @@ export default function LibraryScreen() {
           Suggestions pour toi
         </Text>
         {suggestionsData.suggestions.map((suggestion, index) => (
-          <SuggestionCard
-            key={`${suggestion.name}-${index}`}
-            title={`${suggestion.emoji} ${suggestion.name}`}
-            description={suggestion.description}
-          />
+          <GlassLockOverlay key={`${suggestion.name}-${index}`} locked={index >= 4}>
+            <SuggestionCard
+              title={`${suggestion.emoji} ${suggestion.name}`}
+              description={suggestion.description}
+            />
+          </GlassLockOverlay>
         ))}
       </ScrollView>
     );
