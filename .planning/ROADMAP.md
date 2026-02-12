@@ -41,7 +41,7 @@ Full details: [milestones/v2.0-ROADMAP.md](milestones/v2.0-ROADMAP.md)
 
 - [x] **Phase 12: Foundation Build** - Native dependencies + dark mode base + proof-of-concept validation -- completed 2026-02-11
 - [x] **Phase 13: Design System** - Night Blue tokens, Glass components, icon system, restyled primitives -- completed 2026-02-11
-- [ ] **Phase 14: Screen Rebuild** - Home (daily themes), Explorer (suggestions + library), Revisions, Profile
+- [x] **Phase 14: Screen Rebuild** - Home (daily themes), Explorer (suggestions + library), Revisions, Profile -- completed 2026-02-12
 - [ ] **Phase 15: Backend Endpoints** - Daily themes selection + AI theme suggestions APIs
 - [ ] **Phase 16: UX Polish** - Micro-interactions, loading animations, freemium overlays, haptics
 
@@ -93,9 +93,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 14-01-PLAN.md -- Home screen rebuild (GreetingHeader + DailyThemeCard + useDailyThemes stub hook)
-- [ ] 14-02-PLAN.md -- Explorer screen rebuild (Suggestions placeholder + Library tab with search + triage preserved)
-- [ ] 14-03-PLAN.md -- Revisions screen (category filter chips + search) + Profile screen (GlassCard user info + settings)
+- [x] 14-01-PLAN.md -- Home screen rebuild (GreetingHeader + DailyThemeCard + useDailyThemes stub hook)
+- [x] 14-02-PLAN.md -- Explorer screen rebuild (Suggestions placeholder + Library tab with search + triage preserved)
+- [x] 14-03-PLAN.md -- Revisions screen (category filter chips + search) + Profile screen (GlassCard user info + settings)
 
 ### Phase 15: Backend Endpoints
 **Goal**: Backend serves the data that Home and Explorer screens need -- daily theme selection with smart rotation and AI-generated theme suggestions
@@ -146,6 +146,6 @@ Phase 15 can execute in parallel with 13/14/16 (backend is independent).
 | 11. Theme Discovery & Onboarding | v2.0 | 2/2 | Complete | 2026-02-11 |
 | 12. Foundation Build | v3.0 | 2/2 | Complete | 2026-02-11 |
 | 13. Design System | v3.0 | 3/3 | Complete | 2026-02-11 |
-| 14. Screen Rebuild | v3.0 | 0/3 | Not started | - |
+| 14. Screen Rebuild | v3.0 | 3/3 | Complete | 2026-02-12 |
 | 15. Backend Endpoints | v3.0 | 0/1 | Not started | - |
 | 16. UX Polish | v3.0 | 0/2 | Not started | - |
