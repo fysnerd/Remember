@@ -9,6 +9,7 @@ import { Text, Button } from '../../components/ui';
 import { QuestionCard, AnswerFeedback, QuizSummary } from '../../components/quiz';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { ErrorState } from '../../components/ErrorState';
+import { haptics } from '../../lib/haptics';
 import { useQuiz, useSubmitAnswer, useCreateSession, useCompleteSession } from '../../hooks';
 import { colors, spacing } from '../../theme';
 
@@ -54,6 +55,7 @@ export default function QuizScreen() {
 
   const handleValidate = () => {
     if (!selectedAnswer || !sessionId) return;
+    haptics.medium();
     const isCorrect = selectedAnswer === current.correctAnswer;
     if (isCorrect) setScore((s) => s + 1);
 
@@ -65,9 +67,11 @@ export default function QuizScreen() {
     });
 
     setState('feedback');
+    setTimeout(() => isCorrect ? haptics.success() : haptics.error(), 300);
   };
 
   const handleNext = () => {
+    haptics.light();
     if (currentIndex < total - 1) {
       setCurrentIndex((i) => i + 1);
       setSelectedAnswer(null);
@@ -113,6 +117,7 @@ export default function QuizScreen() {
               options={current.options}
               selectedId={selectedAnswer}
               onSelect={(optionId) => {
+                haptics.selection();
                 console.log('[Quiz] Option selected:', optionId);
                 setSelectedAnswer(optionId);
               }}

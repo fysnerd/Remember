@@ -7,6 +7,7 @@
 
 import { useState, useCallback } from 'react';
 import { View, ScrollView, RefreshControl, StyleSheet } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useQueryClient } from '@tanstack/react-query';
@@ -91,7 +92,7 @@ export default function ReviewsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <Animated.View entering={FadeIn.duration(200)} style={styles.container}>
       {/* Search bar */}
       <View style={styles.searchContainer}>
         <SearchInput
@@ -148,7 +149,7 @@ export default function ReviewsScreen() {
           </View>
         )}
       </ScrollView>
-    </View>
+    </Animated.View>
   );
 }
 

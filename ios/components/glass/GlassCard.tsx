@@ -1,5 +1,6 @@
 import { StyleProp, ViewStyle, Pressable } from 'react-native';
 import { GlassSurface } from './GlassSurface';
+import { haptics } from '../../lib/haptics';
 import { spacing, borderRadius } from '../../theme';
 
 type GlassCardPadding = 'none' | 'sm' | 'md' | 'lg';
@@ -32,7 +33,7 @@ export function GlassCard({
 
   if (onPress) {
     return (
-      <Pressable onPress={onPress} style={({ pressed }) => pressed && { opacity: 0.8 }}>
+      <Pressable onPress={() => { haptics.light(); onPress(); }} style={({ pressed }) => pressed && { opacity: 0.8 }}>
         {content}
       </Pressable>
     );

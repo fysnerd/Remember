@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, ActivityIndicator, StyleProp, ViewStyle } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Text } from '../ui/Text';
+import { haptics } from '../../lib/haptics';
 import { colors, spacing, borderRadius, layout, glass } from '../../theme';
 
 type GlassButtonVariant = 'glass' | 'accent';
@@ -40,7 +41,7 @@ export function GlassButton({
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => { haptics.light(); onPress(); }}
       disabled={isDisabled}
       style={({ pressed }) => [
         styles.container,

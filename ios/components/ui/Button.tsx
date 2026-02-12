@@ -10,6 +10,7 @@ import {
   StyleProp,
 } from 'react-native';
 import { Text } from './Text';
+import { haptics } from '../../lib/haptics';
 import { colors, spacing, borderRadius, layout } from '../../theme';
 
 type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost';
@@ -50,7 +51,7 @@ export function Button({
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => { haptics.light(); onPress(); }}
       disabled={isDisabled}
       style={({ pressed }) => [
         styles.base,

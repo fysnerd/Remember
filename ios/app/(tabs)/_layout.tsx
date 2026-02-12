@@ -10,11 +10,17 @@ import { StyleSheet } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { House, BookOpen, Brain, User } from 'lucide-react-native';
 import { TabIcon } from '../../components/icons';
+import { haptics } from '../../lib/haptics';
 import { colors, fonts, glass } from '../../theme';
 
 export default function TabLayout() {
   return (
     <Tabs
+      screenListeners={{
+        tabPress: () => {
+          haptics.selection();
+        },
+      }}
       screenOptions={{
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textSecondary,

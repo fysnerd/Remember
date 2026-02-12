@@ -7,6 +7,7 @@
 
 import { useState } from 'react';
 import { View, ScrollView, StyleSheet, Pressable, Alert } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useQueryClient } from '@tanstack/react-query';
@@ -146,6 +147,7 @@ export default function ProfileScreen() {
   const displayName = user?.name || user?.email?.split('@')[0] || 'Utilisateur';
 
   return (
+    <Animated.View entering={FadeIn.duration(200)} style={{ flex: 1 }}>
     <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.lg }]}>
       {/* User Info */}
       <GlassCard padding="lg" style={styles.userCard}>
@@ -274,6 +276,7 @@ export default function ProfileScreen() {
         </GlassCard>
       </View>
     </ScrollView>
+    </Animated.View>
   );
 }
 

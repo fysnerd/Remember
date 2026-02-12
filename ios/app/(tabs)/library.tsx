@@ -7,6 +7,7 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import { View, ScrollView, StyleSheet, Pressable, RefreshControl, Dimensions } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -313,7 +314,7 @@ export default function LibraryScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <Animated.View entering={FadeIn.duration(200)} style={styles.container}>
       {/* Top-level tabs: Suggestions | Bibliotheque */}
       <View style={styles.topTabBar}>
         <Pressable
@@ -358,7 +359,7 @@ export default function LibraryScreen() {
           loadingIgnore={batchAction === 'ignore'}
         />
       )}
-    </View>
+    </Animated.View>
   );
 }
 

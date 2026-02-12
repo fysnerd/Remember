@@ -4,6 +4,7 @@
 
 import { useState, useCallback } from 'react';
 import { View, ScrollView, StyleSheet, RefreshControl } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -14,6 +15,7 @@ import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
 import { GreetingHeader } from '../../components/home/GreetingHeader';
 import { DailyThemeCard } from '../../components/home/DailyThemeCard';
+import { STAGGER_DELAY, STAGGER_CAP } from '../../lib/animations';
 import { useDailyThemes, usePendingThemes, useReviewStats } from '../../hooks';
 import { useAuthStore } from '../../stores/authStore';
 import { colors, spacing } from '../../theme';
@@ -67,19 +69,21 @@ export default function HomeScreen() {
 
       {/* Discovery banner */}
       {pendingCount > 0 && (
-        <GlassCard padding="md" onPress={() => router.push('/theme-discovery' as any)}>
-          <View style={styles.discoveryRow}>
-            <View style={styles.discoveryContent}>
-              <Text variant="body" weight="medium">
-                {pendingCount} nouveau{pendingCount > 1 ? 'x' : ''} theme{pendingCount > 1 ? 's' : ''} detecte{pendingCount > 1 ? 's' : ''}
-              </Text>
-              <Text variant="caption" color="secondary">
-                Revoyez et confirmez vos themes
-              </Text>
+        <Animated.View entering={FadeInDown.duration(250)}>
+          <GlassCard padding="md" onPress={() => router.push('/theme-discovery' as any)}>
+            <View style={styles.discoveryRow}>
+              <View style={styles.discoveryContent}>
+                <Text variant="body" weight="medium">
+                  {pendingCount} nouveau{pendingCount > 1 ? 'x' : ''} theme{pendingCount > 1 ? 's' : ''} detecte{pendingCount > 1 ? 's' : ''}
+                </Text>
+                <Text variant="caption" color="secondary">
+                  Revoyez et confirmez vos themes
+                </Text>
+              </View>
+              <ChevronRight size={24} color={colors.textSecondary} strokeWidth={1.75} />
             </View>
-            <ChevronRight size={24} color={colors.textSecondary} strokeWidth={1.75} />
-          </View>
-        </GlassCard>
+          </GlassCard>
+        </Animated.View>
       )}
 
       {/* Daily themes section */}
@@ -88,12 +92,16 @@ export default function HomeScreen() {
       </Text>
 
       <View style={styles.themesList}>
-        {themeList.map((theme) => (
-          <DailyThemeCard
+        {themeList.map((theme, index) => (
+          <Animated.View
             key={theme.id}
-            theme={theme}
-            onPress={() => handleThemePress(theme.id)}
-          />
+            entering={FadeInDown.delay(Math.min(index, STAGGER_CAP) * STAGGER_DELAY).duration(250)}
+          >
+            <DailyThemeCard
+              theme={theme}
+              onPress={() => handleThemePress(theme.id)}
+            />
+          </Animated.View>
         ))}
       </View>
     </ScrollView>

@@ -86,6 +86,8 @@ export default function RootLayout() {
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: '#0A0F1A' },
+          animation: 'fade',
+          animationDuration: 250,
         }}
       >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -116,6 +118,8 @@ export default function RootLayout() {
           options={{
             headerShown: false,
             presentation: 'card',
+            animation: 'fade',
+            animationDuration: 250,
           }}
         />
         <Stack.Screen
@@ -166,6 +170,8 @@ export default function RootLayout() {
             headerShown: true,
             title: 'Connexion',
             presentation: 'modal',
+            animation: 'slide_from_bottom',
+            animationDuration: 300,
             headerStyle: { backgroundColor: '#0A0F1A' },
             headerTintColor: '#F8FAFC',
           }}
@@ -208,6 +214,8 @@ export default function RootLayout() {
             headerShown: true,
             title: 'Nouveau theme',
             presentation: 'modal',
+            animation: 'slide_from_bottom',
+            animationDuration: 300,
             headerStyle: { backgroundColor: '#0A0F1A' },
             headerTintColor: '#F8FAFC',
           }}
