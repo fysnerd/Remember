@@ -119,11 +119,11 @@ Plans:
   2. Loading states display contextual animations during quiz generation and content loading
   3. Freemium-locked content shows lock icon overlay on glass surface (visual only, no payment wiring)
   4. Haptic feedback fires on button press, quiz answer submission, and tab switch
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 16-01: Transitions + loading animations + haptic feedback
-- [ ] 16-02: Freemium lock overlays on glass surfaces
+- [ ] 16-01-PLAN.md -- Haptics utility + animation constants + Reanimated migration + screen transitions + haptic feedback on buttons/tabs/quiz + tab screen entering animations
+- [ ] 16-02-PLAN.md -- GlassLockOverlay component + freemium lock overlays on Home (3rd daily theme) and Explorer (suggestion cards 5+)
 
 ## Progress
 
