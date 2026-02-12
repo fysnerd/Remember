@@ -5,25 +5,25 @@
 See: .planning/PROJECT.md (updated 2026-02-11)
 
 **Core value:** L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans effort supplementaire de curation.
-**Current focus:** v3.0 Night Blue Glass UI -- Phase 14 complete, ready for Phase 15
+**Current focus:** v3.0 Night Blue Glass UI -- Phase 15 complete
 
 ## Current Position
 
-Phase: 14 (Screen Rebuild) -- COMPLETE
-Plan: 3 of 3 in current phase (ALL DONE)
-Status: Phase 14 complete, ready for next phase
-Last activity: 2026-02-12 -- Completed 14-03 (Revisions + Profile screen rebuild)
+Phase: 15 (Backend Endpoints) -- COMPLETE
+Plan: 1 of 1 in current phase (ALL DONE)
+Status: Phase 15 complete, ready for next phase
+Last activity: 2026-02-12 -- Completed 15-01 (Daily themes + Suggestions endpoints)
 
-Progress: [########░░] 8/11 plans (v3.0)
+Progress: [#########░] 9/11 plans (v3.0)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 30 (10 v1.0 + 12 v2.0 + 8 v3.0)
+- Total plans completed: 31 (10 v1.0 + 12 v2.0 + 9 v3.0)
 - v1.0: ~25 min/plan avg (4 phases, 10 plans)
 - v2.0: ~3.75 min/plan avg (7 phases, 12 plans)
-- v3.0: 9.5 min/plan avg (3 phases, 8 plans)
-- Total execution time: ~6 hours 6 min across all milestones
+- v3.0: 9 min/plan avg (4 phases, 9 plans)
+- Total execution time: ~6 hours 11 min across all milestones
 
 | Phase | Plan | Duration | Tasks | Files |
 |-------|------|----------|-------|-------|
@@ -35,6 +35,7 @@ Progress: [########░░] 8/11 plans (v3.0)
 | 14-01 | Home screen rebuild (greeting + daily themes) | 2 min | 2 | 5 |
 | 14-02 | Explorer screen rebuild (search + two-level tabs) | 2 min | 2 | 7 |
 | 14-03 | Revisions + Profile screen rebuild | 4 min | 2 | 4 |
+| 15-01 | Daily themes + Suggestions endpoints | 5 min | 2 | 6 |
 
 ## Accumulated Context
 
@@ -70,6 +71,9 @@ Recent decisions affecting current work:
 - [14-03]: User name fallback chain: name > email prefix > 'Utilisateur' (matches Home screen)
 - [14-03]: glass.border for GlassCard internal row separators instead of colors.border
 - [14-03]: Wrench Lucide icon replaces emoji in Dev Tools section title
+- [15-01]: tags: [] for daily endpoint -- skip ThemeTag join since DailyThemeCard doesn't display tags
+- [15-01]: Named routes (/daily, /suggestions) registered before /:id in Express router
+- [15-01]: LLM suggestions endpoint never 500s -- always returns fallback on any error
 
 ### Pending Todos
 
@@ -85,6 +89,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-12
-Stopped at: Completed 14-03-PLAN.md (Revisions + Profile screen rebuild) -- Phase 14 COMPLETE
-Next step: Begin next phase (Phase 15 or 16 per ROADMAP)
+Stopped at: Completed 15-01-PLAN.md (Daily themes + Suggestions endpoints) -- Phase 15 COMPLETE
+Next step: Begin next phase (Phase 16 per ROADMAP)
 Resume file: None
