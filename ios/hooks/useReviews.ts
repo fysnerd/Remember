@@ -23,9 +23,18 @@ interface CompletedTopicItem {
   contentCount: number;
 }
 
+interface CompletedThemeItem {
+  id: string;
+  name: string;
+  emoji: string;
+  color: string;
+  quizzedContentCount: number;
+}
+
 interface CompletedItemsResponse {
   items: CompletedContentItem[];
   topics: CompletedTopicItem[];
+  themes: CompletedThemeItem[];
 }
 
 // Get contents and topics that have been quizzed

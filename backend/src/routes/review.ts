@@ -113,7 +113,66 @@ reviewRouter.get('/', async (req: Request, res: Response, next: NextFunction) =>
         contentCount: tag.contents.length,
       }));
 
-    return res.json({ items, topics });
+    // Get themes that have at least one quizzed content
+    const themesWithReviews = await prisma.theme.findMany({
+      where: {
+        userId,
+        contentThemes: {
+          some: {
+            content: {
+              status: 'READY',
+              quizzes: {
+                some: {
+                  cards: {
+                    some: {
+                      reviews: {
+                        some: {},
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        emoji: true,
+        color: true,
+        contentThemes: {
+          where: {
+            content: {
+              status: 'READY',
+              quizzes: {
+                some: {
+                  cards: {
+                    some: {
+                      reviews: {
+                        some: {},
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          select: { id: true },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    const themes = themesWithReviews.map(t => ({
+      id: t.id,
+      name: t.name,
+      emoji: t.emoji,
+      color: t.color,
+      quizzedContentCount: t.contentThemes.length,
+    }));
+
+    return res.json({ items, topics, themes });
   } catch (error) {
     return next(error);
   }
