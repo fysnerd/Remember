@@ -105,10 +105,10 @@ Plans:
   1. GET /api/themes/daily returns 3 themes prioritized by due reviews, new content, and recency
   2. GET /api/themes/suggestions returns 8 AI-generated theme ideas via Mistral
   3. Both endpoints return valid JSON and handle edge cases (no themes, no content, API errors)
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 15-01: Daily themes endpoint + AI suggestions endpoint + React Query hooks
+- [ ] 15-01-PLAN.md -- Daily themes + AI suggestions endpoints + iOS hooks + Explorer wiring
 
 ### Phase 16: UX Polish
 **Goal**: The app feels premium and alive with micro-interactions, loading animations, freemium visual indicators, and haptic feedback on key actions
