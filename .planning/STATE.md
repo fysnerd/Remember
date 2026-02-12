@@ -5,25 +5,25 @@
 See: .planning/PROJECT.md (updated 2026-02-11)
 
 **Core value:** L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans effort supplementaire de curation.
-**Current focus:** v3.0 Night Blue Glass UI -- Phase 15 complete
+**Current focus:** v3.0 Night Blue Glass UI -- Phase 16 in progress
 
 ## Current Position
 
-Phase: 15 (Backend Endpoints) -- COMPLETE
-Plan: 1 of 1 in current phase (ALL DONE)
-Status: Phase 15 complete, ready for next phase
-Last activity: 2026-02-12 -- Completed 15-01 (Daily themes + Suggestions endpoints)
+Phase: 16 (UX Polish)
+Plan: 1 of 2 in current phase (16-01 DONE)
+Status: 16-01 complete, ready for 16-02
+Last activity: 2026-02-12 -- Completed 16-01 (Micro-interactions: haptics, animations, Reanimated migration)
 
-Progress: [#########░] 9/11 plans (v3.0)
+Progress: [##########] 10/11 plans (v3.0)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 31 (10 v1.0 + 12 v2.0 + 9 v3.0)
+- Total plans completed: 32 (10 v1.0 + 12 v2.0 + 10 v3.0)
 - v1.0: ~25 min/plan avg (4 phases, 10 plans)
 - v2.0: ~3.75 min/plan avg (7 phases, 12 plans)
-- v3.0: 9 min/plan avg (4 phases, 9 plans)
-- Total execution time: ~6 hours 11 min across all milestones
+- v3.0: 9 min/plan avg (5 phases, 10 plans)
+- Total execution time: ~6 hours 16 min across all milestones
 
 | Phase | Plan | Duration | Tasks | Files |
 |-------|------|----------|-------|-------|
@@ -36,6 +36,7 @@ Progress: [#########░] 9/11 plans (v3.0)
 | 14-02 | Explorer screen rebuild (search + two-level tabs) | 2 min | 2 | 7 |
 | 14-03 | Revisions + Profile screen rebuild | 4 min | 2 | 4 |
 | 15-01 | Daily themes + Suggestions endpoints | 5 min | 2 | 6 |
+| 16-01 | Haptics + animations + Reanimated migration | 5 min | 2 | 14 |
 
 ## Accumulated Context
 
@@ -74,6 +75,10 @@ Recent decisions affecting current work:
 - [15-01]: tags: [] for daily endpoint -- skip ThemeTag join since DailyThemeCard doesn't display tags
 - [15-01]: Named routes (/daily, /suggestions) registered before /:id in Express router
 - [15-01]: LLM suggestions endpoint never 500s -- always returns fallback on any error
+- [16-01]: Haptics utility uses semantic method names (light/medium/selection/success/error/warning) -- never use expo-haptics directly
+- [16-01]: Quiz haptics layered with 300ms delay between submit impact and result notification
+- [16-01]: Tab screens use FadeIn(200ms); Home uses FadeInDown with stagger for visual hierarchy
+- [16-01]: Screen transitions default to fade 250ms; modals use slide_from_bottom 300ms
 
 ### Pending Todos
 
@@ -89,6 +94,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-12
-Stopped at: Completed 15-01-PLAN.md (Daily themes + Suggestions endpoints) -- Phase 15 COMPLETE
-Next step: Begin next phase (Phase 16 per ROADMAP)
+Stopped at: Completed 16-01-PLAN.md (Micro-interactions: haptics, animations, Reanimated migration)
+Next step: Execute 16-02-PLAN.md (remaining UX polish)
 Resume file: None
