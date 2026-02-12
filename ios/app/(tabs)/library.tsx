@@ -20,6 +20,7 @@ import { useInbox, useInboxCount, useTriageMutation, useDebouncedValue, useTheme
 import { useSubscription } from '../../hooks/useSubscription';
 import { useContentStore } from '../../stores/contentStore';
 import { colors, spacing } from '../../theme';
+import api from '../../lib/api';
 import { STAGGER_DELAY, STAGGER_CAP } from '../../lib/animations';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -80,12 +81,18 @@ export default function LibraryScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
+    // Trigger platform sync in background (fire-and-forget)
+    const syncEndpoint = sourceFilter === 'all'
+      ? '/admin/sync/all'
+      : `/admin/sync/${sourceFilter}`;
+    api.post(syncEndpoint).catch(() => {});
+    // Refresh local data immediately
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['inbox'] }),
       queryClient.invalidateQueries({ queryKey: ['themes'] }),
     ]);
     setRefreshing(false);
-  }, [queryClient]);
+  }, [queryClient, sourceFilter]);
 
   // Toggle selection on tap
   const handleToggleSelection = (id: string) => {
