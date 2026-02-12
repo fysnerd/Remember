@@ -1,9 +1,15 @@
 /**
- * Skeleton loading placeholder with pulse animation
+ * Skeleton loading placeholder with pulse animation (Reanimated)
  */
 
-import { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, DimensionValue, ViewStyle } from 'react-native';
+import { useEffect } from 'react';
+import { StyleSheet, DimensionValue, ViewStyle } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import { colors, borderRadius as br } from '../../theme';
 
 type SkeletonVariant = 'text' | 'rect' | 'circle';
@@ -21,26 +27,15 @@ export function Skeleton({
   borderRadius,
   variant = 'rect',
 }: SkeletonProps) {
-  const opacity = useRef(new Animated.Value(0.3)).current;
+  const opacity = useSharedValue(0.3);
 
   useEffect(() => {
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, {
-          toValue: 0.7,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 0.3,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    animation.start();
-    return () => animation.stop();
-  }, [opacity]);
+    opacity.value = withRepeat(withTiming(0.7, { duration: 800 }), -1, true);
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
 
   const getRadius = (): number => {
     if (borderRadius !== undefined) return borderRadius;
@@ -60,7 +55,7 @@ export function Skeleton({
     borderRadius: getRadius(),
   };
 
-  return <Animated.View style={[styles.skeleton, style, { opacity }]} />;
+  return <Animated.View style={[styles.skeleton, style, animatedStyle]} />;
 }
 
 const styles = StyleSheet.create({

@@ -1,9 +1,15 @@
 /**
- * Toast notification component with useToast hook
+ * Toast notification component with useToast hook (Reanimated)
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { View, Animated, StyleSheet, Pressable } from 'react-native';
+import { useEffect, useState, useCallback } from 'react';
+import { View, StyleSheet, Pressable } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { Check, X, Info, LucideIcon } from 'lucide-react-native';
 import { Text } from './Text';
 import { colors, spacing, borderRadius } from '../../theme';
@@ -30,31 +36,27 @@ const bgColorMap: Record<ToastType, string> = {
 };
 
 export function Toast({ message, type, visible, onHide }: ToastProps) {
-  const translateY = useRef(new Animated.Value(-100)).current;
+  const translateY = useSharedValue(-100);
   const IconComponent = iconMap[type];
 
   useEffect(() => {
     if (visible) {
-      Animated.spring(translateY, {
-        toValue: 0,
-        useNativeDriver: true,
-        damping: 15,
-      }).start();
+      translateY.value = withSpring(0, { damping: 15, stiffness: 150 });
       const timer = setTimeout(onHide, 3000);
       return () => clearTimeout(timer);
     } else {
-      Animated.timing(translateY, {
-        toValue: -100,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
+      translateY.value = withTiming(-100, { duration: 200 });
     }
-  }, [visible, translateY, onHide]);
+  }, [visible, onHide]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
 
   if (!visible) return null;
 
   return (
-    <Animated.View style={[styles.container, { transform: [{ translateY }] }]}>
+    <Animated.View style={[styles.container, animatedStyle]}>
       <Pressable
         onPress={onHide}
         style={[styles.toast, { backgroundColor: bgColorMap[type] }]}
