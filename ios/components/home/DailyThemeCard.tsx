@@ -1,13 +1,13 @@
 /**
- * DailyThemeCard - Glass-styled theme card for Home screen
+ * DailyThemeCard - Large glass-styled theme card for Home screen
  *
- * Displays emoji, theme name, content count, and due badge.
+ * Tall card with big emoji, bold title, stats, and due badge.
  */
 
 import { View, StyleSheet } from 'react-native';
 import { GlassCard } from '../glass/GlassCard';
 import { Text } from '../ui';
-import { colors, spacing } from '../../theme';
+import { colors, spacing, fonts } from '../../theme';
 import type { ThemeListItem } from '../../types/content';
 
 interface DailyThemeCardProps {
@@ -17,48 +17,90 @@ interface DailyThemeCardProps {
 
 export function DailyThemeCard({ theme, onPress }: DailyThemeCardProps) {
   return (
-    <GlassCard padding="lg" onPress={onPress}>
-      <View style={styles.row}>
+    <GlassCard padding="lg" onPress={onPress} style={styles.card}>
+      {/* Top: Emoji + Due badge */}
+      <View style={styles.header}>
         <Text style={styles.emoji}>{theme.emoji}</Text>
-        <View style={styles.info}>
-          <Text variant="h3" numberOfLines={1}>
-            {theme.name}
-          </Text>
-          <Text variant="caption" color="secondary">
-            {theme.contentCount} contenu{theme.contentCount !== 1 ? 's' : ''}
-          </Text>
-        </View>
+        {theme.dueCards > 0 && (
+          <View style={styles.dueBadge}>
+            <Text style={styles.dueText}>{theme.dueCards} a revoir</Text>
+          </View>
+        )}
       </View>
 
-      {theme.dueCards > 0 && (
-        <View style={styles.dueBadge}>
-          <Text variant="caption" style={styles.dueText}>
-            {theme.dueCards} a revoir
+      {/* Bottom: Title + meta */}
+      <View style={styles.bottom}>
+        <Text style={styles.title} numberOfLines={2}>
+          {theme.name}
+        </Text>
+        <View style={styles.meta}>
+          <Text style={styles.subtitle}>
+            {theme.contentCount} contenu{theme.contentCount !== 1 ? 's' : ''}
           </Text>
+          <View style={styles.dot} />
+          <Text style={styles.cta}>Lancer le quiz</Text>
         </View>
-      )}
+      </View>
     </GlassCard>
   );
 }
 
 const styles = StyleSheet.create({
-  row: {
+  card: {
+    minHeight: 170,
+    justifyContent: 'space-between',
+  },
+  header: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
   emoji: {
-    fontSize: 32,
-  },
-  info: {
-    flex: 1,
+    fontSize: 48,
+    lineHeight: 56,
   },
   dueBadge: {
-    position: 'absolute',
-    top: spacing.sm,
-    right: spacing.sm,
+    backgroundColor: colors.accent,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: 9999,
   },
   dueText: {
+    color: colors.background,
+    fontFamily: fonts.bold,
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  bottom: {
+    marginTop: spacing.md,
+  },
+  title: {
+    color: colors.text,
+    fontFamily: fonts.bold,
+    fontSize: 22,
+    lineHeight: 28,
+    marginBottom: spacing.sm,
+  },
+  meta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  subtitle: {
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
+    fontSize: 14,
+  },
+  dot: {
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: colors.textTertiary,
+    marginHorizontal: spacing.sm,
+  },
+  cta: {
     color: colors.accent,
+    fontFamily: fonts.semibold,
+    fontSize: 14,
   },
 });

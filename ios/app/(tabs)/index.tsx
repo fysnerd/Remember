@@ -4,12 +4,12 @@
 
 import { useCallback, useState } from 'react';
 import { View, ScrollView, StyleSheet, RefreshControl } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Link2 } from 'lucide-react-native';
-import { Text } from '../../components/ui';
 import { GlassLockOverlay } from '../../components/glass';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
@@ -64,6 +64,7 @@ export default function HomeScreen() {
   }
 
   return (
+    <SafeAreaView style={styles.container} edges={['top']}>
     <ScrollView
       style={styles.container}
       contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.lg }]}
@@ -72,11 +73,6 @@ export default function HomeScreen() {
       }
     >
       <GreetingHeader userName={userName} stats={stats} />
-
-      {/* Daily themes section */}
-      <Text variant="h3" style={styles.sectionTitle}>
-        Themes du jour
-      </Text>
 
       <View style={styles.themesList}>
         {themeList.map((theme, index) => (
@@ -94,6 +90,7 @@ export default function HomeScreen() {
         ))}
       </View>
     </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -105,11 +102,7 @@ const styles = StyleSheet.create({
   content: {
     padding: spacing.lg,
   },
-  sectionTitle: {
-    marginTop: spacing.lg,
-    marginBottom: spacing.md,
-  },
   themesList: {
-    gap: spacing.md,
+    gap: spacing.lg,
   },
 });

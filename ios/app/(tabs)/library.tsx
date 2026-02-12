@@ -161,7 +161,7 @@ export default function LibraryScreen() {
         contentContainerStyle={[styles.suggestionsContainer, { paddingBottom: tabBarHeight + spacing.lg }]}
       >
         <Text variant="h3" style={{ marginBottom: spacing.md }}>
-          Suggestions pour toi
+          Tes themes d'apprentissage
         </Text>
         {suggestionsData.suggestions.map((suggestion, index) => (
           <GlassLockOverlay key={`${suggestion.name}-${index}`} locked={isFree}>
@@ -250,7 +250,7 @@ export default function LibraryScreen() {
             weight={activeExplorerTab === 'suggestions' ? 'medium' : 'regular'}
             style={activeExplorerTab === 'suggestions' ? styles.topTabTextActive : styles.topTabTextInactive}
           >
-            Suggestions
+            Mes themes
           </Text>
           {activeExplorerTab === 'suggestions' && <View style={styles.topTabIndicator} />}
         </Pressable>
