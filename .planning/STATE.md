@@ -11,15 +11,15 @@ See: .planning/PROJECT.md (updated 2026-02-11)
 
 Phase: 16 (UX Polish) -- COMPLETE
 Plan: 2 of 2 in current phase (16-02 DONE)
-Status: All v3.0 plans complete (11/11)
-Last activity: 2026-02-12 -- Completed 16-02 (GlassLockOverlay freemium visual indicators)
+Status: All v3.0 plans complete (11/11) + 14-04 gap closure
+Last activity: 2026-02-12 -- Completed 14-04 (UAT gap closure: 4 visual/interaction fixes)
 
-Progress: [###########] 11/11 plans (v3.0) -- MILESTONE COMPLETE
+Progress: [############] 12/12 plans (v3.0 + gap closure) -- MILESTONE COMPLETE
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 33 (10 v1.0 + 12 v2.0 + 11 v3.0)
+- Total plans completed: 34 (10 v1.0 + 12 v2.0 + 12 v3.0)
 - v1.0: ~25 min/plan avg (4 phases, 10 plans)
 - v2.0: ~3.75 min/plan avg (7 phases, 12 plans)
 - v3.0: 8 min/plan avg (5 phases, 11 plans)
@@ -38,6 +38,7 @@ Progress: [###########] 11/11 plans (v3.0) -- MILESTONE COMPLETE
 | 15-01 | Daily themes + Suggestions endpoints | 5 min | 2 | 6 |
 | 16-01 | Haptics + animations + Reanimated migration | 5 min | 2 | 14 |
 | 16-02 | GlassLockOverlay freemium visual indicators | 2 min | 2 | 4 |
+| 14-04 | UAT gap closure (4 visual/interaction fixes) | 2 min | 1 | 4 |
 
 ## Accumulated Context
 
@@ -83,6 +84,10 @@ Recent decisions affecting current work:
 - [16-02]: GlassLockOverlay uses absoluteFillObject overlay to intercept touches on locked content
 - [16-02]: Home free tier = 2 daily themes (index < 2); Explorer free tier = 4 suggestions (index < 4)
 - [16-02]: Lock overlay BlurView intensity 30 (lighter than glass surfaces at 60) for teaser visibility
+- [14-04]: DailyThemeCard shows content count only -- question count removed as redundant
+- [14-04]: Pull-to-refresh wrapped in try/catch/finally -- prevents frozen spinner on query errors
+- [14-04]: SelectionBar uses useBottomTabBarHeight for bottom offset instead of hardcoded bottom: 0
+- [14-04]: CategoryChips uses alignSelf flex-start to constrain pill height in ScrollView
 
 ### Pending Todos
 
@@ -98,6 +103,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-12
-Stopped at: Completed 16-02-PLAN.md (GlassLockOverlay freemium visual indicators) -- v3.0 MILESTONE COMPLETE
+Stopped at: Completed 14-04-PLAN.md (UAT gap closure: 4 visual/interaction fixes)
 Next step: OTA deploy via `eas update --branch production` or begin v3.1 planning
 Resume file: None
