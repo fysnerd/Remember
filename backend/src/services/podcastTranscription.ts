@@ -421,6 +421,7 @@ async function findPodcastRSS(showName: string, episodeTitle: string): Promise<P
 
 /**
  * Download audio file to temporary location with redirect handling
+ * No longer compresses here - chunking handles oversized files
  */
 async function downloadAudio(audioUrl: string): Promise<string> {
   const tempDir = os.tmpdir();
@@ -467,23 +468,6 @@ async function downloadAudio(audioUrl: string): Promise<string> {
     throw new Error('Downloaded file is not a valid audio file');
   }
 
-  // Check file size for Groq limit (25MB) - compress if needed
-  const maxSize = 25 * 1024 * 1024;
-  if (groqClient && stats.size > maxSize) {
-    log.info({ sizeMB: Math.round(stats.size / 1024 / 1024) }, 'File too large, compressing with ffmpeg');
-    const compressedFile = await compressAudio(tempFile);
-    fs.unlinkSync(tempFile); // Remove original
-
-    const compressedStats = fs.statSync(compressedFile);
-    log.info({ sizeMB: Math.round(compressedStats.size / 1024 / 1024 * 100) / 100 }, 'Audio compressed');
-
-    if (compressedStats.size > maxSize) {
-      fs.unlinkSync(compressedFile);
-      throw new Error(`File still too large after compression (${Math.round(compressedStats.size / 1024 / 1024)}MB > 25MB limit)`);
-    }
-    return compressedFile;
-  }
-
   return tempFile;
 }
 
@@ -505,48 +489,128 @@ async function getAudioDuration(inputPath: string): Promise<number> {
   });
 }
 
-/**
- * Compress audio file using ffmpeg to reduce file size
- * Calculates optimal bitrate to stay under 24MB (safe margin for 25MB limit)
- */
-async function compressAudio(inputPath: string): Promise<string> {
-  const outputPath = inputPath.replace('.mp3', '_compressed.mp3');
-  const targetSizeBytes = 24 * 1024 * 1024; // 24MB target (safe margin)
-  const minBitrate = 16; // Minimum 16kbps for speech quality
-  const maxBitrate = 48; // Maximum 48kbps
+// Chunk duration: 20 minutes (fits well within Groq per-request limits)
+const CHUNK_DURATION_SEC = 20 * 60;
+// Max file size for Groq Whisper
+const MAX_WHISPER_SIZE = 24 * 1024 * 1024; // 24MB safe margin
 
-  // Get duration to calculate optimal bitrate
-  let bitrate = 32; // Default
-  try {
-    const duration = await getAudioDuration(inputPath);
-    if (duration > 0) {
-      // Calculate bitrate: size (bits) / duration (seconds) = bitrate (bps)
-      // targetSizeBytes * 8 (bits) / duration (seconds) / 1000 = kbps
-      const optimalBitrate = Math.floor((targetSizeBytes * 8) / duration / 1000);
-      bitrate = Math.max(minBitrate, Math.min(maxBitrate, optimalBitrate));
-      log.debug({ durationMin: Math.round(duration / 60), bitrateKbps: bitrate }, 'Calculated optimal bitrate');
-    }
-  } catch (error) {
-    log.warn('Could not get duration, using default bitrate');
+/**
+ * Split audio file into chunks of ~CHUNK_DURATION_SEC using ffmpeg
+ * Returns list of chunk file paths
+ */
+async function splitAudioIntoChunks(audioPath: string): Promise<string[]> {
+  const duration = await getAudioDuration(audioPath);
+
+  // If short enough, just compress and return as single chunk
+  if (duration <= CHUNK_DURATION_SEC + 60) { // +60s tolerance
+    const compressed = await compressChunk(audioPath);
+    return [compressed];
   }
 
-  return new Promise((resolve, reject) => {
-    // Compress to mono, 16kHz (good enough for speech), calculated bitrate
-    const cmd = `ffmpeg -y -i "${inputPath}" -ac 1 -ar 16000 -b:a ${bitrate}k "${outputPath}"`;
+  const numChunks = Math.ceil(duration / CHUNK_DURATION_SEC);
+  log.info({ durationMin: Math.round(duration / 60), numChunks }, 'Splitting audio into chunks');
 
-    exec(cmd, { timeout: 600000 }, (error, _stdout, stderr) => {
-      if (error) {
-        log.error({ stderr }, 'ffmpeg compression error');
-        reject(new Error(`ffmpeg compression failed: ${error.message}`));
-        return;
-      }
-      resolve(outputPath);
+  const chunkPaths: string[] = [];
+
+  for (let i = 0; i < numChunks; i++) {
+    const startSec = i * CHUNK_DURATION_SEC;
+    const chunkPath = audioPath.replace('.mp3', `_chunk${i}.mp3`);
+
+    await new Promise<void>((resolve, reject) => {
+      const cmd = `ffmpeg -y -i "${audioPath}" -ss ${startSec} -t ${CHUNK_DURATION_SEC} -ac 1 -ar 16000 -b:a 32k "${chunkPath}"`;
+      exec(cmd, { timeout: 300000 }, (error, _stdout, stderr) => {
+        if (error) {
+          log.error({ stderr, chunk: i }, 'ffmpeg chunk split error');
+          reject(new Error(`ffmpeg chunk ${i} failed: ${error.message}`));
+          return;
+        }
+        resolve();
+      });
     });
-  });
+
+    // Verify chunk exists and is valid
+    if (fs.existsSync(chunkPath)) {
+      const stats = fs.statSync(chunkPath);
+      if (stats.size > 1000) { // skip empty/tiny chunks
+        // If still too large, re-compress with lower bitrate
+        if (stats.size > MAX_WHISPER_SIZE) {
+          const recompressed = await compressChunkToSize(chunkPath, MAX_WHISPER_SIZE);
+          fs.unlinkSync(chunkPath);
+          chunkPaths.push(recompressed);
+        } else {
+          chunkPaths.push(chunkPath);
+        }
+      } else {
+        fs.unlinkSync(chunkPath);
+      }
+    }
+  }
+
+  // Clean up original file
+  fs.unlinkSync(audioPath);
+
+  log.info({ chunks: chunkPaths.length }, 'Audio split complete');
+  return chunkPaths;
 }
 
 /**
- * Transcribe audio using Whisper API (Groq free or OpenAI)
+ * Compress a single chunk to mono 16kHz 32kbps (good for speech)
+ */
+async function compressChunk(inputPath: string): Promise<string> {
+  const outputPath = inputPath.replace('.mp3', '_comp.mp3');
+
+  await new Promise<void>((resolve, reject) => {
+    const cmd = `ffmpeg -y -i "${inputPath}" -ac 1 -ar 16000 -b:a 32k "${outputPath}"`;
+    exec(cmd, { timeout: 300000 }, (error, _stdout, _stderr) => {
+      if (error) {
+        reject(new Error(`ffmpeg compress failed: ${error.message}`));
+        return;
+      }
+      resolve();
+    });
+  });
+
+  fs.unlinkSync(inputPath);
+
+  // If still too large, use even lower bitrate
+  const stats = fs.statSync(outputPath);
+  if (stats.size > MAX_WHISPER_SIZE) {
+    const recompressed = await compressChunkToSize(outputPath, MAX_WHISPER_SIZE);
+    fs.unlinkSync(outputPath);
+    return recompressed;
+  }
+
+  return outputPath;
+}
+
+/**
+ * Re-compress a chunk with calculated bitrate to fit target size
+ */
+async function compressChunkToSize(inputPath: string, targetBytes: number): Promise<string> {
+  const outputPath = inputPath.replace('.mp3', '_fit.mp3');
+  const duration = await getAudioDuration(inputPath);
+  // Calculate bitrate: targetBytes * 8 / duration / 1000 = kbps
+  const bitrate = Math.max(16, Math.floor((targetBytes * 8) / duration / 1000));
+
+  log.debug({ bitrateKbps: bitrate, durationSec: Math.round(duration) }, 'Re-compressing chunk to fit size');
+
+  await new Promise<void>((resolve, reject) => {
+    const cmd = `ffmpeg -y -i "${inputPath}" -ac 1 -ar 16000 -b:a ${bitrate}k "${outputPath}"`;
+    exec(cmd, { timeout: 300000 }, (error) => {
+      if (error) {
+        reject(new Error(`ffmpeg re-compress failed: ${error.message}`));
+        return;
+      }
+      resolve();
+    });
+  });
+
+  return outputPath;
+}
+
+/**
+ * Transcribe a single audio file using Whisper API (Groq free or OpenAI)
+ * Does NOT clean up the file - caller handles cleanup
  */
 async function transcribeWithWhisper(audioPath: string): Promise<{
   text: string;
@@ -573,9 +637,6 @@ async function transcribeWithWhisper(audioPath: string): Promise<{
     ...(isGroq ? {} : { timestamp_granularities: ['segment'] }),
   });
 
-  // Clean up temp file
-  fs.unlinkSync(audioPath);
-
   // Extract segments from response
   const segments: TranscriptSegment[] = (transcription as any).segments?.map((seg: any) => ({
     start: seg.start,
@@ -587,6 +648,62 @@ async function transcribeWithWhisper(audioPath: string): Promise<{
     text: transcription.text,
     segments,
     language: (transcription as any).language || 'fr',
+  };
+}
+
+/**
+ * Transcribe audio with automatic chunking for long files
+ * Splits into ~20min chunks, transcribes each, merges results
+ */
+async function transcribeChunked(audioPath: string): Promise<{
+  text: string;
+  segments: TranscriptSegment[];
+  language: string;
+}> {
+  // Split into chunks (may return single chunk for short files)
+  const chunkPaths = await splitAudioIntoChunks(audioPath);
+
+  log.info({ chunks: chunkPaths.length }, 'Starting chunked transcription');
+
+  const allTexts: string[] = [];
+  const allSegments: TranscriptSegment[] = [];
+  let detectedLanguage = 'fr';
+
+  for (let i = 0; i < chunkPaths.length; i++) {
+    const chunkPath = chunkPaths[i];
+    const chunkOffset = i * CHUNK_DURATION_SEC;
+
+    log.debug({ chunk: i + 1, total: chunkPaths.length, offsetMin: Math.round(chunkOffset / 60) }, 'Transcribing chunk');
+
+    try {
+      const result = await groqLimiter(() => transcribeWithWhisper(chunkPath));
+
+      allTexts.push(result.text);
+      detectedLanguage = result.language;
+
+      // Adjust segment timestamps with chunk offset
+      for (const seg of result.segments) {
+        allSegments.push({
+          start: seg.start + chunkOffset,
+          duration: seg.duration,
+          text: seg.text,
+        });
+      }
+    } finally {
+      // Always clean up chunk file
+      if (fs.existsSync(chunkPath)) {
+        fs.unlinkSync(chunkPath);
+      }
+    }
+  }
+
+  const mergedText = allTexts.join(' ');
+  log.info({ chunks: chunkPaths.length, totalChars: mergedText.length, segments: allSegments.length }, 'Chunked transcription complete');
+
+  return {
+    text: mergedText,
+    segments: allSegments,
+    language: detectedLanguage,
   };
 }
 
@@ -641,9 +758,9 @@ export async function processPodcastTranscript(contentId: string): Promise<boole
     log.debug('Downloading audio');
     const audioPath = await downloadAudio(rssResult.episodeAudioUrl);
 
-    // Step 3: Transcribe with Whisper (rate limited)
-    log.debug('Transcribing with Whisper');
-    const result = await groqLimiter(() => transcribeWithWhisper(audioPath));
+    // Step 3: Transcribe with chunking (splits long audio, handles rate limits)
+    log.debug('Transcribing with chunked Whisper');
+    const result = await transcribeChunked(audioPath);
 
     // Step 4: Save transcript
     await prisma.transcript.create({
@@ -730,7 +847,7 @@ export async function runPodcastTranscriptionWorker(): Promise<void> {
   let cacheHits = 0;
   let failed = 0;
 
-  const limit = pLimit(3); // Podcast downloads + Whisper = heavy, limit to 3
+  const limit = pLimit(1); // Sequential: chunked transcription is heavy + Groq rate limits
 
   const results = await Promise.allSettled(
     Array.from(uniqueEpisodes.values()).map(content =>
@@ -811,9 +928,9 @@ async function processPodcastWithCache(
     log.debug('Downloading audio');
     const audioPath = await downloadAudio(rssResult.episodeAudioUrl);
 
-    // Step 3: Transcribe with Whisper (rate limited)
-    log.debug('Transcribing with Whisper');
-    const transcript = await groqLimiter(() => transcribeWithWhisper(audioPath));
+    // Step 3: Transcribe with chunking (splits long audio, handles rate limits)
+    log.debug('Transcribing with chunked Whisper');
+    const transcript = await transcribeChunked(audioPath);
 
     // Step 4: Save to cache
     await markCacheSuccess(cache.id, {
