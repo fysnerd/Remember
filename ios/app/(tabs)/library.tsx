@@ -1,12 +1,10 @@
 /**
- * Explorer Tab - Suggestions + Bibliotheque (two top-level tabs)
- * Suggestions: 8 thematic topics (all locked if FREE)
- * Bibliotheque: inbox content to triage with source filter, search, and batch actions
+ * Explorer Tab - Mes themes (grid) + Bibliotheque (inbox triage)
  */
 
 import { useState, useCallback, useMemo } from 'react';
 import { View, ScrollView, StyleSheet, Pressable, RefreshControl, Dimensions } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -15,13 +13,14 @@ import { ContentCard, SourcePills, SelectionBar } from '../../components/content
 import { SearchInput } from '../../components/explorer/SearchInput';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
-import { Search, Sparkles } from 'lucide-react-native';
-import { SuggestionCard } from '../../components/explorer/SuggestionCard';
+import { Search, BookOpen, Sparkles } from 'lucide-react-native';
+import { ThemeGridCard } from '../../components/explorer/ThemeGridCard';
 import { GlassLockOverlay } from '../../components/glass';
-import { useInbox, useInboxCount, useTriageMutation, useDebouncedValue, useThemeSuggestions } from '../../hooks';
+import { useInbox, useInboxCount, useTriageMutation, useDebouncedValue, useThemes } from '../../hooks';
 import { useSubscription } from '../../hooks/useSubscription';
 import { useContentStore } from '../../stores/contentStore';
 import { colors, spacing } from '../../theme';
+import { STAGGER_DELAY, STAGGER_CAP } from '../../lib/animations';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_GAP = spacing.sm;
@@ -57,7 +56,7 @@ export default function LibraryScreen() {
   const { data: inboxCount } = useInboxCount();
   const { data: inboxItems, isLoading: inboxLoading } = useInbox();
   const triageMutation = useTriageMutation();
-  const { data: suggestionsData, isLoading: suggestionsLoading, error: suggestionsError } = useThemeSuggestions();
+  const { data: themes, isLoading: themesLoading } = useThemes();
 
   const selectionMode = selectedIds.size > 0;
 
@@ -80,7 +79,10 @@ export default function LibraryScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await queryClient.invalidateQueries({ queryKey: ['inbox'] });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['inbox'] }),
+      queryClient.invalidateQueries({ queryKey: ['themes'] }),
+    ]);
     setRefreshing(false);
   }, [queryClient]);
 
@@ -134,23 +136,29 @@ export default function LibraryScreen() {
     handleToggleSelection(id);
   };
 
-  // --- Render: Suggestions tab content ---
-  const renderSuggestionsTab = () => {
-    if (suggestionsLoading) {
+  const handleThemePress = (themeId: string) => {
+    router.push({ pathname: '/theme/[id]' as any, params: { id: themeId } });
+  };
+
+  // --- Render: Mes themes tab content (2-column grid) ---
+  const renderThemesTab = () => {
+    if (themesLoading) {
       return (
-        <View style={styles.suggestionsContainer}>
+        <View style={styles.themesGrid}>
           {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} height={72} width="100%" />
+            <View key={i} style={styles.themeGridItem}>
+              <Skeleton height={100} width="100%" />
+            </View>
           ))}
         </View>
       );
     }
 
-    if (suggestionsError || !suggestionsData?.suggestions?.length) {
+    if (!themes?.length) {
       return (
         <EmptyState
-          message="Des suggestions personnalisees arrivent bientot"
-          icon={Sparkles}
+          message="Triez du contenu pour decouvrir vos themes"
+          icon={BookOpen}
           hasHeader
         />
       );
@@ -158,19 +166,27 @@ export default function LibraryScreen() {
 
     return (
       <ScrollView
-        contentContainerStyle={[styles.suggestionsContainer, { paddingBottom: tabBarHeight + spacing.lg }]}
+        contentContainerStyle={[styles.themesContainer, { paddingBottom: tabBarHeight + spacing.lg }]}
       >
-        <Text variant="h3" style={{ marginBottom: spacing.md }}>
-          Tes themes d'apprentissage
-        </Text>
-        {suggestionsData.suggestions.map((suggestion, index) => (
-          <GlassLockOverlay key={`${suggestion.name}-${index}`} locked={isFree}>
-            <SuggestionCard
-              title={`${suggestion.emoji} ${suggestion.name}`}
-              description={suggestion.description}
-            />
-          </GlassLockOverlay>
-        ))}
+        <View style={styles.themesGrid}>
+          {themes.map((theme, index) => (
+            <Animated.View
+              key={theme.id}
+              style={styles.themeGridItem}
+              entering={FadeInDown.delay(Math.min(index, STAGGER_CAP) * STAGGER_DELAY).duration(200)}
+            >
+              <GlassLockOverlay locked={isFree && index >= 2}>
+                <ThemeGridCard
+                  emoji={theme.emoji}
+                  name={theme.name}
+                  contentCount={theme.contentCount}
+                  dueCards={theme.dueCards}
+                  onPress={() => handleThemePress(theme.id)}
+                />
+              </GlassLockOverlay>
+            </Animated.View>
+          ))}
+        </View>
       </ScrollView>
     );
   };
@@ -273,7 +289,7 @@ export default function LibraryScreen() {
       </View>
 
       {/* Tab content */}
-      {activeExplorerTab === 'suggestions' ? renderSuggestionsTab() : renderLibraryTab()}
+      {activeExplorerTab === 'suggestions' ? renderThemesTab() : renderLibraryTab()}
 
       {/* Selection bar - appears when items selected in triage */}
       {selectionMode && activeExplorerTab === 'library' && (
@@ -337,10 +353,17 @@ const styles = StyleSheet.create({
     marginVertical: spacing.sm,
   },
 
-  // --- Suggestions ---
-  suggestionsContainer: {
+  // --- Themes grid ---
+  themesContainer: {
     padding: spacing.lg,
-    gap: spacing.md,
+  },
+  themesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: GRID_GAP,
+  },
+  themeGridItem: {
+    width: COLUMN_WIDTH,
   },
 
   // --- Content area ---

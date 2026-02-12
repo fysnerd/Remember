@@ -555,7 +555,7 @@ contentRouter.get('/inbox', async (req: Request, res: Response, next: NextFuncti
           userId: req.user!.id,
           status: ContentStatus.INBOX,
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { capturedAt: 'desc' },
         skip,
         take: limitNum,
         include: {
