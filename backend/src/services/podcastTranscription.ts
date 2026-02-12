@@ -716,7 +716,9 @@ async function transcribeChunked(audioPath: string): Promise<{
       } catch (error: any) {
         const isRateLimit = error?.status === 429 || error?.message?.includes('429');
         if (isRateLimit && attempt < CHUNK_MAX_RETRIES - 1) {
-          const parsedWait = parseRateLimitWait(error?.message || '');
+          // Try parsing from main message, then nested error.message
+          const errMsg = error?.message || error?.error?.message || '';
+          const parsedWait = parseRateLimitWait(errMsg);
           const waitSec = parsedWait ? parsedWait + 30 : CHUNK_DEFAULT_WAIT_SEC; // add 30s buffer
           log.warn(
             { chunk: i + 1, attempt: attempt + 1, waitSec, parsedWait },
