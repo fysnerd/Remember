@@ -721,11 +721,11 @@ reviewRouter.post('/practice/theme', async (req: Request, res: Response, next: N
                   data: { quizId: quiz.id, userId },
                 });
               }
-              log.info({ themeId, count: result.questions.length }, 'Background synthesis generation complete');
+              console.log(`[synthesis] Generated ${result.questions.length} synthesis cards for theme ${themeId}`);
             }
           }
         } catch (err) {
-          log.error({ err, themeId }, 'Background synthesis generation failed');
+          console.error(`[synthesis] Background generation failed for theme ${themeId}:`, err);
         }
       })();
     }
