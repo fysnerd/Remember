@@ -652,8 +652,28 @@ async function transcribeWithWhisper(audioPath: string): Promise<{
 }
 
 /**
+ * Parse wait time from Groq 429 error message.
+ * E.g. "Please try again in 9m26s" → 566 seconds
+ */
+function parseRateLimitWait(errorMessage: string): number | null {
+  const match = errorMessage.match(/try again in (\d+)m(\d+)s/i);
+  if (match) {
+    return parseInt(match[1]) * 60 + parseInt(match[2]);
+  }
+  const secMatch = errorMessage.match(/try again in (\d+)s/i);
+  if (secMatch) {
+    return parseInt(secMatch[1]);
+  }
+  return null;
+}
+
+const CHUNK_MAX_RETRIES = 5;
+const CHUNK_DEFAULT_WAIT_SEC = 600; // 10 min fallback if can't parse wait time
+
+/**
  * Transcribe audio with automatic chunking for long files
  * Splits into ~20min chunks, transcribes each, merges results
+ * Handles Groq 429 rate limits with parsed wait times
  */
 async function transcribeChunked(audioPath: string): Promise<{
   text: string;
@@ -673,27 +693,53 @@ async function transcribeChunked(audioPath: string): Promise<{
     const chunkPath = chunkPaths[i];
     const chunkOffset = i * CHUNK_DURATION_SEC;
 
-    log.debug({ chunk: i + 1, total: chunkPaths.length, offsetMin: Math.round(chunkOffset / 60) }, 'Transcribing chunk');
+    log.info({ chunk: i + 1, total: chunkPaths.length, offsetMin: Math.round(chunkOffset / 60) }, 'Transcribing chunk');
 
-    try {
-      const result = await groqLimiter(() => transcribeWithWhisper(chunkPath));
+    let success = false;
+    for (let attempt = 0; attempt < CHUNK_MAX_RETRIES; attempt++) {
+      try {
+        const result = await groqLimiter(() => transcribeWithWhisper(chunkPath));
 
-      allTexts.push(result.text);
-      detectedLanguage = result.language;
+        allTexts.push(result.text);
+        detectedLanguage = result.language;
 
-      // Adjust segment timestamps with chunk offset
-      for (const seg of result.segments) {
-        allSegments.push({
-          start: seg.start + chunkOffset,
-          duration: seg.duration,
-          text: seg.text,
-        });
+        // Adjust segment timestamps with chunk offset
+        for (const seg of result.segments) {
+          allSegments.push({
+            start: seg.start + chunkOffset,
+            duration: seg.duration,
+            text: seg.text,
+          });
+        }
+        success = true;
+        break;
+      } catch (error: any) {
+        const isRateLimit = error?.status === 429 || error?.message?.includes('429');
+        if (isRateLimit && attempt < CHUNK_MAX_RETRIES - 1) {
+          const parsedWait = parseRateLimitWait(error?.message || '');
+          const waitSec = parsedWait ? parsedWait + 30 : CHUNK_DEFAULT_WAIT_SEC; // add 30s buffer
+          log.warn(
+            { chunk: i + 1, attempt: attempt + 1, waitSec, parsedWait },
+            `Rate limited on chunk, waiting ${Math.round(waitSec / 60)}min before retry`
+          );
+          await new Promise(resolve => setTimeout(resolve, waitSec * 1000));
+        } else {
+          // Clean up chunk file on final failure
+          if (fs.existsSync(chunkPath)) {
+            fs.unlinkSync(chunkPath);
+          }
+          throw error;
+        }
       }
-    } finally {
-      // Always clean up chunk file
-      if (fs.existsSync(chunkPath)) {
-        fs.unlinkSync(chunkPath);
-      }
+    }
+
+    // Clean up chunk file after successful transcription
+    if (fs.existsSync(chunkPath)) {
+      fs.unlinkSync(chunkPath);
+    }
+
+    if (!success) {
+      throw new Error(`Failed to transcribe chunk ${i + 1} after ${CHUNK_MAX_RETRIES} retries`);
     }
   }
 
