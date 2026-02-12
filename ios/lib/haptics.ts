@@ -1,5 +1,6 @@
 /**
  * Centralized haptic feedback utility with semantic methods.
+ * Safe wrapper: silently fails if expo-haptics native module is unavailable.
  *
  * Usage: import { haptics } from '../lib/haptics';
  *        haptics.light();   // button press
@@ -8,17 +9,27 @@
 
 import * as Haptics from 'expo-haptics';
 
+function safe(fn: () => Promise<void>): () => void {
+  return () => {
+    try {
+      fn().catch(() => {});
+    } catch {
+      // Native module not available — silently ignore
+    }
+  };
+}
+
 export const haptics = {
   /** Light tap - button press, pull-to-refresh */
-  light: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
+  light: safe(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)),
   /** Medium impact - quiz submit, card selection */
-  medium: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium),
+  medium: safe(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)),
   /** Selection change - tab switch, quiz option pick, filter change */
-  selection: () => Haptics.selectionAsync(),
+  selection: safe(() => Haptics.selectionAsync()),
   /** Success - quiz correct, triage batch complete */
-  success: () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success),
+  success: safe(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)),
   /** Error - quiz wrong answer */
-  error: () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error),
+  error: safe(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)),
   /** Warning - destructive action */
-  warning: () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning),
+  warning: safe(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)),
 };
