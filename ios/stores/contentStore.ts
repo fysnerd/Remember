@@ -5,10 +5,19 @@
 import { create } from 'zustand';
 
 type LibraryTab = 'collection' | 'triage';
+type ExplorerTab = 'suggestions' | 'library';
 type SourceFilter = 'all' | 'youtube' | 'spotify' | 'tiktok' | 'instagram';
 
 interface ContentStoreState {
-  // Tab state
+  // Explorer top-level tab state
+  activeExplorerTab: ExplorerTab;
+  setActiveExplorerTab: (tab: ExplorerTab) => void;
+
+  // Search state
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+
+  // Library sub-tab state
   activeLibraryTab: LibraryTab;
   setActiveLibraryTab: (tab: LibraryTab) => void;
 
@@ -27,6 +36,12 @@ interface ContentStoreState {
 }
 
 export const useContentStore = create<ContentStoreState>((set) => ({
+  activeExplorerTab: 'library',
+  setActiveExplorerTab: (tab) => set({ activeExplorerTab: tab }),
+
+  searchQuery: '',
+  setSearchQuery: (query) => set({ searchQuery: query }),
+
   activeLibraryTab: 'collection',
   setActiveLibraryTab: (tab) => set({ activeLibraryTab: tab }),
 

@@ -11,6 +11,7 @@ interface ContentFilters {
   topic?: string;
   channel?: string;
   status?: string;
+  search?: string;
 }
 
 // Backend content structure (from Prisma)
@@ -69,6 +70,7 @@ export function useContentList(filters?: ContentFilters) {
       if (filters?.source) params.append('platform', filters.source.toUpperCase());
       if (filters?.topic) params.append('tags', filters.topic);
       if (filters?.channel) params.append('channel', filters.channel);
+      if (filters?.search) params.append('search', filters.search);
       params.append('status', filters?.status || 'READY');
       const { data } = await api.get<BackendContentResponse>(`/content?${params}`);
       return {
