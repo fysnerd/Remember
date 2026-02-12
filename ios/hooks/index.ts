@@ -12,4 +12,5 @@ export { useMemo, useTopicMemo, useThemeMemo, useRefreshThemeMemo } from './useM
 export { useOAuthStatus, useRefreshContent } from './useOAuth';
 export { useThemes, usePendingThemes, useDiscoverThemes, useThemeDetail, useCreateTheme, useUpdateTheme, useDeleteTheme, useAddContentToTheme, useRemoveContentFromTheme } from './useThemes';
 export { useDailyThemes } from './useDailyThemes';
+export { useThemeSuggestions } from './useThemeSuggestions';
 export { useDebouncedValue } from './useDebouncedValue';

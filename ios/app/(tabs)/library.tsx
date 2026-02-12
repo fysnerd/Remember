@@ -10,13 +10,14 @@ import { View, ScrollView, StyleSheet, Pressable, RefreshControl, Dimensions } f
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { Text, Badge } from '../../components/ui';
+import { Text, Badge, Skeleton } from '../../components/ui';
 import { ContentCard, FilterBar, SourcePills, SelectionBar } from '../../components/content';
 import { SearchInput } from '../../components/explorer/SearchInput';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
 import { BookOpen, Search, Sparkles } from 'lucide-react-native';
-import { useContentList, useInbox, useInboxCount, useTriageMutation, useTopics, useChannels, useDebouncedValue } from '../../hooks';
+import { SuggestionCard } from '../../components/explorer/SuggestionCard';
+import { useContentList, useInbox, useInboxCount, useTriageMutation, useTopics, useChannels, useDebouncedValue, useThemeSuggestions } from '../../hooks';
 import { useContentStore } from '../../stores/contentStore';
 import { colors, spacing } from '../../theme';
 
@@ -71,6 +72,7 @@ export default function LibraryScreen() {
   const { data: topics = [] } = useTopics();
   const { data: channels = [] } = useChannels();
   const triageMutation = useTriageMutation();
+  const { data: suggestionsData, isLoading: suggestionsLoading, error: suggestionsError } = useThemeSuggestions();
 
   const selectionMode = selectedIds.size > 0;
 
@@ -145,13 +147,44 @@ export default function LibraryScreen() {
   const isLibraryLoading = activeLibraryTab === 'collection' ? collectionLoading : inboxLoading;
 
   // --- Render: Suggestions tab content ---
-  const renderSuggestionsTab = () => (
-    <EmptyState
-      message="Des suggestions personnalisees arrivent bientot"
-      icon={Sparkles}
-      hasHeader
-    />
-  );
+  const renderSuggestionsTab = () => {
+    if (suggestionsLoading) {
+      return (
+        <View style={styles.suggestionsContainer}>
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} height={72} width="100%" />
+          ))}
+        </View>
+      );
+    }
+
+    if (suggestionsError || !suggestionsData?.suggestions?.length) {
+      return (
+        <EmptyState
+          message="Des suggestions personnalisees arrivent bientot"
+          icon={Sparkles}
+          hasHeader
+        />
+      );
+    }
+
+    return (
+      <ScrollView
+        contentContainerStyle={[styles.suggestionsContainer, { paddingBottom: tabBarHeight + spacing.lg }]}
+      >
+        <Text variant="h3" style={{ marginBottom: spacing.md }}>
+          Suggestions pour toi
+        </Text>
+        {suggestionsData.suggestions.map((suggestion, index) => (
+          <SuggestionCard
+            key={`${suggestion.name}-${index}`}
+            title={`${suggestion.emoji} ${suggestion.name}`}
+            description={suggestion.description}
+          />
+        ))}
+      </ScrollView>
+    );
+  };
 
   // --- Render: Library tab content ---
   const renderLibraryTab = () => (
@@ -401,6 +434,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
+  },
+
+  // --- Suggestions ---
+  suggestionsContainer: {
+    padding: spacing.lg,
+    gap: spacing.md,
   },
 
   // --- Content area ---

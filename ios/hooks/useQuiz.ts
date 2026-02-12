@@ -231,6 +231,8 @@ export function useCompleteSession() {
     onSuccess: () => {
       // Invalidate reviews to refresh history
       queryClient.invalidateQueries({ queryKey: ['reviews'] });
+      // Refresh daily themes so due card counts update after quiz session
+      queryClient.invalidateQueries({ queryKey: ['themes', 'daily'] });
     },
   });
 }
