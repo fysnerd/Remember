@@ -96,7 +96,7 @@ Plans:
 - [x] 14-01-PLAN.md -- Home screen rebuild (GreetingHeader + DailyThemeCard + useDailyThemes stub hook)
 - [x] 14-02-PLAN.md -- Explorer screen rebuild (Suggestions placeholder + Library tab with search + triage preserved)
 - [x] 14-03-PLAN.md -- Revisions screen (category filter chips + search) + Profile screen (GlassCard user info + settings)
-- [ ] 14-04-PLAN.md -- Gap closure: DailyThemeCard content count only, Home banner + refresh fixes, SelectionBar tab bar offset, CategoryChips height constraint
+- [x] 14-04-PLAN.md -- Gap closure: DailyThemeCard content count only, Home banner + refresh fixes, SelectionBar tab bar offset, CategoryChips height constraint
 
 ### Phase 15: Backend Endpoints
 **Goal**: Backend serves the data that Home and Explorer screens need -- daily theme selection with smart rotation and AI-generated theme suggestions
@@ -147,6 +147,6 @@ Phase 15 can execute in parallel with 13/14/16 (backend is independent).
 | 11. Theme Discovery & Onboarding | v2.0 | 2/2 | Complete | 2026-02-11 |
 | 12. Foundation Build | v3.0 | 2/2 | Complete | 2026-02-11 |
 | 13. Design System | v3.0 | 3/3 | Complete | 2026-02-11 |
-| 14. Screen Rebuild | v3.0 | 3/4 | In Progress | 2026-02-12 |
+| 14. Screen Rebuild | v3.0 | 4/4 | Complete | 2026-02-12 |
 | 15. Backend Endpoints | v3.0 | 1/1 | Complete | 2026-02-12 |
 | 16. UX Polish | v3.0 | 2/2 | Complete | 2026-02-12 |
