@@ -16,25 +16,20 @@ interface QuizRecommendationCardProps {
 }
 
 export function QuizRecommendationCard({ recommendation, onPress }: QuizRecommendationCardProps) {
-  const { type, title, subtitle, thumbnailUrl, emoji, dueCount, questionCount } = recommendation;
+  const { type, title, subtitle, thumbnailUrl, emoji, questionCount } = recommendation;
 
   return (
     <GlassCard padding="lg" onPress={onPress} style={styles.card}>
-      {/* Top: Thumbnail/Emoji + Due badge */}
+      {/* Top: Thumbnail/Emoji */}
       <View style={styles.header}>
         {type === 'content' && thumbnailUrl ? (
           <Image source={{ uri: thumbnailUrl }} style={styles.thumbnail} />
         ) : (
           <Text style={styles.emoji}>{emoji || '📚'}</Text>
         )}
-        {dueCount > 0 && (
-          <View style={styles.dueBadge}>
-            <Text style={styles.dueText}>{dueCount} a revoir</Text>
-          </View>
-        )}
       </View>
 
-      {/* Bottom: Title + subtitle + question count + CTA */}
+      {/* Bottom: Title + subtitle + question count */}
       <View style={styles.bottom}>
         <Text style={styles.title} numberOfLines={2}>
           {title}
@@ -45,8 +40,6 @@ export function QuizRecommendationCard({ recommendation, onPress }: QuizRecommen
           </Text>
           <View style={styles.dot} />
           <Text style={styles.subtitle}>{questionCount} question{questionCount !== 1 ? 's' : ''}</Text>
-          <View style={styles.dot} />
-          <Text style={styles.cta}>Lancer le quiz</Text>
         </View>
       </View>
     </GlassCard>
@@ -72,19 +65,6 @@ const styles = StyleSheet.create({
   emoji: {
     fontSize: 48,
     lineHeight: 56,
-  },
-  dueBadge: {
-    backgroundColor: colors.accent,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    borderRadius: 9999,
-  },
-  dueText: {
-    color: colors.background,
-    fontFamily: fonts.bold,
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   bottom: {
     marginTop: spacing.md,
@@ -112,10 +92,5 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: colors.textTertiary,
     marginHorizontal: spacing.sm,
-  },
-  cta: {
-    color: colors.accent,
-    fontFamily: fonts.semibold,
-    fontSize: 14,
   },
 });
