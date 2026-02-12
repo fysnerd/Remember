@@ -90,12 +90,12 @@ Plans:
   3. Explorer screen has a Library tab with content list, source/category filters, and search by title or author
   4. Revisions screen shows revision cards with category filter chips and full-text search
   5. Profile screen displays user info (name, avatar) and settings/preferences
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 14-01: Home screen (3 daily theme cards, greeting, stats)
-- [ ] 14-02: Explorer screen (Suggestions tab + Library tab with filters/search)
-- [ ] 14-03: Revisions screen (revision cards, category filter, search) + Profile screen (user info, settings)
+- [ ] 14-01-PLAN.md -- Home screen rebuild (GreetingHeader + DailyThemeCard + useDailyThemes stub hook)
+- [ ] 14-02-PLAN.md -- Explorer screen rebuild (Suggestions placeholder + Library tab with search + triage preserved)
+- [ ] 14-03-PLAN.md -- Revisions screen (category filter chips + search) + Profile screen (GlassCard user info + settings)
 
 ### Phase 15: Backend Endpoints
 **Goal**: Backend serves the data that Home and Explorer screens need -- daily theme selection with smart rotation and AI-generated theme suggestions
