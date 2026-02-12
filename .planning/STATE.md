@@ -5,25 +5,25 @@
 See: .planning/PROJECT.md (updated 2026-02-11)
 
 **Core value:** L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans effort supplementaire de curation.
-**Current focus:** v3.0 Night Blue Glass UI -- Phase 16 in progress
+**Current focus:** v3.0 Night Blue Glass UI -- COMPLETE
 
 ## Current Position
 
-Phase: 16 (UX Polish)
-Plan: 1 of 2 in current phase (16-01 DONE)
-Status: 16-01 complete, ready for 16-02
-Last activity: 2026-02-12 -- Completed 16-01 (Micro-interactions: haptics, animations, Reanimated migration)
+Phase: 16 (UX Polish) -- COMPLETE
+Plan: 2 of 2 in current phase (16-02 DONE)
+Status: All v3.0 plans complete (11/11)
+Last activity: 2026-02-12 -- Completed 16-02 (GlassLockOverlay freemium visual indicators)
 
-Progress: [##########] 10/11 plans (v3.0)
+Progress: [###########] 11/11 plans (v3.0) -- MILESTONE COMPLETE
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 32 (10 v1.0 + 12 v2.0 + 10 v3.0)
+- Total plans completed: 33 (10 v1.0 + 12 v2.0 + 11 v3.0)
 - v1.0: ~25 min/plan avg (4 phases, 10 plans)
 - v2.0: ~3.75 min/plan avg (7 phases, 12 plans)
-- v3.0: 9 min/plan avg (5 phases, 10 plans)
-- Total execution time: ~6 hours 16 min across all milestones
+- v3.0: 8 min/plan avg (5 phases, 11 plans)
+- Total execution time: ~6 hours 18 min across all milestones
 
 | Phase | Plan | Duration | Tasks | Files |
 |-------|------|----------|-------|-------|
@@ -37,6 +37,7 @@ Progress: [##########] 10/11 plans (v3.0)
 | 14-03 | Revisions + Profile screen rebuild | 4 min | 2 | 4 |
 | 15-01 | Daily themes + Suggestions endpoints | 5 min | 2 | 6 |
 | 16-01 | Haptics + animations + Reanimated migration | 5 min | 2 | 14 |
+| 16-02 | GlassLockOverlay freemium visual indicators | 2 min | 2 | 4 |
 
 ## Accumulated Context
 
@@ -79,6 +80,9 @@ Recent decisions affecting current work:
 - [16-01]: Quiz haptics layered with 300ms delay between submit impact and result notification
 - [16-01]: Tab screens use FadeIn(200ms); Home uses FadeInDown with stagger for visual hierarchy
 - [16-01]: Screen transitions default to fade 250ms; modals use slide_from_bottom 300ms
+- [16-02]: GlassLockOverlay uses absoluteFillObject overlay to intercept touches on locked content
+- [16-02]: Home free tier = 2 daily themes (index < 2); Explorer free tier = 4 suggestions (index < 4)
+- [16-02]: Lock overlay BlurView intensity 30 (lighter than glass surfaces at 60) for teaser visibility
 
 ### Pending Todos
 
@@ -94,6 +98,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-12
-Stopped at: Completed 16-01-PLAN.md (Micro-interactions: haptics, animations, Reanimated migration)
-Next step: Execute 16-02-PLAN.md (remaining UX polish)
+Stopped at: Completed 16-02-PLAN.md (GlassLockOverlay freemium visual indicators) -- v3.0 MILESTONE COMPLETE
+Next step: OTA deploy via `eas update --branch production` or begin v3.1 planning
 Resume file: None
