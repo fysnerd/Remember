@@ -45,7 +45,7 @@ export default function QuizScreen() {
     return <LoadingScreen />;
   }
 
-  if (error || !quiz || !quiz.questions.length) {
+  if (!quiz || !quiz.questions.length) {
     return <ErrorState message="Quiz introuvable" onRetry={refetch} />;
   }
 

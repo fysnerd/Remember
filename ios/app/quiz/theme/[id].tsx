@@ -44,7 +44,7 @@ export default function ThemeQuizScreen() {
     return <LoadingScreen />;
   }
 
-  if (error || !quiz || !quiz.questions.length) {
+  if (!quiz || !quiz.questions.length) {
     return <ErrorState message="Aucun quiz pour ce theme" onRetry={refetch} />;
   }
 

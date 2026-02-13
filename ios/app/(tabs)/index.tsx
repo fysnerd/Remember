@@ -46,11 +46,10 @@ export default function HomeScreen() {
   }, [queryClient]);
 
   const handleRecommendationPress = (rec: { id: string; type: 'content' | 'theme' }) => {
-    if (rec.type === 'content') {
-      router.push({ pathname: '/quiz/[id]' as any, params: { id: rec.id } });
-    } else {
-      router.push({ pathname: '/quiz/theme/[id]' as any, params: { id: rec.id } });
-    }
+    router.push({
+      pathname: '/quiz/preview/[id]' as any,
+      params: { id: rec.id, type: rec.type },
+    });
   };
 
   if (isLoading) {

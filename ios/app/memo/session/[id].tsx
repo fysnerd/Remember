@@ -111,7 +111,7 @@ export default function SessionMemoScreen() {
   };
 
   if (isLoading) return <LoadingScreen />;
-  if (error || !session) return <ErrorState message="Session introuvable" onRetry={refetch} hasHeader />;
+  if (!session) return <ErrorState message="Session introuvable" onRetry={refetch} hasHeader />;
 
   // Extract unique contents from reviews
   const contentMap = new Map<string, { id: string; title: string; platform: string; thumbnailUrl?: string }>();

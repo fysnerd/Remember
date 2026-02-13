@@ -94,12 +94,11 @@ export function useQuiz(contentId: string) {
     queryKey: ['quiz', contentId],
     queryFn: async () => {
       const { data } = await api.post<PracticeResponse>('/reviews/practice', { contentId });
-      console.log('[useQuiz] Raw backend data:', JSON.stringify(data.cards[0]?.quiz, null, 2));
       const quiz = transformCardsToQuiz(data.cards, contentId);
-      console.log('[useQuiz] Transformed quiz:', JSON.stringify(quiz.questions[0], null, 2));
       return quiz;
     },
     enabled: !!contentId,
+    staleTime: 5 * 60 * 1000, // 5 min — avoid refetch during quiz session
   });
 }
 
@@ -116,11 +115,11 @@ export function useTopicQuiz(topicName: string) {
     queryKey: ['quiz', 'topic', topicName],
     queryFn: async () => {
       const { data } = await api.post<TopicPracticeResponse>('/reviews/practice/topic', { topicName });
-      console.log('[useTopicQuiz] Got', data.count, 'cards from', data.contentCount, 'contents');
       const quiz = transformCardsToQuiz(data.cards, `topic:${topicName}`);
       return { ...quiz, topicName, contentCount: data.contentCount };
     },
     enabled: !!topicName,
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -139,7 +138,6 @@ export function useThemeQuiz(themeId: string) {
     queryKey: ['quiz', 'theme', themeId],
     queryFn: async () => {
       const { data } = await api.post<ThemePracticeResponse>('/reviews/practice/theme', { themeId });
-      console.log('[useThemeQuiz] Got', data.count, 'cards from', data.contentCount, 'contents');
       const quiz = transformCardsToQuiz(data.cards, `theme:${themeId}`);
       return {
         ...quiz,
@@ -150,6 +148,7 @@ export function useThemeQuiz(themeId: string) {
       };
     },
     enabled: !!themeId,
+    staleTime: 5 * 60 * 1000, // 5 min — avoid refetch during quiz session
   });
 }
 

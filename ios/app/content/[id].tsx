@@ -48,7 +48,10 @@ export default function ContentDetailScreen() {
   }
 
   const handleStartQuiz = () => {
-    router.push(`/quiz/${id}`);
+    router.push({
+      pathname: '/quiz/preview/[id]' as any,
+      params: { id: id!, type: 'content' },
+    });
   };
 
   const handleViewMemo = () => {
