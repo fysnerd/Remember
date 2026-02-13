@@ -108,7 +108,7 @@ export async function runThemeClassificationWorker(): Promise<void> {
     const usersWithOrphans = await prisma.$queryRaw<{ userId: string; orphanCount: bigint }[]>`
       SELECT c."userId", COUNT(*) as "orphanCount"
       FROM "Content" c
-      WHERE c.status = 'SELECTED'
+      WHERE c.status IN ('SELECTED', 'READY')
         AND EXISTS (SELECT 1 FROM "_ContentTags" ct WHERE ct."A" = c.id)
         AND NOT EXISTS (SELECT 1 FROM "ContentTheme" cth WHERE cth."contentId" = c.id)
         AND EXISTS (SELECT 1 FROM "Theme" t WHERE t."userId" = c."userId")
@@ -587,11 +587,11 @@ export async function evolveThemesForUser(userId: string): Promise<void> {
       return;
     }
 
-    // Find tagged content without any theme assignment
+    // Find tagged content without any theme assignment (SELECTED or READY)
     const orphanContent = await prisma.content.findMany({
       where: {
         userId,
-        status: 'SELECTED',
+        status: { in: ['SELECTED', 'READY'] },
         tags: { some: {} },
         contentThemes: { none: {} },
       },
