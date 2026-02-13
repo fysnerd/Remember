@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Text, Badge, Skeleton } from '../../components/ui';
+import { useToast } from '../../components/ui/Toast';
 import { ContentCard, SourcePills, SelectionBar } from '../../components/content';
 import { SearchInput } from '../../components/explorer/SearchInput';
 import { LoadingScreen } from '../../components/LoadingScreen';
@@ -60,6 +61,7 @@ export default function LibraryScreen() {
   const { data: themes, isLoading: themesLoading } = useThemes();
   const deleteThemeMutation = useDeleteTheme();
 
+  const { show: showToast, ToastComponent } = useToast();
   const selectionMode = selectedIds.size > 0;
 
   // Filter inbox items by source + search (client-side filtering)
@@ -114,10 +116,22 @@ export default function LibraryScreen() {
   // Batch triage
   const handleBatchLearn = () => {
     if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    const count = ids.length;
     setBatchAction('learn');
     triageMutation.mutate(
-      { contentIds: Array.from(selectedIds), action: 'learn' },
+      { contentIds: ids, action: 'learn' },
       {
+        onSuccess: () => {
+          if (count === 1) {
+            router.push({
+              pathname: '/quiz/preview/[id]' as any,
+              params: { id: ids[0], type: 'content' },
+            });
+          } else {
+            showToast(`${count} contenus sauvegardés`, 'success');
+          }
+        },
         onSettled: () => {
           setBatchAction(null);
           setSelectedIds(new Set());
@@ -326,6 +340,7 @@ export default function LibraryScreen() {
           loadingIgnore={batchAction === 'ignore'}
         />
       )}
+      <ToastComponent />
     </Animated.View>
   );
 }
