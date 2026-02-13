@@ -169,6 +169,16 @@ adminRouter.post('/sync/embedding-backfill', async (_req: Request, res: Response
   }
 });
 
+// POST /api/admin/sync/synopsis-backfill - Trigger synopsis backfill (runs in background)
+adminRouter.post('/sync/synopsis-backfill', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    triggerJob('synopsis-backfill', 'MANUAL').catch(err => log.error({ err }, 'Synopsis backfill failed'));
+    res.json({ success: true, message: 'Synopsis backfill started in background' });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/admin/embeddings/status - Get embedding coverage stats
 adminRouter.get('/embeddings/status', async (_req: Request, res: Response, next: NextFunction) => {
   try {
