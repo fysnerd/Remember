@@ -123,14 +123,10 @@ export default function LibraryScreen() {
       { contentIds: ids, action: 'learn' },
       {
         onSuccess: () => {
-          if (count === 1) {
-            router.push({
-              pathname: '/content/[id]' as any,
-              params: { id: ids[0] },
-            });
-          } else {
-            showToast(`${count} contenus sauvegardés`, 'success');
-          }
+          const msg = count === 1
+            ? 'Contenu sauvegardé'
+            : `${count} contenus sauvegardés`;
+          showToast(msg, 'success');
         },
         onSettled: () => {
           setBatchAction(null);
