@@ -125,8 +125,8 @@ export default function LibraryScreen() {
         onSuccess: () => {
           if (count === 1) {
             router.push({
-              pathname: '/quiz/preview/[id]' as any,
-              params: { id: ids[0], type: 'content' },
+              pathname: '/content/[id]' as any,
+              params: { id: ids[0] },
             });
           } else {
             showToast(`${count} contenus sauvegardés`, 'success');

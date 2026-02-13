@@ -20,9 +20,11 @@ export interface Content {
   thumbnailUrl?: string;
   duration?: number; // seconds
   description?: string;
+  synopsis?: string; // AI-generated summary from transcription
   channelName?: string; // YouTube channel, Spotify show, @username for TikTok/Instagram
   url?: string; // Link to original content
   status: ContentStatus;
+  quizCount?: number;
   topics: string[];
   themes?: ThemeRef[];
   createdAt: string;

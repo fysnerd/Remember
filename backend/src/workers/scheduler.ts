@@ -9,7 +9,7 @@ import { runPodcastTranscriptionWorker } from '../services/podcastTranscription.
 import { runTikTokTranscriptionWorker } from '../services/tiktokTranscription.js';
 import { runInstagramSync } from './instagramSync.js';
 import { runInstagramTranscriptionWorker } from '../services/instagramTranscription.js';
-import { runQuizGenerationWorker } from '../services/quizGeneration.js';
+import { runQuizGenerationWorker, runSynopsisBackfill } from '../services/quizGeneration.js';
 import { runReminderWorker } from './reminderWorker.js';
 import { runAutoTaggingWorker } from '../services/tagging.js';
 import { runThemeClassificationWorker, runBackfillThemes } from '../services/themeClassification.js';
@@ -214,7 +214,7 @@ export async function runAllSyncsNow(): Promise<void> {
  * Run a specific job manually
  */
 export async function triggerJob(
-  jobName: 'youtube' | 'spotify' | 'tiktok' | 'instagram' | 'transcription' | 'podcast-transcription' | 'tiktok-transcription' | 'instagram-transcription' | 'quiz-generation' | 'reminder' | 'auto-tagging' | 'theme-classification' | 'theme-backfill' | 'embedding-generation' | 'embedding-backfill',
+  jobName: 'youtube' | 'spotify' | 'tiktok' | 'instagram' | 'transcription' | 'podcast-transcription' | 'tiktok-transcription' | 'instagram-transcription' | 'quiz-generation' | 'reminder' | 'auto-tagging' | 'theme-classification' | 'theme-backfill' | 'embedding-generation' | 'embedding-backfill' | 'synopsis-backfill',
   triggerSource: 'SCHEDULED' | 'MANUAL' = 'SCHEDULED'
 ): Promise<{ success: boolean; message: string }> {
   switch (jobName) {
@@ -277,6 +277,10 @@ export async function triggerJob(
     case 'embedding-backfill':
       await runJob('embedding-backfill', runEmbeddingBackfill, triggerSource);
       return { success: true, message: 'Embedding backfill completed' };
+
+    case 'synopsis-backfill':
+      await runJob('synopsis-backfill', runSynopsisBackfill, triggerSource);
+      return { success: true, message: 'Synopsis backfill completed' };
 
     default:
       return { success: false, message: `Unknown job: ${jobName}` };

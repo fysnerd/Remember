@@ -1,10 +1,11 @@
 /**
- * Content Detail Screen
+ * Content Detail Screen - Shows content info, synopsis, quiz access
  */
 
 import { useState } from 'react';
 import { View, ScrollView, StyleSheet, Image, Linking, Pressable, Modal, FlatList } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text, Button } from '../../components/ui';
 import { PlatformIcon } from '../../components/icons';
 import { LoadingScreen } from '../../components/LoadingScreen';
@@ -34,6 +35,7 @@ function formatDuration(seconds?: number): string | null {
 export default function ContentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { data: content, isLoading, error, refetch } = useContent(id!);
   const [showThemeModal, setShowThemeModal] = useState(false);
   const { data: allThemes } = useThemes();
@@ -48,10 +50,7 @@ export default function ContentDetailScreen() {
   }
 
   const handleStartQuiz = () => {
-    router.push({
-      pathname: '/quiz/preview/[id]' as any,
-      params: { id: id!, type: 'content' },
-    });
+    router.push({ pathname: '/quiz/[id]' as any, params: { id: id! } });
   };
 
   const handleViewMemo = () => {
@@ -64,95 +63,115 @@ export default function ContentDetailScreen() {
     }
   };
 
+  const hasQuiz = (content.quizCount ?? 0) > 0;
+  const displayText = content.synopsis || content.description;
+
   return (
     <>
       <Stack.Screen options={{ title: '', headerBackTitle: 'Retour' }} />
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        {/* Thumbnail */}
-        {content.thumbnailUrl ? (
-          <Image
-            source={{ uri: content.thumbnailUrl }}
-            style={styles.thumbnail}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={[styles.thumbnail, styles.thumbnailPlaceholder]}>
-            <PlatformIcon platform={content.source} size={48} colored />
-          </View>
-        )}
-
-        {/* Title & Channel */}
-        <Text variant="h1" style={styles.title}>
-          {content.title}
-        </Text>
-        {content.channelName && (
-          <Text variant="body" color="secondary" style={styles.channelName}>
-            {content.channelName}
-          </Text>
-        )}
-        <View style={styles.metaRow}>
-          <View style={styles.metaSource}>
-            <PlatformIcon platform={content.source} size={14} colored />
-            <Text variant="caption" color="secondary">
-              {sourceLabel[content.source] || content.source}
-              {content.duration && ` \u2022 ${formatDuration(content.duration)}`}
-            </Text>
-          </View>
-          {content.url && (
-            <Pressable onPress={handleOpenSource} style={styles.sourceLink}>
-              <Text variant="caption" style={styles.sourceLinkText}>
-                Voir l'original →
-              </Text>
-            </Pressable>
+      <View style={styles.container}>
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+          {/* Thumbnail */}
+          {content.thumbnailUrl ? (
+            <Image
+              source={{ uri: content.thumbnailUrl }}
+              style={styles.thumbnail}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={[styles.thumbnail, styles.thumbnailPlaceholder]}>
+              <PlatformIcon platform={content.source} size={48} colored />
+            </View>
           )}
-        </View>
 
-        {/* Themes */}
-        <View style={styles.section}>
-          <Text variant="body" weight="medium" style={styles.sectionTitle}>
-            Themes
+          {/* Title & Channel */}
+          <Text variant="h1" style={styles.title}>
+            {content.title}
           </Text>
-          <View style={styles.themes}>
-            {content.themes && content.themes.length > 0 ? (
-              content.themes.map((theme) => (
-                <Pressable
-                  key={theme.id}
-                  onPress={() => router.push({ pathname: '/theme/[id]' as any, params: { id: theme.id } })}
-                  style={[styles.themeChip, { borderColor: theme.color }]}
-                >
-                  <Text variant="caption">{theme.emoji} {theme.name}</Text>
-                </Pressable>
-              ))
-            ) : (
-              <Text variant="caption" color="secondary">
-                Aucun theme
-              </Text>
-            )}
-            <Pressable onPress={() => setShowThemeModal(true)} style={styles.addThemeChip}>
-              <Text variant="caption" color="secondary">+ Theme</Text>
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Description */}
-        {content.description && (
-          <View style={styles.section}>
-            <Text variant="body" color="secondary" numberOfLines={4}>
-              {content.description}
+          {content.channelName && (
+            <Text variant="body" color="secondary" style={styles.channelName}>
+              {content.channelName}
             </Text>
+          )}
+          <View style={styles.metaRow}>
+            <View style={styles.metaSource}>
+              <PlatformIcon platform={content.source} size={14} colored />
+              <Text variant="caption" color="secondary">
+                {sourceLabel[content.source] || content.source}
+                {content.duration && ` \u2022 ${formatDuration(content.duration)}`}
+              </Text>
+            </View>
+            {content.url && (
+              <Pressable onPress={handleOpenSource} style={styles.sourceLink}>
+                <Text variant="caption" style={styles.sourceLinkText}>
+                  Voir l'original →
+                </Text>
+              </Pressable>
+            )}
           </View>
-        )}
 
-        {/* Actions */}
-        <View style={styles.actions}>
-          <Button variant="primary" fullWidth onPress={handleStartQuiz}>
-            Faire le quiz
-          </Button>
+          {/* Quiz badge */}
+          {hasQuiz && (
+            <View style={styles.quizBadge}>
+              <Text variant="body" weight="medium">
+                {content.quizCount} question{(content.quizCount ?? 0) !== 1 ? 's' : ''} disponibles
+              </Text>
+            </View>
+          )}
+
+          {/* Themes */}
+          <View style={styles.section}>
+            <Text variant="body" weight="medium" style={styles.sectionTitle}>
+              Themes
+            </Text>
+            <View style={styles.themes}>
+              {content.themes && content.themes.length > 0 ? (
+                content.themes.map((theme) => (
+                  <Pressable
+                    key={theme.id}
+                    onPress={() => router.push({ pathname: '/theme/[id]' as any, params: { id: theme.id } })}
+                    style={[styles.themeChip, { borderColor: theme.color }]}
+                  >
+                    <Text variant="caption">{theme.emoji} {theme.name}</Text>
+                  </Pressable>
+                ))
+              ) : (
+                <Text variant="caption" color="secondary">
+                  Aucun theme
+                </Text>
+              )}
+              <Pressable onPress={() => setShowThemeModal(true)} style={styles.addThemeChip}>
+                <Text variant="caption" color="secondary">+ Theme</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          {/* Synopsis or Description */}
+          {displayText && (
+            <View style={styles.section}>
+              <Text variant="body" color="secondary" numberOfLines={6}>
+                {displayText}
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Sticky bottom actions */}
+        <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.md }]}>
+          {hasQuiz ? (
+            <Button variant="primary" fullWidth onPress={handleStartQuiz}>
+              Faire le quiz
+            </Button>
+          ) : (
+            <Button variant="primary" fullWidth disabled>
+              Quiz en preparation...
+            </Button>
+          )}
           <Button variant="outline" fullWidth onPress={handleViewMemo}>
-            Voir le mémo
+            Voir le memo
           </Button>
         </View>
-      </ScrollView>
+      </View>
 
       {/* Add to Theme Modal */}
       <Modal
@@ -196,7 +215,7 @@ export default function ContentDetailScreen() {
                     </Text>
                   </View>
                   {alreadyAssigned && (
-                    <Text variant="caption" color="secondary">Deja ajouté</Text>
+                    <Text variant="caption" color="secondary">Deja ajoute</Text>
                   )}
                 </Pressable>
               );
@@ -215,7 +234,8 @@ export default function ContentDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.lg },
+  scroll: { flex: 1 },
+  scrollContent: { padding: spacing.lg, paddingBottom: 160 },
   thumbnail: {
     width: '100%',
     aspectRatio: 16 / 9,
@@ -245,13 +265,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   sourceLinkText: {
-    color: colors.text,
+    color: colors.accent,
     textDecorationLine: 'underline',
+  },
+  quizBadge: {
+    backgroundColor: colors.surface,
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    marginBottom: spacing.lg,
   },
   section: { marginBottom: spacing.lg },
   sectionTitle: { marginBottom: spacing.sm },
   themes: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  actions: { gap: spacing.md, marginTop: spacing.lg },
+  bottomBar: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.background,
+    gap: spacing.sm,
+  },
   themeChip: {
     borderWidth: 1,
     borderRadius: borderRadius.full,

@@ -253,6 +253,39 @@ Génère un mémo d'étude structuré optimisé pour la rétention à long terme
   return generateText(userPrompt, { system: systemPrompt, temperature: 0.7 });
 }
 
+/**
+ * Generate a concise synopsis from transcription + description
+ */
+export async function generateSynopsis(
+  transcript: string,
+  description: string | null,
+  contentTitle: string
+): Promise<string> {
+  const transcriptText = transcript.slice(0, 6000);
+  const descriptionText = description?.slice(0, 500) || '';
+
+  const systemPrompt = `Tu es un rédacteur expert. Tu génères des synopsis concis (2-3 phrases) qui résument ce qu'un utilisateur va apprendre en regardant/écoutant ce contenu.
+
+Règles:
+- Maximum 3 phrases courtes
+- Parle du CONTENU et des CONNAISSANCES, pas de l'auteur ni du format
+- Pas de "Cette vidéo parle de..." ni "L'auteur explique..."
+- Style direct et informatif, comme une description de cours
+- Entièrement en français`;
+
+  const userPrompt = `Titre: "${contentTitle}"
+${descriptionText ? `Description originale: "${descriptionText}"` : ''}
+
+Transcription (extrait):
+"""
+${transcriptText}
+"""
+
+Génère un synopsis de 2-3 phrases résumant les connaissances clés de ce contenu.`;
+
+  return generateText(userPrompt, { system: systemPrompt, temperature: 0.5 });
+}
+
 // ============================================================================
 // Synthesis Question Generation (Cross-content)
 // ============================================================================
@@ -449,32 +482,60 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
       });
     });
 
-    // Generate memo in parallel (non-blocking, after quiz creation)
-    log.debug({ contentId, title: content.title }, 'Generating memo');
-    try {
-      const tagNames = content.tags.map(t => t.name);
-      const memo = await generateMemoFromTranscript(
-        content.transcript!.text,
-        content.title,
-        tagNames
-      );
+    // Generate memo + synopsis in parallel (non-blocking, after quiz creation)
+    const postProcessing: Promise<void>[] = [];
 
-      // Cache memo in transcript segments
-      await prisma.transcript.update({
-        where: { id: content.transcript!.id },
-        data: {
-          segments: {
-            ...(content.transcript!.segments as object || {}),
-            memo,
-            memoGeneratedAt: new Date().toISOString(),
-          },
-        },
-      });
-      log.info({ contentId }, 'Memo generated and cached');
-    } catch (memoError) {
-      // Don't fail the whole process if memo generation fails
-      log.error({ err: memoError, contentId }, 'Memo generation failed');
+    // Memo generation
+    postProcessing.push(
+      (async () => {
+        log.debug({ contentId, title: content.title }, 'Generating memo');
+        try {
+          const tagNames = content.tags.map(t => t.name);
+          const memo = await generateMemoFromTranscript(
+            content.transcript!.text,
+            content.title,
+            tagNames
+          );
+          await prisma.transcript.update({
+            where: { id: content.transcript!.id },
+            data: {
+              segments: {
+                ...(content.transcript!.segments as object || {}),
+                memo,
+                memoGeneratedAt: new Date().toISOString(),
+              },
+            },
+          });
+          log.info({ contentId }, 'Memo generated and cached');
+        } catch (memoError) {
+          log.error({ err: memoError, contentId }, 'Memo generation failed');
+        }
+      })()
+    );
+
+    // Synopsis generation
+    if (!content.synopsis) {
+      postProcessing.push(
+        (async () => {
+          try {
+            const synopsis = await generateSynopsis(
+              content.transcript!.text,
+              content.description,
+              content.title
+            );
+            await prisma.content.update({
+              where: { id: contentId },
+              data: { synopsis },
+            });
+            log.info({ contentId }, 'Synopsis generated');
+          } catch (synopsisError) {
+            log.error({ err: synopsisError, contentId }, 'Synopsis generation failed');
+          }
+        })()
+      );
     }
+
+    await Promise.allSettled(postProcessing);
 
     log.info({ contentId, questionCount: result.questions.length, title: content.title }, 'Quiz generation completed');
     return true;
@@ -561,4 +622,54 @@ export async function runQuizGenerationWorker(): Promise<void> {
   }
 
   log.info({ success, failed }, 'Quiz generation worker completed');
+}
+
+/**
+ * Backfill synopsis for existing content that has transcript but no synopsis
+ */
+export async function runSynopsisBackfill(): Promise<void> {
+  log.info('Synopsis backfill starting');
+
+  const contents = await prisma.content.findMany({
+    where: {
+      synopsis: null,
+      transcript: { isNot: null },
+    },
+    include: { transcript: true },
+    take: 10,
+    orderBy: { createdAt: 'desc' },
+  });
+
+  if (contents.length === 0) {
+    log.debug('No content needs synopsis backfill');
+    return;
+  }
+
+  log.info({ count: contents.length }, 'Backfilling synopsis');
+
+  const limit = pLimit(3);
+  let success = 0;
+
+  await Promise.allSettled(
+    contents.map(content =>
+      limit(async () => {
+        try {
+          const synopsis = await generateSynopsis(
+            content.transcript!.text,
+            content.description,
+            content.title
+          );
+          await prisma.content.update({
+            where: { id: content.id },
+            data: { synopsis },
+          });
+          success++;
+        } catch (err) {
+          log.error({ err, contentId: content.id }, 'Synopsis backfill failed for content');
+        }
+      })
+    )
+  );
+
+  log.info({ success, total: contents.length }, 'Synopsis backfill completed');
 }

@@ -108,8 +108,8 @@ export default function ThemeDetailScreen() {
   const handleStartQuiz = () => {
     if (id) {
       router.push({
-        pathname: '/quiz/preview/[id]' as any,
-        params: { id, type: 'theme' },
+        pathname: '/quiz/theme/[id]' as any,
+        params: { id },
       });
     }
   };
@@ -118,8 +118,8 @@ export default function ThemeDetailScreen() {
     if (selectedIds.size === 0) return;
     const contentIdsParam = Array.from(selectedIds).join(',');
     router.push({
-      pathname: '/quiz/preview/[id]' as any,
-      params: { id, type: 'theme', contentIds: contentIdsParam },
+      pathname: '/quiz/theme/[id]' as any,
+      params: { id, contentIds: contentIdsParam },
     });
   };
 

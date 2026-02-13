@@ -166,6 +166,9 @@ model Content {
   listenProgress Int?      // Listening progress percentage (0-100)
   fullyPlayed    Boolean   @default(false)
 
+  // AI-generated synopsis (from transcription + description)
+  synopsis      String?
+
   // For TikTok/Instagram videos
   authorUsername String?   // TikTok/Instagram @username
   viewCount      Int?      // Number of views

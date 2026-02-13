@@ -21,6 +21,7 @@ interface BackendContent {
   externalId: string;
   title: string;
   description?: string;
+  synopsis?: string;
   thumbnailUrl?: string;
   duration?: number;
   channelName?: string;
@@ -28,6 +29,7 @@ interface BackendContent {
   status: string;
   tags?: { name: string }[];
   themes?: { id: string; name: string; slug: string; color: string; emoji: string }[];
+  quizzes?: { id: string }[];
   createdAt: string;
 }
 
@@ -52,9 +54,11 @@ function mapContent(item: BackendContent): Content {
     thumbnailUrl: item.thumbnailUrl,
     duration: item.duration,
     description: item.description,
+    synopsis: item.synopsis,
     channelName: item.channelName,
     url: item.url,
     status: item.status as Content['status'],
+    quizCount: item.quizzes?.length,
     topics: item.tags?.map((t) => t.name) ?? [],
     themes: item.themes ?? [],
     createdAt: item.createdAt,
