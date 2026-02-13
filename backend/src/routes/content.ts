@@ -8,7 +8,7 @@ import { processTikTokTranscript } from '../services/tiktokTranscription.js';
 import { processInstagramTranscript } from '../services/instagramTranscription.js';
 import { processContentQuiz, regenerateQuiz } from '../services/quizGeneration.js';
 import { autoTagContent } from '../services/tagging.js';
-import { classifyContentForUser } from '../services/themeClassification.js';
+import { classifyContentForUser, evolveThemesForUser } from '../services/themeClassification.js';
 import { syncUserYouTube } from '../workers/youtubeSync.js';
 import { syncUserSpotify } from '../workers/spotifySync.js';
 import { syncTikTokForUser } from '../workers/tiktokSync.js';
@@ -607,6 +607,8 @@ async function quizThenClassify(contentId: string, userId: string): Promise<void
   const tags = await autoTagContent(contentId);
   if (tags.length > 0) {
     await classifyContentForUser(contentId, userId);
+    // If content couldn't be classified, check if we need new themes
+    await evolveThemesForUser(userId);
   }
 }
 

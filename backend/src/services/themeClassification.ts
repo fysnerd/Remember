@@ -16,6 +16,7 @@ const log = logger.child({ service: 'theme-classification' });
 const MAX_THEMES_PER_USER = 25;
 const MIN_TAGGED_CONTENT = 10;
 const MIN_TAG_USAGE = 2;
+const MIN_ORPHANS_FOR_EVOLUTION = 3;
 
 const THEME_COLOR_PALETTE = [
   '#EF4444', '#F97316', '#EAB308', '#22C55E',
@@ -42,6 +43,7 @@ interface GeneratedTheme {
  * Main worker entry point (called by scheduler).
  * Stage A: Generate themes for users with 10+ tagged items but 0 themes.
  * Stage B: Classify unthemed content for users who already have themes.
+ * Stage C: Evolve themes for users with orphan content that doesn't fit existing themes.
  */
 export async function runThemeClassificationWorker(): Promise<void> {
   log.info('Theme classification worker starting');
@@ -98,6 +100,27 @@ export async function runThemeClassificationWorker(): Promise<void> {
         unclassifiedContent.map(c =>
           classifyLimit(() => classifyContentForUser(c.id, c.userId))
         )
+      );
+    }
+
+    // Stage C: Evolve themes for users with orphan content
+    // Find users who have themes but still have unthemed tagged content after Stage B
+    const usersWithOrphans = await prisma.$queryRaw<{ userId: string; orphanCount: bigint }[]>`
+      SELECT c."userId", COUNT(*) as "orphanCount"
+      FROM "Content" c
+      WHERE c.status = 'SELECTED'
+        AND EXISTS (SELECT 1 FROM "_ContentTags" ct WHERE ct."A" = c.id)
+        AND NOT EXISTS (SELECT 1 FROM "ContentTheme" cth WHERE cth."contentId" = c.id)
+        AND EXISTS (SELECT 1 FROM "Theme" t WHERE t."userId" = c."userId")
+      GROUP BY c."userId"
+      HAVING COUNT(*) >= ${MIN_ORPHANS_FOR_EVOLUTION}
+    `;
+
+    if (usersWithOrphans.length > 0) {
+      log.info({ count: usersWithOrphans.length }, 'Evolving themes for users with orphan content');
+      const evolveLimit = pLimit(2);
+      await Promise.allSettled(
+        usersWithOrphans.map(u => evolveLimit(() => evolveThemesForUser(u.userId)))
       );
     }
 
@@ -537,6 +560,133 @@ Si aucun theme ne correspond, reponds: { "themeNames": [] }`,
     return [];
   }
 }
+
+// ============================================================================
+// Theme Evolution (create new themes from orphan content)
+// ============================================================================
+
+/**
+ * Detect unthemed tagged content and create new themes if enough orphans accumulate.
+ * Only runs for users who already have themes (initial generation is handled by generateThemesForUser).
+ * Reuses generateThemesFromTags with existing themes passed to avoid duplicates.
+ */
+export async function evolveThemesForUser(userId: string): Promise<void> {
+  try {
+    // Only evolve for users who already have themes
+    const existingThemes = await prisma.theme.findMany({
+      where: { userId },
+      select: { id: true, name: true, slug: true },
+    });
+
+    if (existingThemes.length === 0) {
+      // No themes yet — generateThemesForUser handles initial creation
+      return;
+    }
+
+    if (existingThemes.length >= MAX_THEMES_PER_USER) {
+      return;
+    }
+
+    // Find tagged content without any theme assignment
+    const orphanContent = await prisma.content.findMany({
+      where: {
+        userId,
+        status: 'SELECTED',
+        tags: { some: {} },
+        contentThemes: { none: {} },
+      },
+      include: {
+        tags: { select: { id: true, name: true } },
+      },
+    });
+
+    if (orphanContent.length < MIN_ORPHANS_FOR_EVOLUTION) {
+      return;
+    }
+
+    // Collect orphan tag frequencies
+    const tagCounts = new Map<string, number>();
+    for (const content of orphanContent) {
+      for (const tag of content.tags) {
+        tagCounts.set(tag.name, (tagCounts.get(tag.name) || 0) + 1);
+      }
+    }
+
+    const orphanTags = Array.from(tagCounts.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+
+    if (orphanTags.length < 3) {
+      return; // Not enough tag variety for meaningful themes
+    }
+
+    log.info({ userId, orphanCount: orphanContent.length, tagCount: orphanTags.length }, 'Evolving themes from orphan content');
+
+    // Ask LLM to suggest new themes, passing existing themes to avoid duplicates
+    const newThemes = await generateThemesFromTags(orphanTags, existingThemes);
+
+    if (newThemes.length === 0) {
+      log.debug({ userId }, 'LLM returned no new themes for evolution');
+      return;
+    }
+
+    // Cap to available slots
+    const availableSlots = MAX_THEMES_PER_USER - existingThemes.length;
+    const cappedThemes = newThemes.slice(0, availableSlots);
+
+    // Create new themes + ThemeTag records
+    await prisma.$transaction(async (tx) => {
+      for (let i = 0; i < cappedThemes.length; i++) {
+        const generated = cappedThemes[i];
+        const slug = generateSlug(generated.name);
+        if (!slug) continue;
+
+        const existingSlug = await tx.theme.findUnique({
+          where: { userId_slug: { userId, slug } },
+        });
+        if (existingSlug) continue;
+
+        const color = THEME_COLOR_PALETTE.includes(generated.color)
+          ? generated.color
+          : THEME_COLOR_PALETTE[(existingThemes.length + i) % THEME_COLOR_PALETTE.length];
+
+        const emoji = generated.emoji || '\u{1F4DA}';
+
+        const theme = await tx.theme.create({
+          data: { userId, name: generated.name, slug, color, emoji },
+        });
+
+        if (generated.tags?.length > 0) {
+          const matchingTags = await tx.tag.findMany({
+            where: { name: { in: generated.tags.map(t => t.toLowerCase().trim()) } },
+            select: { id: true },
+          });
+
+          if (matchingTags.length > 0) {
+            await tx.themeTag.createMany({
+              data: matchingTags.map(tag => ({ themeId: theme.id, tagId: tag.id })),
+              skipDuplicates: true,
+            });
+          }
+        }
+      }
+    });
+
+    // Classify orphan content with new themes available
+    const classifyLimit = pLimit(5);
+    await Promise.allSettled(
+      orphanContent.map(c => classifyLimit(() => classifyContentForUser(c.id, userId)))
+    );
+
+    log.info({ userId, newThemeCount: cappedThemes.length, orphanCount: orphanContent.length }, 'Theme evolution complete');
+  } catch (error) {
+    log.error({ err: error, userId }, 'Error evolving themes for user');
+  }
+}
+
+// ============================================================================
+// Internal Helpers
+// ============================================================================
 
 /**
  * Classify all tagged content without theme assignments for a given user.
