@@ -19,15 +19,13 @@ interface BackendTopicMemoResponse {
   generatedAt?: string;
 }
 
-// Get memo for content
+// Get memo for content — cached persistently (backend stores in DB, no need to refetch)
 export function useMemo(contentId: string) {
   return useQuery({
     queryKey: ['memo', contentId],
     queryFn: async () => {
       const { data } = await api.get<BackendMemoResponse>(`/content/${contentId}/memo`);
-      console.log('[useMemo] Raw backend data:', data);
 
-      // Transform backend response to frontend Memo type
       const memo: Memo = {
         contentId,
         title: 'Mémo',
@@ -37,6 +35,8 @@ export function useMemo(contentId: string) {
       return memo;
     },
     enabled: !!contentId,
+    staleTime: Infinity,
+    gcTime: 24 * 60 * 60 * 1000, // 24h
   });
 }
 
@@ -48,7 +48,6 @@ export function useTopicMemo(topicName: string) {
       const { data } = await api.get<BackendTopicMemoResponse>(
         `/content/topic/${encodeURIComponent(topicName)}/memo`
       );
-      console.log('[useTopicMemo] Got memo for topic:', topicName, 'from', data.contentCount, 'contents');
 
       return {
         topicName: data.topicName,
@@ -58,6 +57,8 @@ export function useTopicMemo(topicName: string) {
       };
     },
     enabled: !!topicName,
+    staleTime: 30 * 60 * 1000, // 30min — topic memos can change as new content is added
+    gcTime: 24 * 60 * 60 * 1000, // 24h
   });
 }
 
@@ -78,7 +79,6 @@ export function useThemeMemo(themeId: string) {
       const { data } = await api.get<BackendThemeMemoResponse>(
         `/themes/${themeId}/memo`
       );
-      console.log('[useThemeMemo] Got memo for theme:', data.themeName, 'from', data.contentCount, 'contents');
 
       return {
         themeId,
@@ -90,6 +90,8 @@ export function useThemeMemo(themeId: string) {
       };
     },
     enabled: !!themeId,
+    staleTime: 30 * 60 * 1000, // 30min — matches backend 24h TTL, but allow periodic refresh
+    gcTime: 24 * 60 * 60 * 1000, // 24h
   });
 }
 
