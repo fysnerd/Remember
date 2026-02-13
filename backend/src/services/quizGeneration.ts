@@ -264,13 +264,13 @@ export async function generateSynopsis(
   const transcriptText = transcript.slice(0, 6000);
   const descriptionText = description?.slice(0, 500) || '';
 
-  const systemPrompt = `Tu es un rédacteur expert. Tu génères des synopsis concis (2-3 phrases) qui résument ce qu'un utilisateur va apprendre en regardant/écoutant ce contenu.
+  const systemPrompt = `Tu es un rédacteur expert. Tu génères des synopsis très concis (1-2 phrases courtes) qui résument ce qu'un utilisateur va apprendre.
 
 Règles:
-- Maximum 3 phrases courtes
+- Maximum 2 phrases COURTES (40 mots max au total)
 - Parle du CONTENU et des CONNAISSANCES, pas de l'auteur ni du format
-- Pas de "Cette vidéo parle de..." ni "L'auteur explique..."
-- Style direct et informatif, comme une description de cours
+- Pas de "Cette vidéo parle de...", "Découvrez...", "L'auteur explique..."
+- Style direct et factuel
 - Entièrement en français`;
 
   const userPrompt = `Titre: "${contentTitle}"
@@ -281,7 +281,7 @@ Transcription (extrait):
 ${transcriptText}
 """
 
-Génère un synopsis de 2-3 phrases résumant les connaissances clés de ce contenu.`;
+Génère un synopsis de 1-2 phrases courtes (40 mots max) résumant les connaissances clés.`;
 
   return generateText(userPrompt, { system: systemPrompt, temperature: 0.5 });
 }

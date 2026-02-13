@@ -149,7 +149,7 @@ export default function ContentDetailScreen() {
           {/* Synopsis or Description */}
           {displayText && (
             <View style={styles.section}>
-              <Text variant="body" color="secondary" numberOfLines={6}>
+              <Text variant="body" color="secondary" numberOfLines={3}>
                 {displayText}
               </Text>
             </View>
