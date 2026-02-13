@@ -53,6 +53,8 @@ export function useSessionDetail(sessionId: string | undefined) {
       return data;
     },
     enabled: !!sessionId,
+    staleTime: Infinity,
+    gcTime: 24 * 60 * 60 * 1000, // 24h
   });
 }
 

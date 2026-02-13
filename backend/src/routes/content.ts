@@ -6,7 +6,7 @@ import { processContentTranscript } from '../services/transcription.js';
 import { processPodcastTranscript } from '../services/podcastTranscription.js';
 import { processTikTokTranscript } from '../services/tiktokTranscription.js';
 import { processInstagramTranscript } from '../services/instagramTranscription.js';
-import { processContentQuiz, regenerateQuiz } from '../services/quizGeneration.js';
+import { processContentQuiz, regenerateQuiz, generateMemoFromTranscript } from '../services/quizGeneration.js';
 import { autoTagContent } from '../services/tagging.js';
 import { classifyContentForUser, evolveThemesForUser } from '../services/themeClassification.js';
 import { syncUserYouTube } from '../workers/youtubeSync.js';
@@ -1256,28 +1256,9 @@ contentRouter.get('/:id/memo', async (req: Request, res: Response, next: NextFun
       });
     }
 
-    // Generate memo from transcript
-    const transcriptText = content.transcript.text.slice(0, 8000); // Limit for LLM context
-    const tags = content.tags.map(t => t.name).join(', ');
-
-    const systemPrompt = `Tu es un assistant d'apprentissage expert. Génère un mémo d'étude concis et actionnable à partir de la transcription fournie.
-Le mémo doit:
-- Résumer les 5-7 concepts clés à retenir
-- Être structuré avec des bullet points
-- Être pratique et mémorisable
-- Faire maximum 200 mots
-- Être entièrement en français`;
-
-    const userPrompt = `Titre: ${content.title}
-${tags ? `Thèmes: ${tags}` : ''}
-Plateforme: ${content.platform}
-
-Transcription:
-${transcriptText}
-
-Génère un mémo d'étude optimisé pour la rétention avec les points clés.`;
-
-    const memo = await generateText(userPrompt, { system: systemPrompt, temperature: 0.7 });
+    // Generate memo using shared scientific prompt
+    const tagNames = content.tags.map(t => t.name);
+    const memo = await generateMemoFromTranscript(content.transcript.text, content.title, tagNames);
 
     // Cache the memo in transcript segments
     await prisma.transcript.update({
@@ -1321,28 +1302,9 @@ contentRouter.post('/:id/memo/regenerate', async (req: Request, res: Response, n
       return res.status(400).json({ error: 'Content has no transcript - cannot generate memo' });
     }
 
-    // Generate new memo
-    const transcriptText = content.transcript.text.slice(0, 8000);
-    const tags = content.tags.map(t => t.name).join(', ');
-
-    const systemPrompt = `Tu es un assistant d'apprentissage expert. Génère un mémo d'étude concis et actionnable à partir de la transcription fournie.
-Le mémo doit:
-- Résumer les 5-7 concepts clés à retenir
-- Être structuré avec des bullet points
-- Être pratique et mémorisable
-- Faire maximum 200 mots
-- Être entièrement en français`;
-
-    const userPrompt = `Titre: ${content.title}
-${tags ? `Thèmes: ${tags}` : ''}
-Plateforme: ${content.platform}
-
-Transcription:
-${transcriptText}
-
-Génère un mémo d'étude optimisé pour la rétention avec les points clés.`;
-
-    const memo = await generateText(userPrompt, { system: systemPrompt, temperature: 0.7 });
+    // Generate new memo using shared scientific prompt
+    const tagNames = content.tags.map(t => t.name);
+    const memo = await generateMemoFromTranscript(content.transcript.text, content.title, tagNames);
 
     // Update cached memo
     await prisma.transcript.update({

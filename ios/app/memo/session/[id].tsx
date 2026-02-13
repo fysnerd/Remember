@@ -85,12 +85,12 @@ export default function SessionMemoScreen() {
   const memoMutation = useGenerateSessionMemo();
   const { show, ToastComponent } = useToast();
 
-  // Auto-generate memo if session is completed but has no memo
+  // Auto-generate memo only once if session is completed but has no memo yet
   useEffect(() => {
-    if (session && session.completedAt && !session.aiMemo && !memoMutation.isPending && !memoMutation.isSuccess) {
+    if (session && session.completedAt && !session.aiMemo && !memoMutation.isPending && !memoMutation.isSuccess && !memoMutation.isError) {
       memoMutation.mutate({ sessionId: id! });
     }
-  }, [session?.id, session?.aiMemo]);
+  }, [session?.id]); // Only trigger on first load, not on aiMemo changes
 
   const memo = memoMutation.data?.memo ?? session?.aiMemo;
 
