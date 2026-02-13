@@ -16,7 +16,7 @@ const log = logger.child({ service: 'theme-classification' });
 const MAX_THEMES_PER_USER = 25;
 const MIN_TAGGED_CONTENT = 10;
 const MIN_TAG_USAGE = 2;
-const MIN_ORPHANS_FOR_EVOLUTION = 3;
+const MIN_ORPHANS_FOR_EVOLUTION = 1;
 
 const THEME_COLOR_PALETTE = [
   '#EF4444', '#F97316', '#EAB308', '#22C55E',
@@ -616,8 +616,8 @@ export async function evolveThemesForUser(userId: string): Promise<void> {
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count);
 
-    if (orphanTags.length < 3) {
-      return; // Not enough tag variety for meaningful themes
+    if (orphanTags.length === 0) {
+      return;
     }
 
     log.info({ userId, orphanCount: orphanContent.length, tagCount: orphanTags.length }, 'Evolving themes from orphan content');
