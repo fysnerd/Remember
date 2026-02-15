@@ -913,6 +913,13 @@ reviewRouter.get('/sessions', async (req: Request, res: Response, next: NextFunc
                         title: true,
                         platform: true,
                         thumbnailUrl: true,
+                        themes: {
+                          include: {
+                            theme: {
+                              select: { id: true, name: true, emoji: true },
+                            },
+                          },
+                        },
                       },
                     },
                   },
@@ -925,13 +932,29 @@ reviewRouter.get('/sessions', async (req: Request, res: Response, next: NextFunc
     });
 
     const items = sessions.map(session => {
-      // Extract unique contents
-      const contentMap = new Map<string, { id: string; title: string; platform: string; thumbnailUrl: string | null }>();
+      // Extract unique contents with themes
+      const contentMap = new Map<string, { id: string; title: string; platform: string; thumbnailUrl: string | null; themes: { id: string; name: string; emoji: string }[] }>();
       for (const review of session.reviews) {
         const content = review.card.quiz.content;
         if (!content) continue;
         if (!contentMap.has(content.id)) {
-          contentMap.set(content.id, content);
+          contentMap.set(content.id, {
+            id: content.id,
+            title: content.title,
+            platform: content.platform,
+            thumbnailUrl: content.thumbnailUrl,
+            themes: (content as any).themes?.map((ct: any) => ct.theme) ?? [],
+          });
+        }
+      }
+
+      // Collect unique themes across all contents in this session
+      const themeMap = new Map<string, { id: string; name: string; emoji: string }>();
+      for (const content of contentMap.values()) {
+        for (const theme of content.themes) {
+          if (!themeMap.has(theme.id)) {
+            themeMap.set(theme.id, theme);
+          }
         }
       }
 
@@ -947,6 +970,7 @@ reviewRouter.get('/sessions', async (req: Request, res: Response, next: NextFunc
         accuracy,
         hasMemo: !!session.aiMemo,
         contents: Array.from(contentMap.values()),
+        themes: Array.from(themeMap.values()),
       };
     });
 

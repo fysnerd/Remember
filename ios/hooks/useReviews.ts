@@ -10,6 +10,12 @@ import type { ReviewStats } from '../types/content';
 // Quiz Session types
 // ============================================================================
 
+export interface QuizSessionTheme {
+  id: string;
+  name: string;
+  emoji: string;
+}
+
 export interface QuizSessionContent {
   id: string;
   title: string;
@@ -25,6 +31,7 @@ export interface QuizSessionItem {
   accuracy: number;
   hasMemo: boolean;
   contents: QuizSessionContent[];
+  themes: QuizSessionTheme[];
 }
 
 // ============================================================================
