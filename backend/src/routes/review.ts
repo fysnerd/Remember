@@ -913,8 +913,8 @@ reviewRouter.get('/sessions', async (req: Request, res: Response, next: NextFunc
                         title: true,
                         platform: true,
                         thumbnailUrl: true,
-                        themes: {
-                          include: {
+                        contentThemes: {
+                          select: {
                             theme: {
                               select: { id: true, name: true, emoji: true },
                             },
@@ -943,7 +943,7 @@ reviewRouter.get('/sessions', async (req: Request, res: Response, next: NextFunc
             title: content.title,
             platform: content.platform,
             thumbnailUrl: content.thumbnailUrl,
-            themes: (content as any).themes?.map((ct: any) => ct.theme) ?? [],
+            themes: content.contentThemes?.map((ct) => ct.theme) ?? [],
           });
         }
       }
