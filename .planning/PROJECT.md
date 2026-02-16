@@ -35,24 +35,34 @@ L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans eff
 - ✓ Theme discovery onboarding (rename/merge/dismiss) -- v2.0
 - ✓ Learning progress visualization (mastery %, due cards) -- v2.0
 
+- ✓ Night Blue color palette + Soft Gold accent across all screens -- v3.0
+- ✓ Geist font family replacing system font -- v3.0
+- ✓ Glass UI reusable components (GlassCard, GlassButton, GlassSurface, GlassInput) -- v3.0
+- ✓ Lucide Icons replacing emoji -- v3.0
+- ✓ Home screen: 3 daily themes in glass cards (smart rotation) -- v3.0
+- ✓ Explorer screen: Suggestions tab (8 AI-generated) + Library tab (filters/search) -- v3.0
+- ✓ Revisions screen: revision cards with category filter + full-text search -- v3.0
+- ✓ Profile screen: user info + settings -- v3.0
+- ✓ Backend: daily subjects selection endpoint -- v3.0
+- ✓ Backend: AI theme suggestions endpoint (8 suggestions via Mistral) -- v3.0
+- ✓ Visual freemium indicators (lock/overlay UI, no payment wiring) -- v3.0
+- ✓ Micro-interactions: transitions 200-300ms, loading animations, progress feedback -- v3.0
+
 ### Active
 
-#### Current Milestone: v3.0 Night Blue Glass UI
+#### Current Milestone: v4.0 UX Triage & Daily Digest
 
-**Goal:** Complete visual transformation with premium design system, screen restructure, and Glass UI components.
+**Goal:** Refonte complete du flow de triage inbox (swipe Tinder-like + bulk toggle) et implementation du Daily Digest (session microlearning quotidienne avec cloture cognitive). Alignement SRS J+1/J+3/J+7/J+31 et quiz autoreferentiels.
 
-- [ ] Night Blue color palette + Soft Gold accent across all screens
-- [ ] Geist font family replacing system font
-- [ ] Glass UI reusable components (GlassCard, GlassButton, GlassSurface, GlassInput)
-- [ ] Lucide Icons replacing emoji
-- [ ] Home screen: 3 daily themes in glass cards (smart rotation)
-- [ ] Explorer screen: Suggestions tab (8 AI-generated) + Library tab (filters/search)
-- [ ] Revisions screen: revision cards with category filter + full-text search
-- [ ] Profile screen: user info + settings
-- [ ] Backend: daily subjects selection endpoint
-- [ ] Backend: AI theme suggestions endpoint (8 suggestions via Mistral)
-- [ ] Visual freemium indicators (lock/overlay UI, no payment wiring)
-- [ ] Micro-interactions: transitions 200-300ms, loading animations, progress feedback
+**Target features:**
+- Swipe triage Tinder-like (right=keep, left=ignore) as primary inbox mode
+- Bulk select toggle as secondary mode (top-right button)
+- Source filter pills + pull-to-refresh sync in swipe mode
+- Daily Digest microlearning session (10-15 questions, 3-5 min)
+- Cognitive closure screen with session stats
+- SRS alignment: first review at J+1 (24h), then J+3, J+7, J+31
+- Self-referential quiz prompts (creator name, platform, temporal context)
+- Real-time pipeline feedback (transcribing/generating/ready status)
 
 ### Out of Scope
 
@@ -103,11 +113,16 @@ Linear issues: REM-137 (design system + screens), REM-136 (onboarding, deferred 
 | discoveredAt gate (not status enum) | Simpler schema, nullable DateTime sufficient | ✓ Good |
 | Zod validation on theme routes | Consistent with existing project patterns | ✓ Good |
 | 24h memo caching on model fields | Avoid separate cache table, lazy invalidation | ✓ Good |
-| Night Blue + Soft Gold palette | Premium feel, warm contrast against dark blue | — Pending |
-| Geist font (expo-font) | Modern, clean typography, Google Fonts available | — Pending |
-| Glass UI via expo-blur | Native blur, no SwiftUI dependency, OTA-compatible | — Pending |
-| Lucide Icons | Consistent line icons, better than emoji for Glass UI | — Pending |
-| REM-137 first, REM-136 deferred | Design system foundation before onboarding/payment | — Pending |
+| Night Blue + Soft Gold palette | Premium feel, warm contrast against dark blue | ✓ Good |
+| Geist font (expo-font) | Modern, clean typography, Google Fonts available | ✓ Good |
+| Glass UI via expo-blur | Native blur, no SwiftUI dependency, OTA-compatible | ✓ Good |
+| Lucide Icons | Consistent line icons, better than emoji for Glass UI | ✓ Good |
+| REM-137 first, REM-136 deferred | Design system foundation before onboarding/payment | ✓ Good |
+| Swipe triage over batch select | Tinder-like swipe is faster, more satisfying, better for binary decisions | — Pending |
+| Triage != Quiz (separate modes) | Triage is fast curation, quiz is focused engagement -- mixing creates friction | — Pending |
+| J+1 first review (not immediate) | Sleep consolidation before first review, per PRD research | — Pending |
+| Self-referential quiz framing | Creator name + platform context improves retention (self-reference effect) | — Pending |
+| Daily Digest as primary learning | Pre-built session beats content-by-content review for daily habit | — Pending |
 
 ## Constraints
 
@@ -118,4 +133,4 @@ Linear issues: REM-137 (design system + screens), REM-136 (onboarding, deferred 
 - **Existing tags**: Themes derive from tags, both coexist
 
 ---
-*Last updated: 2026-02-11 after v3.0 milestone start*
+*Last updated: 2026-02-16 after v4.0 milestone start*
