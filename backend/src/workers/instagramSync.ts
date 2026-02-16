@@ -116,113 +116,20 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
 
     const page = await context.newPage();
 
-    // Collect liked items from intercepted API responses
-    const interceptedItems: LikedMediaItem[] = [];
-    let sessionExpired = false;
-    const apiUrlsSeen: string[] = []; // track all API/graphql URLs for debugging
-    const allRequestUrls: string[] = []; // track ALL URLs to find the likes endpoint
-
-    // Track all requests for debugging
-    page.on('request', (request) => {
-      const url = request.url();
-      if (url.includes('instagram.com') && !url.includes('.js') && !url.includes('.css') && !url.includes('.png') && !url.includes('.jpg')) {
-        allRequestUrls.push(`${request.method()} ${url.substring(0, 150)}`);
-      }
-    });
-
-    // Set up passive response interceptor BEFORE navigation
-    page.on('response', async (response) => {
-      const url = response.url();
-      const status = response.status();
-
-      // Detect session expiry from any API response
-      if (status === 401 || status === 403) {
-        sessionExpired = true;
-        return;
-      }
-
-      const isLikedAPI = url.includes('/api/v1/feed/liked');
-      const isGraphQL = url.includes('/graphql');
-
-      // Track all API and GraphQL URLs for debugging
-      if (isLikedAPI || isGraphQL) {
-        apiUrlsSeen.push(`${status} ${url.substring(0, 120)}`);
-      }
-
-      if (!isLikedAPI && !isGraphQL) return;
-      if (status !== 200) return;
-
-      try {
-        const text = await response.text();
-        const data = JSON.parse(text);
-
-        if (isLikedAPI && data.items) {
-          log.info({ userId, count: data.items.length }, 'Intercepted REST liked items');
-          interceptedItems.push(...data.items);
-        }
-
-        if (isGraphQL) {
-          // Log all top-level GraphQL data keys for discovery
-          const dataKeys = data?.data ? Object.keys(data.data) : [];
-          if (dataKeys.length > 0) {
-            log.info({ userId, dataKeys, url: url.substring(0, 80) }, 'GraphQL response keys');
-          }
-
-          // Only capture items from "liked" keys — skip timeline/feed/notifications
-          for (const key of dataKeys) {
-            if (!key.includes('liked')) continue;
-            const node = data.data[key];
-            if (!node) continue;
-
-            // Check for edges pattern (paginated connection)
-            if (node.edges && Array.isArray(node.edges)) {
-              const items = node.edges.map((e: any) => e.node).filter(Boolean);
-              const unwrapped = items.map((item: any) => item.media || item);
-              if (unwrapped.length > 0) {
-                log.info({ userId, key, count: unwrapped.length }, 'Found liked items in GraphQL');
-                interceptedItems.push(...unwrapped);
-              }
-            }
-
-            // Check for items array pattern (REST-style in GraphQL)
-            if (node.items && Array.isArray(node.items)) {
-              log.info({ userId, key, count: node.items.length }, 'Found liked items array in GraphQL');
-              interceptedItems.push(...node.items);
-            }
-          }
-        }
-      } catch {
-        // Response body not JSON or already consumed — ignore
-      }
-    });
-
-    // Anti-detection jitter: random 3-10s delay before navigation
+    // Anti-detection jitter: random 3-10s delay before any request
     const jitterMs = 3000 + Math.random() * 7000;
     log.info({ userId, jitterMs: Math.round(jitterMs) }, 'Applying jitter before navigation');
     await new Promise(resolve => setTimeout(resolve, jitterMs));
 
-    // Navigate to the likes page — Instagram's frontend will make API calls naturally
-    log.info({ userId }, 'Navigating to likes page');
-    await page.goto('https://www.instagram.com/your_activity/interactions/likes/', {
-      waitUntil: 'domcontentloaded',
+    // Navigate to Instagram first to establish session context
+    log.info({ userId }, 'Navigating to Instagram');
+    await page.goto('https://www.instagram.com/', {
+      waitUntil: 'networkidle',
       timeout: 30000,
     });
 
-    // Wait for network to settle (SPA might fire API calls after DOMContentLoaded)
-    await page.waitForLoadState('networkidle').catch(() => {
-      log.info({ userId }, 'networkidle timeout, continuing');
-    });
-
-    // Log where we ended up
-    const finalUrl = page.url();
-    const pageTitle = await page.title().catch(() => 'unknown');
-    log.info({ userId, finalUrl, pageTitle, apiUrlsSeen: apiUrlsSeen.length }, 'Page loaded');
-
-    // Log all request URLs for debugging (helps find the actual likes endpoint)
-    const apiRequests = allRequestUrls.filter(u => u.includes('api') || u.includes('graphql'));
-    log.info({ userId, apiRequestCount: apiRequests.length, apiRequests: apiRequests.slice(0, 15) }, 'API requests during page load');
-
     // Check for login redirect (session expired)
+    const finalUrl = page.url();
     if (finalUrl.includes('/accounts/login') || finalUrl.includes('/challenge/')) {
       log.warn({ userId, finalUrl }, 'Redirected to login — session expired');
       await browser.close();
@@ -233,9 +140,41 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       return 0;
     }
 
-    if (sessionExpired) {
-      log.warn({ userId }, 'Session expired (auth error from intercepted API)');
-      await browser.close();
+    log.info({ userId, finalUrl }, 'Instagram loaded, calling liked API from browser');
+
+    // Call the liked API from within the browser context.
+    // This uses the browser's own UA (Safari) and cookies — no Barcelona UA mismatch.
+    const apiResult = await page.evaluate(async (csrfToken: string) => {
+      try {
+        const resp = await fetch('https://www.instagram.com/api/v1/feed/liked/', {
+          method: 'GET',
+          headers: {
+            'X-CSRFToken': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': '*/*',
+          },
+          credentials: 'include',
+        });
+
+        const status = resp.status;
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          return { error: `API error ${status}: ${text.substring(0, 300)}`, items: [], status };
+        }
+
+        const data = await resp.json();
+        return { error: null, items: data.items || [], status };
+      } catch (err: any) {
+        return { error: err.message || 'Unknown fetch error', items: [], status: 0 };
+      }
+    }, cookies.csrftoken || '');
+
+    await browser.close();
+
+    log.info({ userId, status: apiResult.status, itemCount: apiResult.items.length, error: apiResult.error }, 'API result');
+
+    if (apiResult.status === 401 || apiResult.status === 403) {
+      log.warn({ userId, status: apiResult.status }, 'Session expired (auth error from API)');
       await prisma.connectedPlatform.update({
         where: { id: connectionId },
         data: { lastSyncError: 'Session expired. Please reconnect.' },
@@ -243,72 +182,34 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       return 0;
     }
 
-    // Dismiss common Instagram popups (notifications, cookies, etc.)
-    try {
-      const dismissSelectors = [
-        'button:has-text("Not Now")',
-        'button:has-text("Pas maintenant")',
-        'button:has-text("Decline optional cookies")',
-        'button:has-text("Refuser les cookies optionnels")',
-        'button:has-text("Allow all cookies")',
-        'button:has-text("Autoriser tous les cookies")',
-        'button:has-text("Accept All")',
-        'button:has-text("Tout accepter")',
-      ];
-      for (const sel of dismissSelectors) {
-        const btn = page.locator(sel).first();
-        if (await btn.isVisible({ timeout: 1000 }).catch(() => false)) {
-          log.info({ userId, selector: sel }, 'Dismissing popup');
-          await btn.click();
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
-    } catch {
-      // Popup dismissal is best-effort
-    }
-
-    // Wait for intercepted data — if nothing yet, wait more then scroll
-    if (interceptedItems.length === 0) {
-      // SPA may fire API calls lazily after render — wait a bit
-      log.info({ userId }, 'No items yet, waiting 5s for lazy API calls');
-      await new Promise(resolve => setTimeout(resolve, 5000));
-    }
-
-    if (interceptedItems.length === 0) {
-      // Scroll to trigger infinite scroll / lazy loading
-      log.info({ userId }, 'Still no items, scrolling to trigger API');
-      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-      await new Promise(resolve => setTimeout(resolve, 8000));
-
-      // Log updated requests after scroll
-      const postScrollRequests = allRequestUrls.filter(u => u.includes('api') || u.includes('graphql'));
-      log.info({ userId, postScrollCount: postScrollRequests.length, newRequests: postScrollRequests.slice(apiRequests.length, apiRequests.length + 10) }, 'API requests after scroll');
-    }
-
-    if (interceptedItems.length === 0) {
-      log.info({ userId }, 'Still no items, waiting 5s more for late responses');
-      await new Promise(resolve => setTimeout(resolve, 5000));
-    }
-
-    // Brief additional wait if we got items (allow any in-flight responses to complete)
-    if (interceptedItems.length > 0) {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    }
-
-    // Log final state before closing
-    log.info({ userId, interceptedCount: interceptedItems.length, apiUrlsSeen }, 'Closing browser');
-    await browser.close();
-
-    if (interceptedItems.length === 0) {
-      log.warn({ userId }, 'No liked items intercepted from page');
+    if (apiResult.status === 429) {
+      log.warn({ userId }, 'Rate limited by Instagram (429), skipping');
       await prisma.connectedPlatform.update({
         where: { id: connectionId },
-        data: { lastSyncAt: new Date(), lastSyncError: 'No items found on likes page' },
+        data: { lastSyncError: 'Rate limited. Will retry later.' },
       });
       return 0;
     }
 
-    const allItems = interceptedItems;
+    if (apiResult.error) {
+      log.error({ userId, error: apiResult.error }, 'API error');
+      await prisma.connectedPlatform.update({
+        where: { id: connectionId },
+        data: { lastSyncError: apiResult.error },
+      });
+      return 0;
+    }
+
+    if (apiResult.items.length === 0) {
+      log.warn({ userId }, 'No liked items returned from API');
+      await prisma.connectedPlatform.update({
+        where: { id: connectionId },
+        data: { lastSyncAt: new Date(), lastSyncError: null },
+      });
+      return 0;
+    }
+
+    const allItems = apiResult.items as LikedMediaItem[];
     log.info({ userId, itemCount: allItems.length }, 'Got items from API');
 
     // Filter: only videos (media_type 2 = video, product_type 'clips' = reel)
