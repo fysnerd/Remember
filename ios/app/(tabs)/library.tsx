@@ -1,5 +1,9 @@
 /**
  * Explorer Tab - Mes themes (grid) + Bibliotheque (inbox triage)
+ *
+ * Bibliotheque supports two triage modes:
+ * - Swipe mode (default): SwipeCardStack for one-at-a-time triage
+ * - Bulk mode: FlatList grid with multi-select and batch actions
  */
 
 import { useState, useCallback, useMemo } from 'react';
@@ -10,14 +14,14 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Text, Badge, Skeleton } from '../../components/ui';
 import { useToast } from '../../components/ui/Toast';
-import { ContentCard, SourcePills, SelectionBar } from '../../components/content';
+import { ContentCard, SourcePills, SelectionBar, SwipeCardStack, TriageModeToggle } from '../../components/content';
 import { SearchInput } from '../../components/explorer/SearchInput';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
-import { Search, BookOpen, Sparkles } from 'lucide-react-native';
+import { Search, BookOpen, Sparkles, PartyPopper } from 'lucide-react-native';
 import { ThemeGridCard } from '../../components/explorer/ThemeGridCard';
 import { GlassLockOverlay } from '../../components/glass';
-import { useInbox, useInboxCount, useTriageMutation, useDebouncedValue, useThemes, useToggleFavoriteTheme, useDeleteTheme } from '../../hooks';
+import { useInbox, useInboxCount, useTriageMutation, useDebouncedValue, useThemes, useToggleFavoriteTheme, useDeleteTheme, useSwipeTriage } from '../../hooks';
 import { useSubscription } from '../../hooks/useSubscription';
 import { useContentStore } from '../../stores/contentStore';
 import type { Content } from '../../types/content';
@@ -46,19 +50,22 @@ export default function LibraryScreen() {
     setSearchQuery,
     sourceFilter,
     setSourceFilter,
+    triageMode,
+    setTriageMode,
   } = useContentStore();
 
   // Subscription
   const { data: subscription } = useSubscription();
   const isFree = subscription?.plan !== 'PRO';
 
-  // Debounce search for filtering
+  // Debounce search for filtering (bulk mode only)
   const debouncedSearch = useDebouncedValue(searchQuery, 300);
 
   // Data fetching
   const { data: inboxCount } = useInboxCount();
   const { data: inboxItems, isLoading: inboxLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInbox(sourceFilter);
   const triageMutation = useTriageMutation();
+  const swipeTriage = useSwipeTriage();
   const { data: themes, isLoading: themesLoading } = useThemes();
   const toggleFavoriteMutation = useToggleFavoriteTheme();
   const deleteThemeMutation = useDeleteTheme();
@@ -70,7 +77,8 @@ export default function LibraryScreen() {
   const filteredInboxItems = useMemo(() => {
     let items = inboxItems;
     if (!items) return items;
-    if (debouncedSearch) {
+    // Only apply text search in bulk mode
+    if (triageMode === 'bulk' && debouncedSearch) {
       const searchLower = debouncedSearch.toLowerCase();
       items = items.filter((item) =>
         item.title.toLowerCase().includes(searchLower) ||
@@ -78,7 +86,7 @@ export default function LibraryScreen() {
       );
     }
     return items;
-  }, [inboxItems, debouncedSearch]);
+  }, [inboxItems, debouncedSearch, triageMode]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -95,7 +103,37 @@ export default function LibraryScreen() {
     setRefreshing(false);
   }, [queryClient, sourceFilter]);
 
-  // Toggle selection on tap
+  // --- Swipe mode handlers ---
+  const handleSwipeRight = useCallback((item: Content) => {
+    swipeTriage.mutate({ contentId: item.id, action: 'learn' });
+    showToast('Contenu sauvegarde', 'success');
+  }, [swipeTriage, showToast]);
+
+  const handleSwipeLeft = useCallback((item: Content) => {
+    swipeTriage.mutate({ contentId: item.id, action: 'archive' });
+  }, [swipeTriage]);
+
+  const handleSwipeEmpty = useCallback(() => {
+    // No-op: empty state is handled by checking filteredInboxItems length
+  }, []);
+
+  const handleNearEnd = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  // --- Mode toggle ---
+  const handleToggleMode = useCallback(() => {
+    const newMode = triageMode === 'swipe' ? 'bulk' : 'swipe';
+    setTriageMode(newMode);
+    // Reset selection when switching to swipe mode
+    if (newMode === 'swipe') {
+      setSelectedIds(new Set());
+    }
+  }, [triageMode, setTriageMode]);
+
+  // Toggle selection on tap (bulk mode)
   const handleToggleSelection = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -112,7 +150,7 @@ export default function LibraryScreen() {
     setSelectedIds(new Set());
   };
 
-  // Batch triage
+  // Batch triage (bulk mode)
   const handleBatchLearn = () => {
     if (selectedIds.size === 0) return;
     const ids = Array.from(selectedIds);
@@ -226,7 +264,7 @@ export default function LibraryScreen() {
     );
   };
 
-  // Render a single inbox card (for FlatList)
+  // Render a single inbox card (for FlatList in bulk mode)
   const renderInboxItem = useCallback(({ item }: { item: Content }) => (
     <View style={styles.gridItem}>
       <ContentCard
@@ -249,22 +287,78 @@ export default function LibraryScreen() {
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  // --- Render: Bibliotheque tab content (inbox only) ---
-  const renderLibraryTab = () => (
+  // --- Render: Swipe mode ---
+  const renderSwipeMode = () => {
+    if (inboxLoading) {
+      return <LoadingScreen />;
+    }
+
+    if (!filteredInboxItems?.length) {
+      // Empty state with pull-to-refresh
+      const isFiltered = sourceFilter !== 'all';
+      const platformName = sourceFilter === 'youtube' ? 'YouTube'
+        : sourceFilter === 'spotify' ? 'Spotify'
+        : sourceFilter === 'tiktok' ? 'TikTok'
+        : sourceFilter === 'instagram' ? 'Instagram'
+        : '';
+
+      return (
+        <ScrollView
+          contentContainerStyle={[styles.swipeEmptyContainer, { paddingBottom: tabBarHeight + spacing.lg }]}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
+          }
+        >
+          {isFiltered ? (
+            <EmptyState
+              message={`Aucun contenu ${platformName} a trier`}
+              icon={Search}
+              hasHeader
+            />
+          ) : (
+            <EmptyState
+              message="Tout est trie !"
+              icon={PartyPopper}
+              hasHeader
+            />
+          )}
+        </ScrollView>
+      );
+    }
+
+    // Swipe card stack with pull-to-refresh wrapper
+    // ScrollView with flex: 1 contentContainer is non-scrollable but RefreshControl still works
+    return (
+      <ScrollView
+        contentContainerStyle={styles.swipeScrollWrapper}
+        bounces={true}
+        scrollEnabled={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
+        }
+      >
+        <SwipeCardStack
+          key={sourceFilter}
+          items={filteredInboxItems}
+          onSwipeRight={handleSwipeRight}
+          onSwipeLeft={handleSwipeLeft}
+          onEmpty={handleSwipeEmpty}
+          onNearEnd={handleNearEnd}
+        />
+      </ScrollView>
+    );
+  };
+
+  // --- Render: Bulk mode ---
+  const renderBulkMode = () => (
     <>
-      {/* Search bar */}
+      {/* Search bar (bulk mode only) */}
       <View style={styles.searchContainer}>
         <SearchInput
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
       </View>
-
-      {/* Source filter pills */}
-      <SourcePills
-        selectedSource={sourceFilter}
-        onSourceChange={setSourceFilter}
-      />
 
       {inboxLoading ? (
         <LoadingScreen />
@@ -317,46 +411,67 @@ export default function LibraryScreen() {
     </>
   );
 
+  // --- Render: Bibliotheque tab content (swipe or bulk) ---
+  const renderLibraryTab = () => (
+    <>
+      {/* Source filter pills (both modes) */}
+      <SourcePills
+        selectedSource={sourceFilter}
+        onSourceChange={setSourceFilter}
+      />
+
+      {/* Mode-specific content */}
+      {triageMode === 'swipe' ? renderSwipeMode() : renderBulkMode()}
+    </>
+  );
+
   return (
     <Animated.View entering={FadeIn.duration(200)} style={styles.container}>
-      {/* Top-level tabs: Suggestions | Bibliotheque */}
+      {/* Top-level tabs: Suggestions | Bibliotheque + mode toggle */}
       <View style={styles.topTabBar}>
-        <Pressable
-          style={styles.topTab}
-          onPress={() => setActiveExplorerTab('suggestions')}
-        >
-          <Text
-            variant="body"
-            weight={activeExplorerTab === 'suggestions' ? 'medium' : 'regular'}
-            style={activeExplorerTab === 'suggestions' ? styles.topTabTextActive : styles.topTabTextInactive}
+        <View style={styles.topTabGroup}>
+          <Pressable
+            style={styles.topTab}
+            onPress={() => setActiveExplorerTab('suggestions')}
           >
-            Mes themes
-          </Text>
-          {activeExplorerTab === 'suggestions' && <View style={styles.topTabIndicator} />}
-        </Pressable>
-        <Pressable
-          style={styles.topTab}
-          onPress={() => setActiveExplorerTab('library')}
-        >
-          <View style={styles.topTabWithBadge}>
             <Text
               variant="body"
-              weight={activeExplorerTab === 'library' ? 'medium' : 'regular'}
-              style={activeExplorerTab === 'library' ? styles.topTabTextActive : styles.topTabTextInactive}
+              weight={activeExplorerTab === 'suggestions' ? 'medium' : 'regular'}
+              style={activeExplorerTab === 'suggestions' ? styles.topTabTextActive : styles.topTabTextInactive}
             >
-              Bibliotheque
+              Mes themes
             </Text>
-            {(inboxCount ?? 0) > 0 && <Badge count={inboxCount ?? 0} size="sm" />}
-          </View>
-          {activeExplorerTab === 'library' && <View style={styles.topTabIndicator} />}
-        </Pressable>
+            {activeExplorerTab === 'suggestions' && <View style={styles.topTabIndicator} />}
+          </Pressable>
+          <Pressable
+            style={styles.topTab}
+            onPress={() => setActiveExplorerTab('library')}
+          >
+            <View style={styles.topTabWithBadge}>
+              <Text
+                variant="body"
+                weight={activeExplorerTab === 'library' ? 'medium' : 'regular'}
+                style={activeExplorerTab === 'library' ? styles.topTabTextActive : styles.topTabTextInactive}
+              >
+                Bibliotheque
+              </Text>
+              {(inboxCount ?? 0) > 0 && <Badge count={inboxCount ?? 0} size="sm" />}
+            </View>
+            {activeExplorerTab === 'library' && <View style={styles.topTabIndicator} />}
+          </Pressable>
+        </View>
+
+        {/* Triage mode toggle (only visible on library tab) */}
+        {activeExplorerTab === 'library' && (
+          <TriageModeToggle mode={triageMode} onToggle={handleToggleMode} />
+        )}
       </View>
 
       {/* Tab content */}
       {activeExplorerTab === 'suggestions' ? renderThemesTab() : renderLibraryTab()}
 
-      {/* Selection bar - appears when items selected in triage */}
-      {selectionMode && activeExplorerTab === 'library' && (
+      {/* Selection bar - appears when items selected in bulk triage mode */}
+      {selectionMode && activeExplorerTab === 'library' && triageMode === 'bulk' && (
         <SelectionBar
           selectedCount={selectedIds.size}
           onLearn={handleBatchLearn}
@@ -380,12 +495,17 @@ const styles = StyleSheet.create({
   // --- Top-level tabs (Suggestions | Bibliotheque) ---
   topTabBar: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
     paddingBottom: spacing.md,
-    gap: spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
+  },
+  topTabGroup: {
+    flexDirection: 'row',
+    gap: spacing.lg,
   },
   topTab: {
     paddingVertical: spacing.sm,
@@ -412,10 +532,19 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
 
-  // --- Search ---
+  // --- Search (bulk mode only) ---
   searchContainer: {
     marginHorizontal: spacing.lg,
     marginVertical: spacing.sm,
+  },
+
+  // --- Swipe mode ---
+  swipeScrollWrapper: {
+    flex: 1,
+  },
+  swipeEmptyContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
 
   // --- Themes grid ---
@@ -443,7 +572,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // --- Grid ---
+  // --- Grid (bulk mode) ---
   columnWrapper: {
     gap: GRID_GAP,
   },
