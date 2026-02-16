@@ -57,7 +57,7 @@ export default function LibraryScreen() {
 
   // Data fetching
   const { data: inboxCount } = useInboxCount();
-  const { data: inboxItems, isLoading: inboxLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInbox();
+  const { data: inboxItems, isLoading: inboxLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInbox(sourceFilter);
   const triageMutation = useTriageMutation();
   const { data: themes, isLoading: themesLoading } = useThemes();
   const toggleFavoriteMutation = useToggleFavoriteTheme();
@@ -66,13 +66,10 @@ export default function LibraryScreen() {
   const { show: showToast, ToastComponent } = useToast();
   const selectionMode = selectedIds.size > 0;
 
-  // Filter inbox items by source + search (client-side filtering)
+  // Filter inbox items by search (source filtering is done server-side)
   const filteredInboxItems = useMemo(() => {
     let items = inboxItems;
     if (!items) return items;
-    if (sourceFilter !== 'all') {
-      items = items.filter((item) => item.source === sourceFilter);
-    }
     if (debouncedSearch) {
       const searchLower = debouncedSearch.toLowerCase();
       items = items.filter((item) =>
@@ -81,7 +78,7 @@ export default function LibraryScreen() {
       );
     }
     return items;
-  }, [inboxItems, sourceFilter, debouncedSearch]);
+  }, [inboxItems, debouncedSearch]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -278,7 +275,7 @@ export default function LibraryScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
           }
         >
-          {sourceFilter !== 'all' && inboxItems?.length ? (
+          {sourceFilter !== 'all' ? (
             <EmptyState message={`Aucun contenu ${sourceFilter === 'youtube' ? 'YouTube' : sourceFilter === 'spotify' ? 'Spotify' : sourceFilter === 'tiktok' ? 'TikTok' : 'Instagram'} a trier`} icon={Search} hasHeader />
           ) : debouncedSearch && inboxItems?.length ? (
             <EmptyState message="Aucun resultat pour cette recherche" icon={Search} hasHeader />

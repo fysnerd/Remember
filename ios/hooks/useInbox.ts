@@ -52,12 +52,16 @@ function mapContent(item: BackendContent): Content {
 }
 
 // Inbox content (status: INBOX) with infinite scroll
-export function useInbox() {
+export function useInbox(platform?: string) {
   const query = useInfiniteQuery({
-    queryKey: ['inbox'],
+    queryKey: ['inbox', platform ?? 'all'],
     queryFn: async ({ pageParam = 1 }) => {
+      const params = new URLSearchParams({ page: String(pageParam), limit: '20' });
+      if (platform && platform !== 'all') {
+        params.set('platform', platform.toUpperCase());
+      }
       const { data } = await api.get<BackendInboxResponse>(
-        `/content/inbox?page=${pageParam}&limit=20`
+        `/content/inbox?${params.toString()}`
       );
       return data;
     },

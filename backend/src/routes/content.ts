@@ -550,12 +550,18 @@ contentRouter.get('/inbox', async (req: Request, res: Response, next: NextFuncti
     const limitNum = Math.min(parseInt(limit as string, 10), 100);
     const skip = (pageNum - 1) * limitNum;
 
+    const platform = req.query.platform as string | undefined;
+    const where: any = {
+      userId: req.user!.id,
+      status: ContentStatus.INBOX,
+    };
+    if (platform && ['YOUTUBE', 'SPOTIFY', 'TIKTOK', 'INSTAGRAM'].includes(platform.toUpperCase())) {
+      where.platform = platform.toUpperCase();
+    }
+
     const [contents, total] = await Promise.all([
       prisma.content.findMany({
-        where: {
-          userId: req.user!.id,
-          status: ContentStatus.INBOX,
-        },
+        where,
         orderBy: { capturedAt: 'desc' },
         skip,
         take: limitNum,
@@ -563,12 +569,7 @@ contentRouter.get('/inbox', async (req: Request, res: Response, next: NextFuncti
           tags: true,
         },
       }),
-      prisma.content.count({
-        where: {
-          userId: req.user!.id,
-          status: ContentStatus.INBOX,
-        },
-      }),
+      prisma.content.count({ where }),
     ]);
 
     return res.json({
