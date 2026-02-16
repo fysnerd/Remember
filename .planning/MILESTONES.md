@@ -49,3 +49,44 @@
 
 ---
 
+
+## v3.0 Night Blue Glass UI (Shipped: 2026-02-12)
+
+**Phases completed:** 5 phases (12-16), 12 plans
+**Timeline:** 2 days (2026-02-11 - 2026-02-12)
+
+**Key accomplishments:**
+1. Night Blue color palette (#0a0f1a) with Soft Gold accent (#D4A574) across all screens
+2. Glass UI design system with reusable components (GlassCard, GlassButton, GlassSurface, GlassInput) via expo-blur
+3. Geist font family and Lucide Icons replacing system font and emoji
+4. Complete screen rebuild: Home (3 daily themes), Explorer (suggestions + library), Revisions (filter + search), Profile
+5. Backend endpoints for daily subjects selection and AI theme suggestions (8 via Mistral)
+6. Visual freemium indicators and micro-interactions (200-300ms transitions, loading animations)
+
+**Delivered:** Full visual overhaul from light monochrome to Night Blue Glass UI -- premium dark mode design system with reusable glass components, modern typography, and consistent icon language.
+
+---
+
+
+## v4.0 UX Triage & Daily Digest (Shipped: 2026-02-16)
+
+**Phases completed:** 4 phases (17-20), 7 plans, 15 tasks
+**Timeline:** 1 day (2026-02-16), ~2 hours execution
+**Git range:** `7d17af8..3b6970a` (32 commits, 14 feat)
+**Files changed:** 47 files, +6,211 / -118 lines
+
+**Key accomplishments:**
+1. SRS fixed intervals (J+1/J+3/J+7/J+31) replacing pure SM-2 dynamic scheduling for research-backed retention
+2. Self-referential quiz prompts with creator name, platform context, and temporal framing (self-reference effect)
+3. Tinder-like swipe triage with spring physics, dual-mode (swipe + bulk select), pull-to-refresh, source filters
+4. Daily Digest microlearning session with SRS-priority card selection, progress tracking, and cognitive closure screen
+5. Real-time pipeline feedback with animated status badges, conditional 5s polling, and haptic ready transitions
+
+**Delivered:** Complete UX overhaul of content curation and learning flow -- from batch-only inbox to satisfying swipe triage, from per-content quiz to daily digest sessions, with real-time pipeline visibility throughout.
+
+**Archives:**
+- [milestones/v4.0-ROADMAP.md](milestones/v4.0-ROADMAP.md)
+- [milestones/v4.0-REQUIREMENTS.md](milestones/v4.0-REQUIREMENTS.md)
+
+---
+

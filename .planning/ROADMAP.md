@@ -47,82 +47,19 @@ Full details: [milestones/v2.0-ROADMAP.md](milestones/v2.0-ROADMAP.md)
 
 </details>
 
-### ✅ v4.0 UX Triage & Daily Digest -- SHIPPED 2026-02-16
+<details>
+<summary>✅ v4.0 UX Triage & Daily Digest (Phases 17-20) -- SHIPPED 2026-02-16</summary>
 
-**Milestone Goal:** Refonte complete du flow de triage inbox (swipe Tinder-like + bulk toggle) et implementation du Daily Digest (session microlearning quotidienne avec cloture cognitive). Alignement SRS J+1/J+3/J+7/J+31 et quiz autoreferentiels.
+- [x] Phase 17: SRS & Quiz Backend (2/2 plans) -- completed 2026-02-16
+- [x] Phase 18: Swipe Triage (2/2 plans) -- completed 2026-02-16
+- [x] Phase 19: Daily Digest (2/2 plans) -- completed 2026-02-16
+- [x] Phase 20: Pipeline Feedback (1/1 plan) -- completed 2026-02-16
 
-- [x] **Phase 17: SRS & Quiz Backend** - Align SRS intervals to J+1/J+3/J+7/J+31 and make quiz prompts self-referential with creator/platform context
-- [x] **Phase 18: Swipe Triage** - Full inbox overhaul with Tinder-like swipe as primary mode and bulk select as secondary
-- [x] **Phase 19: Daily Digest** - Pre-built microlearning session with SRS-prioritized card selection and cognitive closure
-- [x] **Phase 20: Pipeline Feedback** - Real-time processing status so users see content progress from triage to quiz-ready
+Full details: [milestones/v4.0-ROADMAP.md](milestones/v4.0-ROADMAP.md)
 
-## Phase Details
-
-### Phase 17: SRS & Quiz Backend
-**Goal**: The spaced repetition engine uses research-backed intervals and quiz questions reference the creator and platform context -- improving retention through the self-reference effect
-**Depends on**: Nothing (first phase of v4.0, backend-only changes)
-**Requirements**: SRS-01, SRS-02, SRS-03, SRS-04, QUIZ-01, QUIZ-02, QUIZ-03
-**Success Criteria** (what must be TRUE):
-  1. After triaging content to "learn", the first review card appears no earlier than 24 hours later (J+1)
-  2. Subsequent review intervals progress through J+3, J+7, J+31 for cards answered correctly
-  3. A card answered incorrectly (rating < 3) resets to J+1 interval on next scheduling
-  4. Quiz questions for a YouTube video include the channel name and reference "cette video YouTube de [creator]" in the question text
-  5. Quiz generation prompt uses self-referential framing with temporal context (when the user watched/listened)
-**Plans**: 2 plans (Wave 1: 17-01, Wave 2: 17-02)
-
-Plans:
-- [x] 17-01-PLAN.md -- SRS interval alignment (fixed INTERVAL_MAP for reps 1-4, SM-2 fallback for reps > 4, J+1 nextReviewAt on all 3 card.create sites)
-- [x] 17-02-PLAN.md -- Self-referential quiz prompt (creator name + platform label + temporal context injection, TikTok/Instagram contentType fix)
-
-### Phase 18: Swipe Triage
-**Goal**: Users can quickly curate their inbox through satisfying swipe gestures (right to keep, left to dismiss) with animated card physics, or switch to bulk select mode for batch operations
-**Depends on**: Nothing (independent of Phase 17; can execute in parallel)
-**Requirements**: TRIAGE-01, TRIAGE-02, TRIAGE-03, TRIAGE-04, TRIAGE-05, TRIAGE-06, TRIAGE-07, TRIAGE-08
-**Success Criteria** (what must be TRUE):
-  1. User can swipe right on an inbox card to keep it (triggers learn pipeline) and swipe left to dismiss it (archives), with cards flying off-screen with spring physics
-  2. User can tap a top-right button to toggle from swipe mode into bulk select mode, then select/deselect multiple items and batch learn or archive them
-  3. User can filter inbox cards by source platform (YouTube, Spotify, TikTok, Instagram) using filter pills, available in both modes
-  4. User can pull-to-refresh in swipe mode to trigger a platform sync, and inbox cards display sorted most recent first
-**Plans**: 2 plans (Wave 1: 18-01, Wave 2: 18-02)
-
-Plans:
-- [x] 18-01-PLAN.md -- Swipe card infrastructure (GestureHandlerRootView, SwipeCard with pan+spring, SwipeCardStack, SwipeOverlay, useSwipeTriage hook, TriageModeToggle, triageMode state)
-- [x] 18-02-PLAN.md -- Library screen integration (swipe mode as default Bibliotheque tab, bulk select toggle, SourcePills in both modes, pull-to-refresh, pagination pre-fetch, empty states)
-
-### Phase 19: Daily Digest
-**Goal**: Users have a single daily learning session that mixes SRS due cards and new content into a focused 10-15 question experience, ending with a cognitive closure screen showing their performance
-**Depends on**: Phase 17 (SRS intervals must be correct for card selection logic)
-**Requirements**: DIGEST-01, DIGEST-02, DIGEST-03, DIGEST-04, DIGEST-05
-**Success Criteria** (what must be TRUE):
-  1. User can tap a prominent button on the home screen to launch a daily digest session
-  2. The digest pre-selects 10-15 questions, prioritizing SRS due cards over new content cards
-  3. User sees question-by-question progress indicator during the session (e.g., "Question 5/12")
-  4. After the last question, user sees a cognitive closure screen with score percentage, answer streak, and session duration
-**Plans**: 2 plans (Wave 1: 19-01, Wave 2: 19-02)
-
-Plans:
-- [x] 19-01-PLAN.md -- Digest session backend (POST /reviews/digest endpoint with card selection algorithm, useDigestCards hook)
-- [x] 19-02-PLAN.md -- Digest session UI (ProgressBar, DigestClosure, DigestCTA components, digest.tsx screen, home screen integration)
-
-### Phase 20: Pipeline Feedback
-**Goal**: Users see real-time processing status for their triaged content, so they understand why some content has quizzes and others are still processing
-**Depends on**: Phase 18 (triage must exist to show post-triage feedback)
-**Requirements**: FEEDBACK-01, FEEDBACK-02
-**Success Criteria** (what must be TRUE):
-  1. User can see per-content processing status (transcribing, generating quiz, ready) on content cards or detail screens
-  2. User receives a visual indicator (badge, animation, or status change) when content transitions from processing to quiz-ready
-**Plans**: 1 plan (Wave 1: 20-01)
-
-Plans:
-- [x] 20-01-PLAN.md -- Pipeline feedback (batch pipeline-status endpoint + usePipelineStatus polling hook + PipelineStatusBadge on ContentCard + status-specific content detail text + ready transition haptic)
+</details>
 
 ## Progress
-
-**Execution Order:**
-Phase 17 and 18 can execute in parallel (backend SRS vs iOS triage are independent).
-Phase 19 depends on Phase 17 (SRS intervals).
-Phase 20 depends on Phase 18 (triage must exist).
-Recommended: 17 → 18 → 19 → 20 (serial for simplicity).
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|

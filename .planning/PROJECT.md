@@ -2,7 +2,7 @@
 
 ## What This Is
 
-Ankora est une plateforme d'apprentissage actif qui transforme le contenu consomme sur les reseaux sociaux (YouTube, Spotify, TikTok, Instagram) en connaissances durables via des quiz generes par IA et la repetition espacee. L'app iOS organise le contenu par themes auto-generes, avec quiz cross-contenu par theme, memos de synthese, et suivi de progression par theme.
+Ankora est une plateforme d'apprentissage actif qui transforme le contenu consomme sur les reseaux sociaux (YouTube, Spotify, TikTok, Instagram) en connaissances durables via des quiz generes par IA et la repetition espacee. L'app iOS organise le contenu par themes auto-generes, avec quiz cross-contenu par theme, memos de synthese, et suivi de progression. Le triage inbox se fait par swipe Tinder-like, et le Daily Digest offre une session microlearning quotidienne avec cloture cognitive.
 
 ## Core Value
 
@@ -34,7 +34,6 @@ L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans eff
 - ✓ Cross-content synthesis quiz (LLM questions connecting 2+ sources) -- v2.0
 - ✓ Theme discovery onboarding (rename/merge/dismiss) -- v2.0
 - ✓ Learning progress visualization (mastery %, due cards) -- v2.0
-
 - ✓ Night Blue color palette + Soft Gold accent across all screens -- v3.0
 - ✓ Geist font family replacing system font -- v3.0
 - ✓ Glass UI reusable components (GlassCard, GlassButton, GlassSurface, GlassInput) -- v3.0
@@ -47,22 +46,18 @@ L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans eff
 - ✓ Backend: AI theme suggestions endpoint (8 suggestions via Mistral) -- v3.0
 - ✓ Visual freemium indicators (lock/overlay UI, no payment wiring) -- v3.0
 - ✓ Micro-interactions: transitions 200-300ms, loading animations, progress feedback -- v3.0
+- ✓ SRS fixed intervals J+1/J+3/J+7/J+31 (research-backed) -- v4.0
+- ✓ Self-referential quiz prompts (creator name, platform, temporal context) -- v4.0
+- ✓ Swipe triage Tinder-like (right=keep, left=dismiss) as primary inbox mode -- v4.0
+- ✓ Bulk select toggle as secondary triage mode -- v4.0
+- ✓ Source filter pills + pull-to-refresh sync in both modes -- v4.0
+- ✓ Daily Digest microlearning session (10-15 questions, SRS-priority selection) -- v4.0
+- ✓ Cognitive closure screen with score %, streak, session duration -- v4.0
+- ✓ Real-time pipeline feedback (transcribing/generating/ready status badges) -- v4.0
 
 ### Active
 
-#### Current Milestone: v4.0 UX Triage & Daily Digest
-
-**Goal:** Refonte complete du flow de triage inbox (swipe Tinder-like + bulk toggle) et implementation du Daily Digest (session microlearning quotidienne avec cloture cognitive). Alignement SRS J+1/J+3/J+7/J+31 et quiz autoreferentiels.
-
-**Target features:**
-- Swipe triage Tinder-like (right=keep, left=ignore) as primary inbox mode
-- Bulk select toggle as secondary mode (top-right button)
-- Source filter pills + pull-to-refresh sync in swipe mode
-- Daily Digest microlearning session (10-15 questions, 3-5 min)
-- Cognitive closure screen with session stats
-- SRS alignment: first review at J+1 (24h), then J+3, J+7, J+31
-- Self-referential quiz prompts (creator name, platform, temporal context)
-- Real-time pipeline feedback (transcribing/generating/ready status)
+(None -- start next milestone with `/gsd:new-milestone`)
 
 ### Out of Scope
 
@@ -74,26 +69,24 @@ L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans eff
 - Hierarchical/nested themes -- Prisma lacks recursive queries, 5-15 themes not enough for hierarchy
 - Vector database for classification -- tag space too small, LLM simpler
 - Theme-specific SM-2 schedules -- SM-2 per-card, overriding fights the algorithm
-- Onboarding flow (11 steps) -- deferred to v3.1
-- Apple/Google Sign-In + Magic Links -- deferred to v3.1 (add alongside email/password)
-- RevenueCat payment integration -- deferred to v3.1 (visual freemium in v3.0)
-- Push notifications -- deferred to v3.1 (onboarding permission prompt)
-- Gamification (streaks, badges, levels) -- post-MVP
-- A/B testing (paywall, trial) -- post-MVP
+- Quiz during triage -- triage is fast curation, quiz is focused engagement (different mental modes)
+- Custom SRS intervals -- fixed J+1/J+3/J+7/J+31 per PRD research
+- Undo swipe (shake to undo) -- simplicity over features
+- Payment/subscription gating -- visual freemium in v3.0, actual payment deferred
 
 ## Context
 
 Backend: Node.js v22, Express.js, TypeScript, Prisma, PostgreSQL (Supabase), Pino, AdminJS v7. Runs on Hetzner CPX32 VPS with PM2 cluster mode and Caddy reverse proxy.
 
-iOS app: Expo SDK 54, expo-router, Zustand, TanStack React Query, Axios.
+iOS app: Expo SDK 54, expo-router, Zustand, TanStack React Query, Axios, react-native-gesture-handler, react-native-reanimated.
 
-Shipped v2.0 with ~14,000 LOC across backend + iOS.
-Theme system: 3 new Prisma models (Theme, ContentTheme, ThemeTag), 15+ new API endpoints, 8 new iOS screens.
+Shipped v4.0 with ~20,000 LOC across backend + iOS.
+20 phases completed across 4 milestones (v1.0-v4.0), 41 plans total.
+Theme system: 3 Prisma models, 15+ API endpoints, 8+ iOS screens.
 Workers: 15 cron jobs including theme classification at */15 schedule.
-Quiz system: per-content + cross-content synthesis questions, 20-card cap per session.
-
-v3.0 design direction: Night Blue dark mode (#0a0f1a), Glass UI surfaces (expo-blur), Soft Gold accent (#D4A574), Geist typography, Lucide icons. Current UI is light monochrome with system fonts and emoji icons -- full visual overhaul.
-Linear issues: REM-137 (design system + screens), REM-136 (onboarding, deferred to v3.1).
+Quiz system: per-content + cross-content synthesis + daily digest sessions.
+Triage: dual-mode (swipe + bulk), source filters, pull-to-refresh.
+Design: Night Blue Glass UI, Geist font, Lucide icons, spring animations.
 
 ## Key Decisions
 
@@ -117,12 +110,14 @@ Linear issues: REM-137 (design system + screens), REM-136 (onboarding, deferred 
 | Geist font (expo-font) | Modern, clean typography, Google Fonts available | ✓ Good |
 | Glass UI via expo-blur | Native blur, no SwiftUI dependency, OTA-compatible | ✓ Good |
 | Lucide Icons | Consistent line icons, better than emoji for Glass UI | ✓ Good |
-| REM-137 first, REM-136 deferred | Design system foundation before onboarding/payment | ✓ Good |
-| Swipe triage over batch select | Tinder-like swipe is faster, more satisfying, better for binary decisions | — Pending |
-| Triage != Quiz (separate modes) | Triage is fast curation, quiz is focused engagement -- mixing creates friction | — Pending |
-| J+1 first review (not immediate) | Sleep consolidation before first review, per PRD research | — Pending |
-| Self-referential quiz framing | Creator name + platform context improves retention (self-reference effect) | — Pending |
-| Daily Digest as primary learning | Pre-built session beats content-by-content review for daily habit | — Pending |
+| Swipe triage over batch select | Tinder-like swipe is faster, more satisfying for binary decisions | ✓ Good |
+| Triage != Quiz (separate modes) | Triage is fast curation, quiz is focused engagement -- mixing creates friction | ✓ Good |
+| J+1 first review (not immediate) | Sleep consolidation before first review, per PRD research | ✓ Good |
+| Self-referential quiz framing | Creator name + platform context improves retention (self-reference effect) | ✓ Good |
+| Daily Digest as primary learning | Pre-built session beats content-by-content review for daily habit | ✓ Good |
+| useMutation for digest fetch | Prevents duplicate QuizSession creation on re-fetches | ✓ Good |
+| Conditional 5s polling for pipeline | Polls only when processing items exist, stops when idle (battery-safe) | ✓ Good |
+| GestureHandlerRootView at app root | Global gesture support, no per-screen wrappers needed | ✓ Good |
 
 ## Constraints
 
@@ -133,4 +128,4 @@ Linear issues: REM-137 (design system + screens), REM-136 (onboarding, deferred 
 - **Existing tags**: Themes derive from tags, both coexist
 
 ---
-*Last updated: 2026-02-16 after v4.0 milestone start*
+*Last updated: 2026-02-16 after v4.0 milestone*
