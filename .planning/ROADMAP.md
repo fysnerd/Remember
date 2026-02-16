@@ -111,10 +111,10 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. User can see per-content processing status (transcribing, generating quiz, ready) on content cards or detail screens
   2. User receives a visual indicator (badge, animation, or status change) when content transitions from processing to quiz-ready
-**Plans**: TBD
+**Plans**: 1 plan (Wave 1: 20-01)
 
 Plans:
-- [ ] 20-01-PLAN.md -- Pipeline status tracking (backend status field + API exposure + iOS status indicators + ready transition animation)
+- [ ] 20-01-PLAN.md -- Pipeline feedback (batch pipeline-status endpoint + usePipelineStatus polling hook + PipelineStatusBadge on ContentCard + status-specific content detail text + ready transition haptic)
 
 ## Progress
 
