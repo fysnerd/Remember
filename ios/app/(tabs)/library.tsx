@@ -3,7 +3,7 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { View, ScrollView, StyleSheet, Pressable, RefreshControl, Dimensions, Alert } from 'react-native';
+import { View, ScrollView, FlatList, StyleSheet, Pressable, RefreshControl, Dimensions, Alert, ActivityIndicator } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -20,6 +20,7 @@ import { GlassLockOverlay } from '../../components/glass';
 import { useInbox, useInboxCount, useTriageMutation, useDebouncedValue, useThemes, useDeleteTheme } from '../../hooks';
 import { useSubscription } from '../../hooks/useSubscription';
 import { useContentStore } from '../../stores/contentStore';
+import type { Content } from '../../types/content';
 import { colors, spacing } from '../../theme';
 import api from '../../lib/api';
 import { STAGGER_DELAY, STAGGER_CAP } from '../../lib/animations';
@@ -56,7 +57,7 @@ export default function LibraryScreen() {
 
   // Data fetching
   const { data: inboxCount } = useInboxCount();
-  const { data: inboxItems, isLoading: inboxLoading } = useInbox();
+  const { data: inboxItems, isLoading: inboxLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInbox();
   const triageMutation = useTriageMutation();
   const { data: themes, isLoading: themesLoading } = useThemes();
   const deleteThemeMutation = useDeleteTheme();
@@ -225,6 +226,29 @@ export default function LibraryScreen() {
     );
   };
 
+  // Render a single inbox card (for FlatList)
+  const renderInboxItem = useCallback(({ item }: { item: Content }) => (
+    <View style={styles.gridItem}>
+      <ContentCard
+        id={item.id}
+        title={item.title}
+        source={item.source}
+        thumbnailUrl={item.thumbnailUrl}
+        channelName={item.channelName}
+        duration={item.duration}
+        onPress={() => handleInboxItemPress(item.id)}
+        isSelected={selectedIds.has(item.id)}
+        selectionMode={true}
+      />
+    </View>
+  ), [selectedIds]);
+
+  const handleLoadMore = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
   // --- Render: Bibliotheque tab content (inbox only) ---
   const renderLibraryTab = () => (
     <>
@@ -244,38 +268,14 @@ export default function LibraryScreen() {
 
       {inboxLoading ? (
         <LoadingScreen />
-      ) : (
+      ) : !filteredInboxItems?.length ? (
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.lg }]}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
           }
         >
-          {filteredInboxItems?.length ? (
-            <>
-              {/* Instruction message */}
-              <Text variant="caption" style={styles.instruction}>
-                Selectionnez le contenu a garder
-              </Text>
-              <View style={[styles.grid, selectionMode && styles.gridWithBar]}>
-                {filteredInboxItems.map((item) => (
-                  <View key={item.id} style={styles.gridItem}>
-                    <ContentCard
-                      id={item.id}
-                      title={item.title}
-                      source={item.source}
-                      thumbnailUrl={item.thumbnailUrl}
-                      channelName={item.channelName}
-                      duration={item.duration}
-                      onPress={() => handleInboxItemPress(item.id)}
-                      isSelected={selectedIds.has(item.id)}
-                      selectionMode={true}
-                    />
-                  </View>
-                ))}
-              </View>
-            </>
-          ) : sourceFilter !== 'all' && inboxItems?.length ? (
+          {sourceFilter !== 'all' && inboxItems?.length ? (
             <EmptyState message={`Aucun contenu ${sourceFilter === 'youtube' ? 'YouTube' : sourceFilter === 'spotify' ? 'Spotify' : sourceFilter === 'tiktok' ? 'TikTok' : 'Instagram'} a trier`} icon={Search} hasHeader />
           ) : debouncedSearch && inboxItems?.length ? (
             <EmptyState message="Aucun resultat pour cette recherche" icon={Search} hasHeader />
@@ -283,6 +283,36 @@ export default function LibraryScreen() {
             <EmptyState message="Rien a trier pour le moment" icon={Sparkles} hasHeader />
           )}
         </ScrollView>
+      ) : (
+        <FlatList
+          data={filteredInboxItems}
+          renderItem={renderInboxItem}
+          keyExtractor={(item) => item.id}
+          numColumns={2}
+          columnWrapperStyle={styles.columnWrapper}
+          contentContainerStyle={[
+            styles.content,
+            { paddingBottom: tabBarHeight + spacing.lg },
+            selectionMode && styles.gridWithBar,
+          ]}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
+          }
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          ListHeaderComponent={
+            <Text variant="caption" style={styles.instruction}>
+              Selectionnez le contenu a garder
+            </Text>
+          }
+          ListFooterComponent={
+            isFetchingNextPage ? (
+              <View style={styles.loadingMore}>
+                <ActivityIndicator color={colors.textSecondary} />
+              </View>
+            ) : null
+          }
+        />
       )}
     </>
   );
@@ -414,9 +444,7 @@ const styles = StyleSheet.create({
   },
 
   // --- Grid ---
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  columnWrapper: {
     gap: GRID_GAP,
   },
   gridWithBar: {
@@ -424,5 +452,9 @@ const styles = StyleSheet.create({
   },
   gridItem: {
     width: COLUMN_WIDTH,
+  },
+  loadingMore: {
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
   },
 });

@@ -2,7 +2,7 @@
  * Inbox hooks - content to triage, count for badge
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import type { Content } from '../types/content';
 
@@ -51,15 +51,30 @@ function mapContent(item: BackendContent): Content {
   };
 }
 
-// Inbox content (status: INBOX)
+// Inbox content (status: INBOX) with infinite scroll
 export function useInbox() {
-  return useQuery({
+  const query = useInfiniteQuery({
     queryKey: ['inbox'],
-    queryFn: async () => {
-      const { data } = await api.get<BackendInboxResponse>('/content/inbox');
-      return data.contents.map(mapContent);
+    queryFn: async ({ pageParam = 1 }) => {
+      const { data } = await api.get<BackendInboxResponse>(
+        `/content/inbox?page=${pageParam}&limit=20`
+      );
+      return data;
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => {
+      const { page, totalPages } = lastPage.pagination;
+      return page < totalPages ? page + 1 : undefined;
     },
   });
+
+  // Flatten all pages into a single array of Content
+  const data = query.data?.pages.flatMap((p) => p.contents.map(mapContent));
+
+  return {
+    ...query,
+    data,
+  };
 }
 
 // Inbox count for badge

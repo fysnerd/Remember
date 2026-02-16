@@ -17,6 +17,8 @@ import { runEmbeddingWorker, runEmbeddingBackfill } from '../services/embeddingG
 import { trackJobExecution } from './jobExecutionTracker.js';
 import { runCleanupJobExecutions } from './cleanupWorker.js';
 import { cleanupDesktopAuthSessions } from '../routes/oauth.js';
+import { prisma } from '../config/database.js';
+import { ContentStatus } from '@prisma/client';
 
 const log = logger.child({ component: 'scheduler' });
 
@@ -151,6 +153,26 @@ export function startScheduler(): void {
     await runJob('cleanup-job-executions', runCleanupJobExecutions);
   });
 
+  // Inbox Auto-Expiration - Daily at 3:15 AM
+  // Archives INBOX items older than 7 days that users haven't triaged
+  cron.schedule('15 3 * * *', async () => {
+    try {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const result = await prisma.content.updateMany({
+        where: {
+          status: ContentStatus.INBOX,
+          createdAt: { lt: sevenDaysAgo },
+        },
+        data: { status: ContentStatus.ARCHIVED },
+      });
+      if (result.count > 0) {
+        log.info({ expired: result.count }, 'Auto-expired old inbox items');
+      }
+    } catch (error) {
+      log.error({ err: error }, 'Failed to auto-expire inbox items');
+    }
+  });
+
   // Desktop Auth Session Cleanup - Every minute
   // Removes expired pending desktop auth sessions (>10 min old)
   cron.schedule('* * * * *', () => {
@@ -174,6 +196,7 @@ export function startScheduler(): void {
       { name: 'theme-classification', schedule: '*/15 * * * *' },
       { name: 'embedding-generation', schedule: '*/5 * * * *' },
       { name: 'cleanup-job-executions', schedule: '0 3 * * *' },
+      { name: 'inbox-auto-expiration', schedule: '15 3 * * *' },
       { name: 'desktop-auth-cleanup', schedule: '* * * * *' },
     ]
   }, 'All cron jobs scheduled');
@@ -309,6 +332,7 @@ export function getSchedulerStatus(): {
       { name: 'theme-classification', schedule: '*/15 * * * *' },
       { name: 'embedding-generation', schedule: '*/5 * * * *' },
       { name: 'cleanup-job-executions', schedule: '0 3 * * *' },
+      { name: 'inbox-auto-expiration', schedule: '15 3 * * *' },
     ],
   };
 }
