@@ -68,11 +68,11 @@ Full details: [milestones/v2.0-ROADMAP.md](milestones/v2.0-ROADMAP.md)
   3. A card answered incorrectly (rating < 3) resets to J+1 interval on next scheduling
   4. Quiz questions for a YouTube video include the channel name and reference "cette video YouTube de [creator]" in the question text
   5. Quiz generation prompt uses self-referential framing with temporal context (when the user watched/listened)
-**Plans**: TBD
+**Plans**: 2 plans (Wave 1: 17-01, Wave 2: 17-02)
 
 Plans:
-- [ ] 17-01-PLAN.md -- SRS interval alignment (J+1/J+3/J+7/J+31 scheduling logic + Prisma default change + failed review reset)
-- [ ] 17-02-PLAN.md -- Self-referential quiz prompt update (creator name injection, platform context, temporal framing)
+- [ ] 17-01-PLAN.md -- SRS interval alignment (fixed INTERVAL_MAP for reps 1-4, SM-2 fallback for reps > 4, J+1 nextReviewAt on all 3 card.create sites)
+- [ ] 17-02-PLAN.md -- Self-referential quiz prompt (creator name + platform label + temporal context injection, TikTok/Instagram contentType fix)
 
 ### Phase 18: Swipe Triage
 **Goal**: Users can quickly curate their inbox through satisfying swipe gestures (right to keep, left to dismiss) with animated card physics, or switch to bulk select mode for batch operations
