@@ -21,20 +21,6 @@ interface InstagramCookies {
   datr?: string;
 }
 
-interface LikedMediaItem {
-  pk?: number;
-  id?: string;
-  code?: string;
-  caption?: { text?: string };
-  user?: { username?: string; full_name?: string };
-  like_count?: number;
-  comment_count?: number;
-  video_duration?: number;
-  image_versions2?: { candidates?: Array<{ url: string }> };
-  taken_at?: number;
-  media_type?: number;
-  product_type?: string;
-}
 
 /**
  * Fetch LIKED reels from Instagram for a specific user
@@ -122,9 +108,9 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
     log.info({ userId, jitterMs: Math.round(jitterMs) }, 'Applying jitter before navigation');
     await new Promise(resolve => setTimeout(resolve, jitterMs));
 
-    // Navigate to Instagram first to establish session context
-    log.info({ userId }, 'Navigating to Instagram');
-    await page.goto('https://www.instagram.com/', {
+    // Navigate directly to the likes page
+    log.info({ userId }, 'Navigating to likes page');
+    await page.goto('https://www.instagram.com/your_activity/interactions/likes/', {
       waitUntil: 'networkidle',
       timeout: 30000,
     });
@@ -141,145 +127,171 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       return 0;
     }
 
-    log.info({ userId, finalUrl }, 'Instagram loaded, calling liked API from browser');
+    log.info({ userId, finalUrl }, 'Likes page loaded');
 
-    // Call the liked API from within the browser context.
-    // This uses the browser's own UA (Safari) and cookies — no Barcelona UA mismatch.
-    const apiResult = await page.evaluate(async (csrfToken: string) => {
-      try {
-        const resp = await fetch('https://www.instagram.com/api/v1/feed/liked/', {
-          method: 'GET',
-          headers: {
-            'X-CSRFToken': csrfToken,
-            'X-Requested-With': 'XMLHttpRequest',
-            'Accept': '*/*',
-          },
-          credentials: 'include',
-        });
-
-        const status = resp.status;
-        if (!resp.ok) {
-          const text = await resp.text().catch(() => '');
-          return { error: `API error ${status}: ${text.substring(0, 300)}`, items: [], status };
+    // Dismiss popups (cookies consent, notifications, etc.)
+    try {
+      for (const text of ['Not Now', 'Pas maintenant', 'Decline optional cookies', 'Refuser les cookies optionnels', 'Allow all cookies', 'Tout accepter']) {
+        const btn = page.locator(`button:has-text("${text}")`).first();
+        if (await btn.isVisible({ timeout: 1000 }).catch(() => false)) {
+          await btn.click();
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
-
-        const data = await resp.json();
-        return { error: null, items: data.items || [], status };
-      } catch (err: any) {
-        return { error: err.message || 'Unknown fetch error', items: [], status: 0 };
       }
-    }, cookies.csrftoken || '');
+    } catch { /* best-effort */ }
+
+    // Wait for liked content to render — the SPA may need extra time
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    // Extract liked post data from the page DOM and embedded Relay store
+    const extractedData = await page.evaluate(() => {
+      const result: {
+        postLinks: string[];
+        relayItems: any[];
+        scriptData: string[];
+        debugInfo: string;
+      } = { postLinks: [], relayItems: [], scriptData: [], debugInfo: '' };
+
+      // Method 1: Extract post links from DOM <a href="/p/SHORTCODE/"> or <a href="/reel/SHORTCODE/">
+      const links = document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]');
+      const seen = new Set<string>();
+      links.forEach(link => {
+        const href = link.getAttribute('href') || '';
+        const match = href.match(/\/(p|reel)\/([A-Za-z0-9_-]+)/);
+        if (match && !seen.has(match[2])) {
+          seen.add(match[2]);
+          result.postLinks.push(match[2]);
+        }
+      });
+
+      // Method 2: Check for Relay store data (Instagram's SPA data store)
+      try {
+        // Try various known Instagram data stores
+        const stores = [
+          (window as any).__relay_store__,
+          (window as any).__RELAY_STORE__,
+          (window as any).__initialData,
+          (window as any)._sharedData,
+          (window as any).__additionalDataLoaded,
+        ];
+        for (const store of stores) {
+          if (store) {
+            const storeStr = JSON.stringify(store).substring(0, 200);
+            result.debugInfo += `Found store: ${storeStr}... `;
+          }
+        }
+      } catch (e) {
+        result.debugInfo += `Store error: ${(e as Error).message} `;
+      }
+
+      // Method 3: Check embedded JSON in script tags
+      const scripts = document.querySelectorAll('script[type="application/json"]');
+      scripts.forEach((script, i) => {
+        const text = script.textContent || '';
+        if (text.includes('liked') || text.includes('media_type') || text.includes('/p/')) {
+          result.scriptData.push(`script[${i}]: ${text.substring(0, 200)}`);
+        }
+      });
+
+      // Method 4: Check __NEXT_DATA__ (Next.js style)
+      const nextDataEl = document.getElementById('__NEXT_DATA__');
+      if (nextDataEl) {
+        const text = nextDataEl.textContent || '';
+        result.debugInfo += `__NEXT_DATA__ length: ${text.length} `;
+        if (text.includes('liked') || text.includes('media_type')) {
+          result.scriptData.push(`__NEXT_DATA__: ${text.substring(0, 200)}`);
+        }
+      }
+
+      // Debug: count all elements and provide page structure info
+      result.debugInfo += `Total links: ${links.length}, ` +
+        `All anchors: ${document.querySelectorAll('a').length}, ` +
+        `Images: ${document.querySelectorAll('img').length}, ` +
+        `Body text length: ${document.body?.innerText?.length || 0}`;
+
+      return result;
+    });
+
+    log.info({
+      userId,
+      postLinksCount: extractedData.postLinks.length,
+      postLinks: extractedData.postLinks.slice(0, 10),
+      relayItemsCount: extractedData.relayItems.length,
+      scriptDataCount: extractedData.scriptData.length,
+      scriptData: extractedData.scriptData.slice(0, 3),
+      debugInfo: extractedData.debugInfo,
+    }, 'Extracted data from likes page');
+
+    // If no links found, try scrolling to trigger lazy loading
+    if (extractedData.postLinks.length === 0) {
+      log.info({ userId }, 'No post links found, scrolling to trigger content load');
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
+      // Re-extract after scroll
+      const scrollLinks = await page.evaluate(() => {
+        const links = document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]');
+        const seen = new Set<string>();
+        const result: string[] = [];
+        links.forEach(link => {
+          const href = link.getAttribute('href') || '';
+          const match = href.match(/\/(p|reel)\/([A-Za-z0-9_-]+)/);
+          if (match && !seen.has(match[2])) {
+            seen.add(match[2]);
+            result.push(match[2]);
+          }
+        });
+        return result;
+      });
+      extractedData.postLinks = scrollLinks;
+      log.info({ userId, postLinksCount: scrollLinks.length }, 'Post links after scroll');
+    }
 
     await browser.close();
 
-    log.info({ userId, status: apiResult.status, itemCount: apiResult.items.length, error: apiResult.error }, 'API result');
-
-    if (apiResult.status === 401 || apiResult.status === 403) {
-      log.warn({ userId, status: apiResult.status }, 'Session expired (auth error from API)');
+    if (extractedData.postLinks.length === 0) {
+      log.warn({ userId }, 'No liked posts found on page');
       await prisma.connectedPlatform.update({
         where: { id: connectionId },
-        data: { lastSyncError: 'Session expired. Please reconnect.' },
+        data: { lastSyncAt: new Date(), lastSyncError: 'No liked posts found on page' },
       });
       return 0;
     }
 
-    if (apiResult.status === 429) {
-      log.warn({ userId }, 'Rate limited by Instagram (429), skipping');
-      await prisma.connectedPlatform.update({
-        where: { id: connectionId },
-        data: { lastSyncError: 'Rate limited. Will retry later.' },
-      });
-      return 0;
-    }
+    // DOM scraping only gives shortcodes — save all as INBOX,
+    // the transcription worker will detect videos vs photos
+    const shortcodes = extractedData.postLinks.slice(0, 20);
+    log.info({ userId, itemCount: shortcodes.length }, 'Processing shortcodes');
 
-    if (apiResult.error) {
-      log.error({ userId, error: apiResult.error }, 'API error');
-      await prisma.connectedPlatform.update({
-        where: { id: connectionId },
-        data: { lastSyncError: apiResult.error },
-      });
-      return 0;
-    }
-
-    if (apiResult.items.length === 0) {
-      log.warn({ userId }, 'No liked items returned from API');
-      await prisma.connectedPlatform.update({
-        where: { id: connectionId },
-        data: { lastSyncAt: new Date(), lastSyncError: null },
-      });
-      return 0;
-    }
-
-    const allItems = apiResult.items as LikedMediaItem[];
-    log.info({ userId, itemCount: allItems.length }, 'Got items from API');
-
-    // Filter: only videos (media_type 2 = video, product_type 'clips' = reel)
-    const videos = allItems.filter((item: LikedMediaItem) =>
-      item.media_type === 2 || item.product_type === 'clips'
-    );
-    log.info({
-      userId,
-      videoCount: videos.length,
-      skippedCount: allItems.length - videos.length
-    }, 'Filtered to videos');
-
-    if (videos.length === 0) {
-      await prisma.connectedPlatform.update({
-        where: { id: connectionId },
-        data: { lastSyncAt: new Date(), lastSyncError: null },
-      });
-      return 0;
-    }
-
-    // Limit to 20 most recent
-    const items = videos.slice(0, 20);
-
-    // Batch check existing content
-    const externalIds = items
-      .map((item: LikedMediaItem) => item.pk?.toString() || item.id?.toString() || item.code)
-      .filter((id): id is string => !!id);
-
+    // Batch check existing content (use shortcode as externalId)
     const existingContent = await prisma.content.findMany({
       where: {
         userId,
         platform: Platform.INSTAGRAM,
-        externalId: { in: externalIds },
+        externalId: { in: shortcodes },
       },
       select: { externalId: true },
     });
     const existingIds = new Set(existingContent.map(c => c.externalId));
 
     // Insert oldest-liked first so most-recently-liked gets the latest createdAt
-    // (inbox sorts by createdAt desc → most recent like appears first)
-    const itemsReversed = [...items].reverse();
+    const shortcodesReversed = [...shortcodes].reverse();
 
-    for (const item of itemsReversed) {
-      const externalId = item.pk?.toString() || item.id?.toString() || item.code;
-      if (!externalId) continue;
-
-      if (existingIds.has(externalId)) {
-        continue; // skip existing (can't break — reversed order)
+    for (const shortcode of shortcodesReversed) {
+      if (existingIds.has(shortcode)) {
+        continue;
       }
 
-      const shortcode = item.code || externalId;
-      const url = `https://www.instagram.com/p/${shortcode}/`;
-      const authorUsername = item.user?.username || null;
+      const url = `https://www.instagram.com/reel/${shortcode}/`;
 
       await prisma.content.create({
         data: {
           userId,
           platform: Platform.INSTAGRAM,
-          externalId,
+          externalId: shortcode,
           url,
-          title: item.caption?.text?.substring(0, 255) || 'Instagram Reel',
-          description: item.caption?.text || null,
-          thumbnailUrl: item.image_versions2?.candidates?.[0]?.url || null,
-          duration: item.video_duration || null,
-          authorUsername,
-          channelName: authorUsername ? `@${authorUsername}` : null,
-          likeCount: item.like_count || null,
-          commentCount: item.comment_count || null,
-          capturedAt: item.taken_at ? new Date(item.taken_at * 1000) : new Date(),
+          title: 'Instagram Reel',
+          capturedAt: new Date(),
           status: ContentStatus.INBOX,
         },
       });
