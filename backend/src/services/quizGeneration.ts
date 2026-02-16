@@ -513,13 +513,19 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
   });
 
   try {
-    const contentType = content.platform === 'YOUTUBE' ? 'video' : 'podcast';
+    const { type: contentType, label: platformLabel } = getContentTypeAndLabel(content.platform);
+    const creatorName = getCreatorName(content);
 
-    log.info({ contentId, title: content.title }, 'Generating quiz');
+    log.info({ contentId, title: content.title, platform: content.platform, creator: creatorName }, 'Generating quiz');
     const result = await generateQuizFromTranscript(
       content.transcript.text,
       content.title,
-      contentType
+      contentType,
+      {
+        creatorName,
+        platformLabel,
+        capturedAt: content.capturedAt,
+      }
     );
 
     if (!result.isEducational) {
@@ -690,11 +696,17 @@ export async function regenerateQuiz(contentId: string): Promise<boolean> {
   });
 
   try {
-    const contentType = content.platform === 'YOUTUBE' ? 'video' : 'podcast';
+    const { type: contentType, label: platformLabel } = getContentTypeAndLabel(content.platform);
+    const creatorName = getCreatorName(content);
     const result = await generateQuizFromTranscript(
       content.transcript.text,
       content.title,
       contentType,
+      {
+        creatorName,
+        platformLabel,
+        capturedAt: content.capturedAt,
+      },
       previousQuestions
     );
 
