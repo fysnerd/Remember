@@ -416,7 +416,16 @@ reviewRouter.post('/', async (req: Request, res: Response, next: NextFunction) =
       });
     }
 
-    // SM-2 Algorithm implementation
+    // Research-backed fixed intervals (v4.0 PRD)
+    const FIXED_INTERVALS: Record<number, number> = {
+      1: 1,   // J+1: first review
+      2: 3,   // J+3: second review
+      3: 7,   // J+7: third review
+      4: 31,  // J+31: fourth review
+    };
+    const MAX_FIXED_REP = 4;
+
+    // SM-2 Algorithm with fixed interval progression (v4.0)
     const ratingValue = { AGAIN: 1, HARD: 2, GOOD: 3, EASY: 4 }[data.rating];
 
     let newEaseFactor = card.easeFactor;
@@ -424,31 +433,31 @@ reviewRouter.post('/', async (req: Request, res: Response, next: NextFunction) =
     let newRepetitions = card.repetitions;
 
     if (ratingValue < 3) {
-      // Failed review - reset
+      // SRS-03: Failed review resets to J+1
       newRepetitions = 0;
       newInterval = 1;
     } else {
       // Successful review
       newRepetitions += 1;
 
-      if (newRepetitions === 1) {
-        newInterval = 1;
-      } else if (newRepetitions === 2) {
-        newInterval = 3;
+      if (newRepetitions <= MAX_FIXED_REP) {
+        // SRS-02: Fixed intervals for first 4 reps
+        newInterval = FIXED_INTERVALS[newRepetitions];
       } else {
+        // Beyond J+31: SM-2 dynamic intervals with easeFactor
         newInterval = Math.round(card.interval * newEaseFactor);
+
+        // EASY bonus only applies in dynamic interval phase (rep > 4)
+        if (data.rating === 'EASY') {
+          newInterval = Math.round(newInterval * 1.3);
+        }
       }
 
-      // Update ease factor
+      // SRS-04: Ease factor always adjusts (SM-2 compatible)
       newEaseFactor = Math.max(
         1.3,
         card.easeFactor + (0.1 - (5 - ratingValue) * (0.08 + (5 - ratingValue) * 0.02))
       );
-
-      // Bonus for easy
-      if (data.rating === 'EASY') {
-        newInterval = Math.round(newInterval * 1.3);
-      }
     }
 
     const nextReviewAt = new Date();
@@ -776,8 +785,10 @@ reviewRouter.post('/practice/theme', async (req: Request, res: Response, next: N
                     explanation: q.explanation,
                   },
                 });
+                const synthCardNextReview = new Date();
+                synthCardNextReview.setDate(synthCardNextReview.getDate() + 1);
                 await prisma.card.create({
-                  data: { quizId: quiz.id, userId },
+                  data: { quizId: quiz.id, userId, nextReviewAt: synthCardNextReview },
                 });
               }
               console.log(`[synthesis] Generated ${result.questions.length} synthesis cards for theme ${themeId}`);
