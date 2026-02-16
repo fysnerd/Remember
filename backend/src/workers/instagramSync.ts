@@ -120,6 +120,15 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
     const interceptedItems: LikedMediaItem[] = [];
     let sessionExpired = false;
     const apiUrlsSeen: string[] = []; // track all API/graphql URLs for debugging
+    const allRequestUrls: string[] = []; // track ALL URLs to find the likes endpoint
+
+    // Track all requests for debugging
+    page.on('request', (request) => {
+      const url = request.url();
+      if (url.includes('instagram.com') && !url.includes('.js') && !url.includes('.css') && !url.includes('.png') && !url.includes('.jpg')) {
+        allRequestUrls.push(`${request.method()} ${url.substring(0, 150)}`);
+      }
+    });
 
     // Set up passive response interceptor BEFORE navigation
     page.on('response', async (response) => {
@@ -159,30 +168,25 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
             log.info({ userId, dataKeys, url: url.substring(0, 80) }, 'GraphQL response keys');
           }
 
-          // Try to find liked items in any key containing "liked"
+          // Only capture items from "liked" keys — skip timeline/feed/notifications
           for (const key of dataKeys) {
+            if (!key.includes('liked')) continue;
             const node = data.data[key];
             if (!node) continue;
 
             // Check for edges pattern (paginated connection)
             if (node.edges && Array.isArray(node.edges)) {
               const items = node.edges.map((e: any) => e.node).filter(Boolean);
-              // Check if this looks like media items (has media_type, pk, or code)
-              const mediaItems = items.filter((item: any) =>
-                item.media_type !== undefined || item.pk !== undefined || item.code !== undefined ||
-                item.media?.media_type !== undefined || item.media?.pk !== undefined || item.media?.code !== undefined
-              );
-              if (mediaItems.length > 0) {
-                log.info({ userId, key, count: mediaItems.length }, 'Found media items in GraphQL');
-                // Unwrap .media if items are wrapped
-                const unwrapped = mediaItems.map((item: any) => item.media || item);
+              const unwrapped = items.map((item: any) => item.media || item);
+              if (unwrapped.length > 0) {
+                log.info({ userId, key, count: unwrapped.length }, 'Found liked items in GraphQL');
                 interceptedItems.push(...unwrapped);
               }
             }
 
             // Check for items array pattern (REST-style in GraphQL)
             if (node.items && Array.isArray(node.items)) {
-              log.info({ userId, key, count: node.items.length }, 'Found items array in GraphQL');
+              log.info({ userId, key, count: node.items.length }, 'Found liked items array in GraphQL');
               interceptedItems.push(...node.items);
             }
           }
@@ -200,14 +204,23 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
     // Navigate to the likes page — Instagram's frontend will make API calls naturally
     log.info({ userId }, 'Navigating to likes page');
     await page.goto('https://www.instagram.com/your_activity/interactions/likes/', {
-      waitUntil: 'networkidle',
+      waitUntil: 'domcontentloaded',
       timeout: 30000,
+    });
+
+    // Wait for network to settle (SPA might fire API calls after DOMContentLoaded)
+    await page.waitForLoadState('networkidle').catch(() => {
+      log.info({ userId }, 'networkidle timeout, continuing');
     });
 
     // Log where we ended up
     const finalUrl = page.url();
     const pageTitle = await page.title().catch(() => 'unknown');
     log.info({ userId, finalUrl, pageTitle, apiUrlsSeen: apiUrlsSeen.length }, 'Page loaded');
+
+    // Log all request URLs for debugging (helps find the actual likes endpoint)
+    const apiRequests = allRequestUrls.filter(u => u.includes('api') || u.includes('graphql'));
+    log.info({ userId, apiRequestCount: apiRequests.length, apiRequests: apiRequests.slice(0, 15) }, 'API requests during page load');
 
     // Check for login redirect (session expired)
     if (finalUrl.includes('/accounts/login') || finalUrl.includes('/challenge/')) {
@@ -254,15 +267,24 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       // Popup dismissal is best-effort
     }
 
-    // Wait for intercepted data — if nothing yet, scroll to trigger more API calls
+    // Wait for intercepted data — if nothing yet, wait more then scroll
     if (interceptedItems.length === 0) {
-      log.info({ userId, apiUrlsSeen }, 'No items after first load, scrolling to trigger API');
-      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-      // Wait up to 10s for API responses after scroll
-      await new Promise(resolve => setTimeout(resolve, 10000));
+      // SPA may fire API calls lazily after render — wait a bit
+      log.info({ userId }, 'No items yet, waiting 5s for lazy API calls');
+      await new Promise(resolve => setTimeout(resolve, 5000));
     }
 
-    // If still nothing, try waiting for any network activity
+    if (interceptedItems.length === 0) {
+      // Scroll to trigger infinite scroll / lazy loading
+      log.info({ userId }, 'Still no items, scrolling to trigger API');
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      await new Promise(resolve => setTimeout(resolve, 8000));
+
+      // Log updated requests after scroll
+      const postScrollRequests = allRequestUrls.filter(u => u.includes('api') || u.includes('graphql'));
+      log.info({ userId, postScrollCount: postScrollRequests.length, newRequests: postScrollRequests.slice(apiRequests.length, apiRequests.length + 10) }, 'API requests after scroll');
+    }
+
     if (interceptedItems.length === 0) {
       log.info({ userId }, 'Still no items, waiting 5s more for late responses');
       await new Promise(resolve => setTimeout(resolve, 5000));
