@@ -16,8 +16,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { GreetingHeader } from '../../components/home/GreetingHeader';
 import { QuizRecommendationCard } from '../../components/home/QuizRecommendationCard';
 import { STAGGER_DELAY, STAGGER_CAP } from '../../lib/animations';
-import { useQuizRecommendations, useReviewStats, usePipelineStatus } from '../../hooks';
-import { DigestCTA } from '../../components/home/DigestCTA';
+import { useQuizRecommendations, usePipelineStatus } from '../../hooks';
 import { useSubscription } from '../../hooks/useSubscription';
 import { useAuthStore } from '../../stores/authStore';
 import { colors, spacing } from '../../theme';
@@ -30,7 +29,6 @@ export default function HomeScreen() {
 
   const { user } = useAuthStore();
   const { data: recommendations, isLoading } = useQuizRecommendations();
-  const { data: reviewStats } = useReviewStats();
   // Pipeline polling — runs on home screen, fires haptic when content becomes ready
   usePipelineStatus();
   const { data: subscription } = useSubscription();
@@ -80,11 +78,6 @@ export default function HomeScreen() {
       }
     >
       <GreetingHeader userName={userName} />
-
-      <DigestCTA
-        dueCount={reviewStats?.dueToday ?? 0}
-        onPress={() => router.push('/digest')}
-      />
 
       <View style={styles.cardsList}>
         {items.map((rec, index) => (
