@@ -99,11 +99,8 @@ export function startScheduler(): void {
     await runJob('tiktok-transcription', runTikTokTranscriptionWorker);
   });
 
-  // Instagram Sync - Every 12 hours (low volume, mainly on-demand via /content/refresh)
-  cron.schedule('0 */12 * * *', async () => {
-    log.info({ job: 'instagram-sync' }, 'Triggering scheduled job');
-    await runJob('instagram-sync', runInstagramSync);
-  });
+  // Instagram Sync - NO CRON: triggered only on-demand via /content/refresh (5min cooldown)
+  // Barcelona UA on i.instagram.com triggers "suspicious activity" warnings if called too often
 
   // Instagram Transcription Worker - Every 2 minutes (optimized)
   // Processes pending Instagram transcriptions (via yt-dlp + Whisper)
@@ -166,7 +163,7 @@ export function startScheduler(): void {
       { name: 'youtube-sync', schedule: '*/15 * * * *' },
       { name: 'spotify-sync', schedule: '*/30 * * * *' },
       { name: 'tiktok-sync', schedule: '0 */12 * * *' },
-      { name: 'instagram-sync', schedule: '0 */12 * * *' },
+      { name: 'instagram-sync', schedule: 'on-demand only (5min cooldown)' },
       { name: 'youtube-transcription', schedule: '*/2 * * * *' },
       { name: 'podcast-transcription', schedule: '*/5 * * * *' },
       { name: 'tiktok-transcription', schedule: '*/2 * * * *' },
@@ -188,12 +185,11 @@ export function startScheduler(): void {
 export async function runAllSyncsNow(): Promise<void> {
   log.info('Running all syncs now (manual trigger)');
 
-  // Phase 1: Sync content from platforms
+  // Phase 1: Sync content from platforms (Instagram excluded — on-demand only)
   await Promise.allSettled([
     runJob('youtube-sync', runYouTubeSync),
     runJob('spotify-sync', runSpotifySync),
     runJob('tiktok-sync', runTikTokSync),
-    runJob('instagram-sync', runInstagramSync),
   ]);
 
   // Phase 2: Transcribe content
@@ -302,7 +298,7 @@ export function getSchedulerStatus(): {
       { name: 'youtube-sync', schedule: '*/15 * * * *' },
       { name: 'spotify-sync', schedule: '*/30 * * * *' },
       { name: 'tiktok-sync', schedule: '0 */12 * * *' },
-      { name: 'instagram-sync', schedule: '0 */12 * * *' },
+      { name: 'instagram-sync', schedule: 'on-demand only (5min cooldown)' },
       { name: 'youtube-transcription', schedule: '*/2 * * * *' },
       { name: 'podcast-transcription', schedule: '*/5 * * * *' },
       { name: 'tiktok-transcription', schedule: '*/2 * * * *' },

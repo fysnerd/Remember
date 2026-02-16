@@ -40,7 +40,7 @@ contentRouter.post('/refresh', async (req: Request, res: Response, next: NextFun
   try {
     const userId = req.user!.id;
     const COOLDOWN_MS = 0; // No cooldown for YouTube, Spotify, TikTok — instant sync
-    const IG_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes (Instagram — anti-ban)
+    const IG_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes (Instagram — on-demand only, no cron)
     const now = new Date();
 
     // Get all connected platforms for this user
