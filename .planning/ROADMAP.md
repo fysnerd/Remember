@@ -51,7 +51,7 @@ Full details: [milestones/v2.0-ROADMAP.md](milestones/v2.0-ROADMAP.md)
 
 **Milestone Goal:** Refonte complete du flow de triage inbox (swipe Tinder-like + bulk toggle) et implementation du Daily Digest (session microlearning quotidienne avec cloture cognitive). Alignement SRS J+1/J+3/J+7/J+31 et quiz autoreferentiels.
 
-- [ ] **Phase 17: SRS & Quiz Backend** - Align SRS intervals to J+1/J+3/J+7/J+31 and make quiz prompts self-referential with creator/platform context
+- [x] **Phase 17: SRS & Quiz Backend** - Align SRS intervals to J+1/J+3/J+7/J+31 and make quiz prompts self-referential with creator/platform context
 - [ ] **Phase 18: Swipe Triage** - Full inbox overhaul with Tinder-like swipe as primary mode and bulk select as secondary
 - [ ] **Phase 19: Daily Digest** - Pre-built microlearning session with SRS-prioritized card selection and cognitive closure
 - [ ] **Phase 20: Pipeline Feedback** - Real-time processing status so users see content progress from triage to quiz-ready
@@ -71,8 +71,8 @@ Full details: [milestones/v2.0-ROADMAP.md](milestones/v2.0-ROADMAP.md)
 **Plans**: 2 plans (Wave 1: 17-01, Wave 2: 17-02)
 
 Plans:
-- [ ] 17-01-PLAN.md -- SRS interval alignment (fixed INTERVAL_MAP for reps 1-4, SM-2 fallback for reps > 4, J+1 nextReviewAt on all 3 card.create sites)
-- [ ] 17-02-PLAN.md -- Self-referential quiz prompt (creator name + platform label + temporal context injection, TikTok/Instagram contentType fix)
+- [x] 17-01-PLAN.md -- SRS interval alignment (fixed INTERVAL_MAP for reps 1-4, SM-2 fallback for reps > 4, J+1 nextReviewAt on all 3 card.create sites)
+- [x] 17-02-PLAN.md -- Self-referential quiz prompt (creator name + platform label + temporal context injection, TikTok/Instagram contentType fix)
 
 ### Phase 18: Swipe Triage
 **Goal**: Users can quickly curate their inbox through satisfying swipe gestures (right to keep, left to dismiss) with animated card physics, or switch to bulk select mode for batch operations
@@ -143,7 +143,7 @@ Recommended: 17 → 18 → 19 → 20 (serial for simplicity).
 | 14. Screen Rebuild | v3.0 | 4/4 | Complete | 2026-02-12 |
 | 15. Backend Endpoints | v3.0 | 1/1 | Complete | 2026-02-12 |
 | 16. UX Polish | v3.0 | 2/2 | Complete | 2026-02-12 |
-| 17. SRS & Quiz Backend | v4.0 | 0/2 | Not started | - |
+| 17. SRS & Quiz Backend | v4.0 | 2/2 | Complete | 2026-02-16 |
 | 18. Swipe Triage | v4.0 | 0/3 | Not started | - |
 | 19. Daily Digest | v4.0 | 0/2 | Not started | - |
 | 20. Pipeline Feedback | v4.0 | 0/1 | Not started | - |
