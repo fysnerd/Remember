@@ -119,6 +119,7 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
     // Collect liked items from intercepted API responses
     const interceptedItems: LikedMediaItem[] = [];
     let sessionExpired = false;
+    const apiUrlsSeen: string[] = []; // track all API/graphql URLs for debugging
 
     // Set up passive response interceptor BEFORE navigation
     page.on('response', async (response) => {
@@ -131,26 +132,40 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
         return;
       }
 
-      const isLikedAPI = url.includes('/api/v1/feed/liked/');
+      const isLikedAPI = url.includes('/api/v1/feed/liked');
       const isGraphQL = url.includes('/graphql');
+
+      // Track all API and GraphQL URLs for debugging
+      if (isLikedAPI || isGraphQL) {
+        apiUrlsSeen.push(`${status} ${url.substring(0, 120)}`);
+      }
 
       if (!isLikedAPI && !isGraphQL) return;
       if (status !== 200) return;
 
       try {
-        const data = await response.json();
+        const text = await response.text();
+        const data = JSON.parse(text);
 
         if (isLikedAPI && data.items) {
-          log.debug({ userId, count: data.items.length }, 'Intercepted REST liked items');
+          log.info({ userId, count: data.items.length }, 'Intercepted REST liked items');
           interceptedItems.push(...data.items);
         }
 
-        if (isGraphQL && data?.data?.xdt_api__v1__feed__liked__connection) {
-          const edges = data.data.xdt_api__v1__feed__liked__connection.edges || [];
-          const items = edges.map((e: any) => e.node).filter(Boolean);
-          if (items.length > 0) {
-            log.debug({ userId, count: items.length }, 'Intercepted GraphQL liked items');
-            interceptedItems.push(...items);
+        if (isGraphQL) {
+          // Try standard path
+          if (data?.data?.xdt_api__v1__feed__liked__connection) {
+            const edges = data.data.xdt_api__v1__feed__liked__connection.edges || [];
+            const items = edges.map((e: any) => e.node).filter(Boolean);
+            if (items.length > 0) {
+              log.info({ userId, count: items.length }, 'Intercepted GraphQL liked items');
+              interceptedItems.push(...items);
+            }
+          }
+          // Also check for any "liked" key pattern in GraphQL response
+          const dataStr = JSON.stringify(data).substring(0, 500);
+          if (dataStr.includes('liked') || dataStr.includes('feed')) {
+            log.info({ userId, preview: dataStr.substring(0, 200) }, 'GraphQL response with liked/feed data');
           }
         }
       } catch {
@@ -158,20 +173,24 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       }
     });
 
-    // Anti-detection jitter: random 3-15s delay before navigation
-    const jitterMs = 3000 + Math.random() * 12000;
-    log.debug({ userId, jitterMs: Math.round(jitterMs) }, 'Applying jitter before navigation');
+    // Anti-detection jitter: random 3-10s delay before navigation
+    const jitterMs = 3000 + Math.random() * 7000;
+    log.info({ userId, jitterMs: Math.round(jitterMs) }, 'Applying jitter before navigation');
     await new Promise(resolve => setTimeout(resolve, jitterMs));
 
     // Navigate to the likes page — Instagram's frontend will make API calls naturally
-    log.debug({ userId }, 'Navigating to likes page');
+    log.info({ userId }, 'Navigating to likes page');
     await page.goto('https://www.instagram.com/your_activity/interactions/likes/', {
       waitUntil: 'networkidle',
       timeout: 30000,
     });
 
-    // Check for login redirect (session expired)
+    // Log where we ended up
     const finalUrl = page.url();
+    const pageTitle = await page.title().catch(() => 'unknown');
+    log.info({ userId, finalUrl, pageTitle, apiUrlsSeen: apiUrlsSeen.length }, 'Page loaded');
+
+    // Check for login redirect (session expired)
     if (finalUrl.includes('/accounts/login') || finalUrl.includes('/challenge/')) {
       log.warn({ userId, finalUrl }, 'Redirected to login — session expired');
       await browser.close();
@@ -199,12 +218,17 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
         'button:has-text("Pas maintenant")',
         'button:has-text("Decline optional cookies")',
         'button:has-text("Refuser les cookies optionnels")',
+        'button:has-text("Allow all cookies")',
+        'button:has-text("Autoriser tous les cookies")',
+        'button:has-text("Accept All")',
+        'button:has-text("Tout accepter")',
       ];
       for (const sel of dismissSelectors) {
         const btn = page.locator(sel).first();
         if (await btn.isVisible({ timeout: 1000 }).catch(() => false)) {
+          log.info({ userId, selector: sel }, 'Dismissing popup');
           await btn.click();
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
     } catch {
@@ -213,10 +237,16 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
 
     // Wait for intercepted data — if nothing yet, scroll to trigger more API calls
     if (interceptedItems.length === 0) {
-      log.debug({ userId }, 'No items intercepted on first load, scrolling to trigger API');
+      log.info({ userId, apiUrlsSeen }, 'No items after first load, scrolling to trigger API');
       await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-      // Wait up to 8s for API responses after scroll
-      await new Promise(resolve => setTimeout(resolve, 8000));
+      // Wait up to 10s for API responses after scroll
+      await new Promise(resolve => setTimeout(resolve, 10000));
+    }
+
+    // If still nothing, try waiting for any network activity
+    if (interceptedItems.length === 0) {
+      log.info({ userId }, 'Still no items, waiting 5s more for late responses');
+      await new Promise(resolve => setTimeout(resolve, 5000));
     }
 
     // Brief additional wait if we got items (allow any in-flight responses to complete)
@@ -224,6 +254,8 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
 
+    // Log final state before closing
+    log.info({ userId, interceptedCount: interceptedItems.length, apiUrlsSeen }, 'Closing browser');
     await browser.close();
 
     if (interceptedItems.length === 0) {
