@@ -1,7 +1,8 @@
-// Instagram Sync Worker - Hybrid approach:
+// Instagram Sync Worker - Page navigation + passive interception:
 // 1. Playwright browser for cookie auth + anti-detection
-// 2. page.evaluate() to call Instagram private API from browser context
-// This avoids UA mismatch and uses the browser's real cookies/session
+// 2. Navigate to likes page, intercept API responses passively
+// The browser makes API calls naturally with the same Safari UA as cookie origin
+// → No Barcelona UA mismatch, no suspicious activity warnings
 import { logger } from '../config/logger.js';
 import { prisma } from '../config/database.js';
 import { Platform, ContentStatus } from '@prisma/client';
@@ -113,66 +114,128 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
 
     await context.addCookies(playwrightCookies);
 
-    // Anti-detection jitter: random 5-30s delay before API call
-    // Makes the timing organic (not instant after app open)
-    const jitterMs = 5000 + Math.random() * 25000;
-    log.debug({ userId, jitterMs: Math.round(jitterMs) }, 'Applying jitter before Instagram API call');
-    await new Promise(resolve => setTimeout(resolve, jitterMs));
+    const page = await context.newPage();
 
-    // Call API directly without page navigation (avoids Instagram tracking JS)
-    // context.request sends browser cookies but with our own headers
-    log.debug({ userId }, 'Fetching liked posts via API (no page navigation)');
+    // Collect liked items from intercepted API responses
+    const interceptedItems: LikedMediaItem[] = [];
+    let sessionExpired = false;
 
-    const response = await context.request.get('https://i.instagram.com/api/v1/feed/liked/', {
-      headers: {
-        'User-Agent': 'Barcelona 289.0.0.77.109 Android',
-        'X-IG-App-ID': '1217981644879628',
-        'X-CSRFToken': cookies.csrftoken || '',
-        'Accept': '*/*',
-      },
+    // Set up passive response interceptor BEFORE navigation
+    page.on('response', async (response) => {
+      const url = response.url();
+      const status = response.status();
+
+      // Detect session expiry from any API response
+      if (status === 401 || status === 403) {
+        sessionExpired = true;
+        return;
+      }
+
+      const isLikedAPI = url.includes('/api/v1/feed/liked/');
+      const isGraphQL = url.includes('/graphql');
+
+      if (!isLikedAPI && !isGraphQL) return;
+      if (status !== 200) return;
+
+      try {
+        const data = await response.json();
+
+        if (isLikedAPI && data.items) {
+          log.debug({ userId, count: data.items.length }, 'Intercepted REST liked items');
+          interceptedItems.push(...data.items);
+        }
+
+        if (isGraphQL && data?.data?.xdt_api__v1__feed__liked__connection) {
+          const edges = data.data.xdt_api__v1__feed__liked__connection.edges || [];
+          const items = edges.map((e: any) => e.node).filter(Boolean);
+          if (items.length > 0) {
+            log.debug({ userId, count: items.length }, 'Intercepted GraphQL liked items');
+            interceptedItems.push(...items);
+          }
+        }
+      } catch {
+        // Response body not JSON or already consumed — ignore
+      }
     });
 
-    const apiResult: { error: string | null; items: any[] } = { error: null, items: [] };
-    const statusCode = response.status();
+    // Anti-detection jitter: random 3-15s delay before navigation
+    const jitterMs = 3000 + Math.random() * 12000;
+    log.debug({ userId, jitterMs: Math.round(jitterMs) }, 'Applying jitter before navigation');
+    await new Promise(resolve => setTimeout(resolve, jitterMs));
 
-    try {
-      if (statusCode === 401 || statusCode === 403) {
-        // Session expired — mark connection and bail
-        log.warn({ userId, statusCode }, 'Session expired (auth error from API)');
-        await prisma.connectedPlatform.update({
-          where: { id: connectionId },
-          data: { lastSyncError: 'Session expired. Please reconnect.' },
-        });
-        return 0;
-      } else if (statusCode === 429) {
-        // Rate limited — skip this sync silently
-        log.warn({ userId }, 'Rate limited by Instagram (429), skipping');
-        await prisma.connectedPlatform.update({
-          where: { id: connectionId },
-          data: { lastSyncError: 'Rate limited. Will retry later.' },
-        });
-        return 0;
-      } else if (!response.ok()) {
-        const text = await response.text().catch(() => '');
-        apiResult.error = `API error ${statusCode}: ${text.substring(0, 200)}`;
-      } else {
-        const data = await response.json();
-        apiResult.items = data.items || [];
-      }
-    } finally {
+    // Navigate to the likes page — Instagram's frontend will make API calls naturally
+    log.debug({ userId }, 'Navigating to likes page');
+    await page.goto('https://www.instagram.com/your_activity/interactions/likes/', {
+      waitUntil: 'networkidle',
+      timeout: 30000,
+    });
+
+    // Check for login redirect (session expired)
+    const finalUrl = page.url();
+    if (finalUrl.includes('/accounts/login') || finalUrl.includes('/challenge/')) {
+      log.warn({ userId, finalUrl }, 'Redirected to login — session expired');
       await browser.close();
-    }
-
-    if (apiResult.error) {
-      log.error({ userId, error: apiResult.error }, 'API error');
       await prisma.connectedPlatform.update({
         where: { id: connectionId },
-        data: { lastSyncError: apiResult.error },
+        data: { lastSyncError: 'Session expired. Please reconnect.' },
       });
       return 0;
     }
 
-    const allItems = apiResult.items as LikedMediaItem[];
+    if (sessionExpired) {
+      log.warn({ userId }, 'Session expired (auth error from intercepted API)');
+      await browser.close();
+      await prisma.connectedPlatform.update({
+        where: { id: connectionId },
+        data: { lastSyncError: 'Session expired. Please reconnect.' },
+      });
+      return 0;
+    }
+
+    // Dismiss common Instagram popups (notifications, cookies, etc.)
+    try {
+      const dismissSelectors = [
+        'button:has-text("Not Now")',
+        'button:has-text("Pas maintenant")',
+        'button:has-text("Decline optional cookies")',
+        'button:has-text("Refuser les cookies optionnels")',
+      ];
+      for (const sel of dismissSelectors) {
+        const btn = page.locator(sel).first();
+        if (await btn.isVisible({ timeout: 1000 }).catch(() => false)) {
+          await btn.click();
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+    } catch {
+      // Popup dismissal is best-effort
+    }
+
+    // Wait for intercepted data — if nothing yet, scroll to trigger more API calls
+    if (interceptedItems.length === 0) {
+      log.debug({ userId }, 'No items intercepted on first load, scrolling to trigger API');
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      // Wait up to 8s for API responses after scroll
+      await new Promise(resolve => setTimeout(resolve, 8000));
+    }
+
+    // Brief additional wait if we got items (allow any in-flight responses to complete)
+    if (interceptedItems.length > 0) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+
+    await browser.close();
+
+    if (interceptedItems.length === 0) {
+      log.warn({ userId }, 'No liked items intercepted from page');
+      await prisma.connectedPlatform.update({
+        where: { id: connectionId },
+        data: { lastSyncAt: new Date(), lastSyncError: 'No items found on likes page' },
+      });
+      return 0;
+    }
+
+    const allItems = interceptedItems;
     log.info({ userId, itemCount: allItems.length }, 'Got items from API');
 
     // Filter: only videos (media_type 2 = video, product_type 'clips' = reel)
@@ -286,7 +349,7 @@ export async function runInstagramSync(): Promise<void> {
   let successCount = 0;
   let errorCount = 0;
 
-  const TIMEOUT_MS = 45000;
+  const TIMEOUT_MS = 90000; // longer timeout: page navigation + networkidle + scroll
 
   const results = await Promise.allSettled(
     connections.map(connection =>
