@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-16)
 
 **Core value:** L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans effort supplementaire de curation.
-**Current focus:** v4.0 UX Triage & Daily Digest -- Phase 19 complete, Phase 20 next
+**Current focus:** v4.0 UX Triage & Daily Digest -- Phase 20 complete, all v4.0 phases done
 
 ## Current Position
 
-Phase: 19 of 20
-Plan: 2 of 2 in current phase
-Status: Phase 19 complete -- ready for Phase 20
-Last activity: 2026-02-16 -- Completed 19-02 (digest session UI + home screen CTA)
+Phase: 20 of 20
+Plan: 1 of 1 in current phase
+Status: Phase 20 complete -- v4.0 milestone complete
+Last activity: 2026-02-16 -- Completed 20-01 (pipeline feedback UI + polling)
 
-Progress: [######################################░░] 40/42 plans (95% overall, 75% v4.0)
+Progress: [#########################################] 41/42 plans (97% overall, 87% v4.0)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 40 (10 v1.0 + 12 v2.0 + 12 v3.0 + 6 v4.0)
+- Total plans completed: 41 (10 v1.0 + 12 v2.0 + 12 v3.0 + 7 v4.0)
 - v1.0: ~25 min/plan avg (4 phases, 10 plans)
 - v2.0: ~3.75 min/plan avg (7 phases, 12 plans)
 - v3.0: 8 min/plan avg (5 phases, 12 plans)
@@ -59,6 +59,11 @@ Recent decisions affecting current work:
 - [19-02]: Option normalization duplicated inline in digest.tsx (not shared util) to keep screen self-contained
 - [19-02]: ReviewStats type updated to match actual backend response (adds dueToday, reviewDue, etc.)
 - [19-02]: gestureEnabled: false on /digest route to prevent accidental back-swipe during session
+- [20-01]: Pipeline-status endpoint placed BEFORE /:id catch-all to avoid Express param collision
+- [20-01]: Haptic + query invalidation as ready transition feedback (no blocking Alert or toast)
+- [20-01]: 5s polling interval with conditional refetchInterval returning false when idle
+- [20-01]: PipelineStatusBadge bottom-left position avoids overlap with source/duration/selection overlays
+- [20-01]: Content detail uses local setInterval+refetch (not modified useContent hook) for scoped changes
 
 ### Pending Todos
 
@@ -73,6 +78,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Completed 19-02-PLAN.md (digest session UI + home screen CTA)
-Next step: Execute Phase 20 (Pipeline Feedback)
+Stopped at: Completed 20-01-PLAN.md (pipeline feedback UI + polling)
+Next step: All v4.0 phases complete -- deploy and verify
 Resume file: None
