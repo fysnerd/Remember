@@ -211,6 +211,7 @@ export async function generateThemesForUser(userId: string): Promise<void> {
           slug,
           color,
           emoji,
+          discoveredAt: new Date(),
         },
       });
 
@@ -653,7 +654,7 @@ export async function evolveThemesForUser(userId: string): Promise<void> {
         const emoji = generated.emoji || '\u{1F4DA}';
 
         const theme = await tx.theme.create({
-          data: { userId, name: generated.name, slug, color, emoji },
+          data: { userId, name: generated.name, slug, color, emoji, discoveredAt: new Date() },
         });
 
         if (generated.tags?.length > 0) {
