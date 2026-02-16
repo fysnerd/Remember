@@ -153,19 +153,38 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
         }
 
         if (isGraphQL) {
-          // Try standard path
-          if (data?.data?.xdt_api__v1__feed__liked__connection) {
-            const edges = data.data.xdt_api__v1__feed__liked__connection.edges || [];
-            const items = edges.map((e: any) => e.node).filter(Boolean);
-            if (items.length > 0) {
-              log.info({ userId, count: items.length }, 'Intercepted GraphQL liked items');
-              interceptedItems.push(...items);
-            }
+          // Log all top-level GraphQL data keys for discovery
+          const dataKeys = data?.data ? Object.keys(data.data) : [];
+          if (dataKeys.length > 0) {
+            log.info({ userId, dataKeys, url: url.substring(0, 80) }, 'GraphQL response keys');
           }
-          // Also check for any "liked" key pattern in GraphQL response
-          const dataStr = JSON.stringify(data).substring(0, 500);
-          if (dataStr.includes('liked') || dataStr.includes('feed')) {
-            log.info({ userId, preview: dataStr.substring(0, 200) }, 'GraphQL response with liked/feed data');
+
+          // Try to find liked items in any key containing "liked"
+          for (const key of dataKeys) {
+            const node = data.data[key];
+            if (!node) continue;
+
+            // Check for edges pattern (paginated connection)
+            if (node.edges && Array.isArray(node.edges)) {
+              const items = node.edges.map((e: any) => e.node).filter(Boolean);
+              // Check if this looks like media items (has media_type, pk, or code)
+              const mediaItems = items.filter((item: any) =>
+                item.media_type !== undefined || item.pk !== undefined || item.code !== undefined ||
+                item.media?.media_type !== undefined || item.media?.pk !== undefined || item.media?.code !== undefined
+              );
+              if (mediaItems.length > 0) {
+                log.info({ userId, key, count: mediaItems.length }, 'Found media items in GraphQL');
+                // Unwrap .media if items are wrapped
+                const unwrapped = mediaItems.map((item: any) => item.media || item);
+                interceptedItems.push(...unwrapped);
+              }
+            }
+
+            // Check for items array pattern (REST-style in GraphQL)
+            if (node.items && Array.isArray(node.items)) {
+              log.info({ userId, key, count: node.items.length }, 'Found items array in GraphQL');
+              interceptedItems.push(...node.items);
+            }
           }
         }
       } catch {
