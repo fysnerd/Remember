@@ -94,10 +94,11 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       ]
     });
 
-    // Match the UA from the iOS WebView that captured the cookies
+    // Match the WKWebView UA that created the cookies (NOT Safari — no "Version/Safari" suffix)
+    // WKWebView format: ...AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/XXXXX
     const context = await browser.newContext({
       viewport: { width: 390, height: 844 },
-      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_3_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/22D72',
       locale: 'fr-FR',
       timezoneId: 'Europe/Paris',
       isMobile: true,
