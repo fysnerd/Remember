@@ -7,7 +7,9 @@ import { Pressable, StyleSheet, View, Image } from 'react-native';
 import { Check } from 'lucide-react-native';
 import { Text } from '../ui';
 import { PlatformIcon } from '../icons';
+import { PipelineStatusBadge } from './PipelineStatusBadge';
 import { colors, spacing, borderRadius, shadows } from '../../theme';
+import type { ContentStatus } from '../../types/content';
 
 type ContentSource = 'youtube' | 'spotify' | 'tiktok' | 'instagram';
 
@@ -22,6 +24,7 @@ interface ContentCardProps {
   onLongPress?: () => void;
   isSelected?: boolean;
   selectionMode?: boolean;
+  status?: ContentStatus;
 }
 
 // Format duration in mm:ss or hh:mm:ss
@@ -46,6 +49,7 @@ export function ContentCard({
   onLongPress,
   isSelected = false,
   selectionMode = false,
+  status,
 }: ContentCardProps) {
   const durationText = formatDuration(duration);
   const metaText = [channelName, durationText].filter(Boolean).join(' • ');
@@ -82,6 +86,8 @@ export function ContentCard({
             </View>
           </View>
         )}
+        {/* Pipeline status badge - bottom left */}
+        {status && <PipelineStatusBadge status={status} />}
       </View>
       <View style={styles.infoContainer}>
         <Text variant="caption" numberOfLines={2} weight="medium" style={styles.title}>

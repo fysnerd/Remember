@@ -2,7 +2,7 @@
  * Content Detail Screen - Shows content info, synopsis, quiz access
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, ScrollView, StyleSheet, Image, Linking, Pressable, Modal, FlatList } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -40,6 +40,16 @@ export default function ContentDetailScreen() {
   const [showThemeModal, setShowThemeModal] = useState(false);
   const { data: allThemes } = useThemes();
   const addContentToTheme = useAddContentToTheme();
+
+  // Auto-refresh when content is processing
+  useEffect(() => {
+    if (!content) return;
+    const isProcessing = ['SELECTED', 'TRANSCRIBING', 'GENERATING'].includes(content.status);
+    if (!isProcessing) return;
+
+    const interval = setInterval(() => { refetch(); }, 5000);
+    return () => clearInterval(interval);
+  }, [content?.status, refetch]);
 
   if (isLoading) {
     return <LoadingScreen />;
@@ -163,8 +173,12 @@ export default function ContentDetailScreen() {
               Faire le quiz
             </Button>
           ) : (
-            <Button variant="primary" fullWidth disabled>
-              Quiz en preparation...
+            <Button variant="primary" fullWidth disabled onPress={() => {}}>
+              {content.status === 'TRANSCRIBING' ? 'Transcription en cours...' :
+               content.status === 'GENERATING' ? 'Quiz en creation...' :
+               content.status === 'FAILED' ? 'Erreur de traitement' :
+               content.status === 'UNSUPPORTED' ? 'Contenu non supporte' :
+               'En attente de traitement...'}
             </Button>
           )}
           <Button variant="outline" fullWidth onPress={handleViewMemo}>
