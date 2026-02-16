@@ -96,7 +96,9 @@ themeRouter.get('/daily', async (req: Request, res: Response, next: NextFunction
         COALESCE(COUNT(card.id) FILTER (WHERE card."nextReviewAt" <= NOW()), 0) AS "dueCards",
         COALESCE(COUNT(DISTINCT ct.id) FILTER (WHERE ct."assignedAt" > NOW() - INTERVAL '7 days'), 0) AS "newContentCount"
       FROM "Theme" t
-      LEFT JOIN "ContentTheme" ct ON ct."themeId" = t.id
+      LEFT JOIN "ContentTheme" ct ON ct."themeId" = t.id AND EXISTS (
+        SELECT 1 FROM "Content" c WHERE c.id = ct."contentId" AND c.status = 'READY'
+      )
       LEFT JOIN "Quiz" q ON q."contentId" = ct."contentId" AND q."isSynthesis" = false
       LEFT JOIN "Card" card ON card."quizId" = q.id AND card."userId" = ${userId}
       WHERE t."userId" = ${userId} AND t."discoveredAt" IS NOT NULL
@@ -236,7 +238,7 @@ themeRouter.get('/', async (req: Request, res: Response, next: NextFunction) => 
       where,
       include: {
         _count: {
-          select: { contentThemes: true },
+          select: { contentThemes: { where: { content: { status: 'READY' } } } },
         },
         themeTags: {
           include: {
@@ -263,7 +265,9 @@ themeRouter.get('/', async (req: Request, res: Response, next: NextFunction) => 
           COALESCE(COUNT(card.id) FILTER (WHERE card.repetitions >= 3), 0) AS "masteredCards",
           COALESCE(COUNT(card.id) FILTER (WHERE card."nextReviewAt" <= NOW()), 0) AS "dueCards"
         FROM "Theme" t
-        LEFT JOIN "ContentTheme" ct ON ct."themeId" = t.id
+        LEFT JOIN "ContentTheme" ct ON ct."themeId" = t.id AND EXISTS (
+          SELECT 1 FROM "Content" c WHERE c.id = ct."contentId" AND c.status = 'READY'
+        )
         LEFT JOIN "Quiz" q ON q."contentId" = ct."contentId" AND q."isSynthesis" = false
         LEFT JOIN "Card" card ON card."quizId" = q.id AND card."userId" = ${userId}
         WHERE t."userId" = ${userId} AND t."discoveredAt" IS NOT NULL
@@ -316,7 +320,7 @@ themeRouter.get('/:id', async (req: Request, res: Response, next: NextFunction) 
       where: { id: themeId, userId },
       include: {
         _count: {
-          select: { contentThemes: true },
+          select: { contentThemes: { where: { content: { status: 'READY' } } } },
         },
         themeTags: {
           include: {
@@ -330,10 +334,11 @@ themeRouter.get('/:id', async (req: Request, res: Response, next: NextFunction) 
       return res.status(404).json({ error: 'Theme not found' });
     }
 
-    // Build content query through join table
+    // Build content query through join table - only READY content
     const contentWhere: any = {
       contentThemes: { some: { themeId } },
       userId,
+      status: 'READY',
     };
 
     // Optional platform filter
@@ -520,7 +525,7 @@ themeRouter.post('/discover', async (req: Request, res: Response, next: NextFunc
       where: { userId, discoveredAt: { not: null } },
       include: {
         _count: {
-          select: { contentThemes: true },
+          select: { contentThemes: { where: { content: { status: 'READY' } } } },
         },
         themeTags: {
           include: {
