@@ -5,6 +5,7 @@
 - ✅ **v1.0 Admin & Observability** -- Phases 1-4 (shipped 2026-02-10)
 - ✅ **v2.0 Themes-first UX** -- Phases 5-11 (shipped 2026-02-11)
 - ✅ **v3.0 Night Blue Glass UI** -- Phases 12-16 (shipped 2026-02-12)
+- 🚧 **v4.0 UX Triage & Daily Digest** -- Phases 17-20 (in progress)
 
 ## Phases
 
@@ -35,102 +36,94 @@ Full details: [milestones/v2.0-ROADMAP.md](milestones/v2.0-ROADMAP.md)
 
 </details>
 
-### ✅ v3.0 Night Blue Glass UI -- SHIPPED 2026-02-12
+<details>
+<summary>✅ v3.0 Night Blue Glass UI (Phases 12-16) -- SHIPPED 2026-02-12</summary>
 
-**Milestone Goal:** Complete visual transformation from light monochrome to premium Night Blue dark mode with Glass UI components, Geist typography, Lucide icons, and restructured screens.
+- [x] Phase 12: Foundation Build (2/2 plans) -- completed 2026-02-11
+- [x] Phase 13: Design System (3/3 plans) -- completed 2026-02-11
+- [x] Phase 14: Screen Rebuild (4/4 plans) -- completed 2026-02-12
+- [x] Phase 15: Backend Endpoints (1/1 plan) -- completed 2026-02-12
+- [x] Phase 16: UX Polish (2/2 plans) -- completed 2026-02-12
 
-- [x] **Phase 12: Foundation Build** - Native dependencies + dark mode base + proof-of-concept validation -- completed 2026-02-11
-- [x] **Phase 13: Design System** - Night Blue tokens, Glass components, icon system, restyled primitives -- completed 2026-02-11
-- [x] **Phase 14: Screen Rebuild** - Home (daily themes), Explorer (suggestions + library), Revisions, Profile -- completed 2026-02-12
-- [x] **Phase 15: Backend Endpoints** - Daily themes selection + AI theme suggestions APIs -- completed 2026-02-12
-- [x] **Phase 16: UX Polish** - Micro-interactions, loading animations, freemium overlays, haptics -- completed 2026-02-12
+</details>
+
+### 🚧 v4.0 UX Triage & Daily Digest
+
+**Milestone Goal:** Refonte complete du flow de triage inbox (swipe Tinder-like + bulk toggle) et implementation du Daily Digest (session microlearning quotidienne avec cloture cognitive). Alignement SRS J+1/J+3/J+7/J+31 et quiz autoreferentiels.
+
+- [ ] **Phase 17: SRS & Quiz Backend** - Align SRS intervals to J+1/J+3/J+7/J+31 and make quiz prompts self-referential with creator/platform context
+- [ ] **Phase 18: Swipe Triage** - Full inbox overhaul with Tinder-like swipe as primary mode and bulk select as secondary
+- [ ] **Phase 19: Daily Digest** - Pre-built microlearning session with SRS-prioritized card selection and cognitive closure
+- [ ] **Phase 20: Pipeline Feedback** - Real-time processing status so users see content progress from triage to quiz-ready
 
 ## Phase Details
 
-### Phase 12: Foundation Build
-**Goal**: App runs on a new production binary with all native dependencies installed, dark mode base active, and key technologies validated on-device
-**Depends on**: Nothing (first phase of v3.0)
-**Requirements**: FOUND-01, FOUND-02, FOUND-03
+### Phase 17: SRS & Quiz Backend
+**Goal**: The spaced repetition engine uses research-backed intervals and quiz questions reference the creator and platform context -- improving retention through the self-reference effect
+**Depends on**: Nothing (first phase of v4.0, backend-only changes)
+**Requirements**: SRS-01, SRS-02, SRS-03, SRS-04, QUIZ-01, QUIZ-02, QUIZ-03
 **Success Criteria** (what must be TRUE):
-  1. App builds and runs on iOS device with expo-blur, react-native-svg, and lucide-react-native installed
-  2. App launches with Night Blue background (#0a0f1a) and light status bar -- no white flash
-  3. Geist font renders correctly at multiple weights (Regular, Medium, SemiBold, Bold) in a test screen
-  4. A Lucide icon renders on-device in a New Architecture + React 19 environment (proof-of-concept validated)
-  5. New production binary is submitted to TestFlight via eas build
-**Plans**: 2 plans
+  1. After triaging content to "learn", the first review card appears no earlier than 24 hours later (J+1)
+  2. Subsequent review intervals progress through J+3, J+7, J+31 for cards answered correctly
+  3. A card answered incorrectly (rating < 3) resets to J+1 interval on next scheduling
+  4. Quiz questions for a YouTube video include the channel name and reference "cette video YouTube de [creator]" in the question text
+  5. Quiz generation prompt uses self-referential framing with temporal context (when the user watched/listened)
+**Plans**: TBD
 
 Plans:
-- [x] 12-01-PLAN.md -- Install native deps, configure dark mode + Geist font globally, create validation test screen
-- [x] 12-02-PLAN.md -- Preview build validation on device + production build to TestFlight
+- [ ] 17-01-PLAN.md -- SRS interval alignment (J+1/J+3/J+7/J+31 scheduling logic + Prisma default change + failed review reset)
+- [ ] 17-02-PLAN.md -- Self-referential quiz prompt update (creator name injection, platform context, temporal framing)
 
-### Phase 13: Design System
-**Goal**: A complete, reusable design system is in place -- Night Blue palette, Glass UI components, Lucide icon wrappers, and all existing UI primitives restyled -- so screens can be rebuilt using these building blocks
-**Depends on**: Phase 12 (native dependencies must be in binary)
-**Requirements**: DS-01, DS-02, DS-03, DS-04, DS-05
+### Phase 18: Swipe Triage
+**Goal**: Users can quickly curate their inbox through satisfying swipe gestures (right to keep, left to dismiss) with animated card physics, or switch to bulk select mode for batch operations
+**Depends on**: Nothing (independent of Phase 17; can execute in parallel)
+**Requirements**: TRIAGE-01, TRIAGE-02, TRIAGE-03, TRIAGE-04, TRIAGE-05, TRIAGE-06, TRIAGE-07, TRIAGE-08
 **Success Criteria** (what must be TRUE):
-  1. Every screen uses Night Blue color palette with Soft Gold accent -- zero light-mode colors remain in any component
-  2. GlassSurface, GlassCard, GlassButton, and GlassInput components render with blur, border, and shadow and are importable from a shared path
-  3. All icons across the app (tab bar, cards, badges, action buttons) use Lucide icons -- no emoji remain
-  4. Existing UI components (Text, Button, Card, Input, Badge, TopicChip, Skeleton, Toast) render in Night Blue / Glass style
-  5. Tab bar uses glass blur background that content scrolls behind
-**Plans**: 3 plans
+  1. User can swipe right on an inbox card to keep it (triggers learn pipeline) and swipe left to dismiss it (archives), with cards flying off-screen with spring physics
+  2. User can tap a top-right button to toggle from swipe mode into bulk select mode, then select/deselect multiple items and batch learn or archive them
+  3. User can filter inbox cards by source platform (YouTube, Spotify, TikTok, Instagram) using filter pills, available in both modes
+  4. User can pull-to-refresh in swipe mode to trigger a platform sync, and inbox cards display sorted most recent first
+**Plans**: TBD
 
 Plans:
-- [x] 13-01-PLAN.md -- Glass tokens in theme.ts + restyle 8 UI primitives + QuestionCard dark mode
-- [x] 13-02-PLAN.md -- Glass components (GlassSurface, GlassCard, GlassButton, GlassInput) + Glass tab bar with Lucide icons
-- [x] 13-03-PLAN.md -- Icon wrappers (Icon, TabIcon, PlatformIcon) + emoji replacement pass across 20 files
+- [ ] 18-01-PLAN.md -- Swipe card stack component (gesture handler, spring animations, swipe right=keep, swipe left=dismiss)
+- [ ] 18-02-PLAN.md -- Bulk select toggle mode (multi-select UI, batch learn/archive actions)
+- [ ] 18-03-PLAN.md -- Source filter pills + pull-to-refresh sync + capturedAt desc sorting
 
-### Phase 14: Screen Rebuild
-**Goal**: All four main screens are rebuilt using Glass UI components, delivering the new information architecture (daily themes home, explorer with suggestions + library, revisions with filter/search, profile with settings)
-**Depends on**: Phase 13 (design system components must exist)
-**Requirements**: SCREEN-01, SCREEN-02, SCREEN-03, SCREEN-04, SCREEN-05
+### Phase 19: Daily Digest
+**Goal**: Users have a single daily learning session that mixes SRS due cards and new content into a focused 10-15 question experience, ending with a cognitive closure screen showing their performance
+**Depends on**: Phase 17 (SRS intervals must be correct for card selection logic)
+**Requirements**: DIGEST-01, DIGEST-02, DIGEST-03, DIGEST-04, DIGEST-05
 **Success Criteria** (what must be TRUE):
-  1. Home screen shows 3 daily themes in glass cards with title, content count, and question count
-  2. Explorer screen has a Suggestions tab displaying 8 AI-generated theme suggestions
-  3. Explorer screen has a Library tab with content list, source/category filters, and search by title or author
-  4. Revisions screen shows revision cards with category filter chips and full-text search
-  5. Profile screen displays user info (name, avatar) and settings/preferences
-**Plans**: 4 plans
+  1. User can tap a prominent button on the home screen to launch a daily digest session
+  2. The digest pre-selects 10-15 questions, prioritizing SRS due cards over new content cards
+  3. User sees question-by-question progress indicator during the session (e.g., "Question 5/12")
+  4. After the last question, user sees a cognitive closure screen with score percentage, answer streak, and session duration
+**Plans**: TBD
 
 Plans:
-- [x] 14-01-PLAN.md -- Home screen rebuild (GreetingHeader + DailyThemeCard + useDailyThemes stub hook)
-- [x] 14-02-PLAN.md -- Explorer screen rebuild (Suggestions placeholder + Library tab with search + triage preserved)
-- [x] 14-03-PLAN.md -- Revisions screen (category filter chips + search) + Profile screen (GlassCard user info + settings)
-- [x] 14-04-PLAN.md -- Gap closure: DailyThemeCard content count only, Home banner + refresh fixes, SelectionBar tab bar offset, CategoryChips height constraint
+- [ ] 19-01-PLAN.md -- Digest session backend (card selection algorithm: SRS due priority + new cards fill, 10-15 cap)
+- [ ] 19-02-PLAN.md -- Digest session UI (launch from home, question progress, answer flow, cognitive closure screen with stats)
 
-### Phase 15: Backend Endpoints
-**Goal**: Backend serves the data that Home and Explorer screens need -- daily theme selection with smart rotation and AI-generated theme suggestions
-**Depends on**: Nothing (can execute in parallel with Phases 13-14; wired into screens during or after Phase 14)
-**Requirements**: API-01, API-02
+### Phase 20: Pipeline Feedback
+**Goal**: Users see real-time processing status for their triaged content, so they understand why some content has quizzes and others are still processing
+**Depends on**: Phase 18 (triage must exist to show post-triage feedback)
+**Requirements**: FEEDBACK-01, FEEDBACK-02
 **Success Criteria** (what must be TRUE):
-  1. GET /api/themes/daily returns 3 themes prioritized by due reviews, new content, and recency
-  2. GET /api/themes/suggestions returns 8 AI-generated theme ideas via Mistral
-  3. Both endpoints return valid JSON and handle edge cases (no themes, no content, API errors)
-**Plans**: 1 plan
+  1. User can see per-content processing status (transcribing, generating quiz, ready) on content cards or detail screens
+  2. User receives a visual indicator (badge, animation, or status change) when content transitions from processing to quiz-ready
+**Plans**: TBD
 
 Plans:
-- [x] 15-01-PLAN.md -- Daily themes + AI suggestions endpoints + iOS hooks + Explorer wiring
-
-### Phase 16: UX Polish
-**Goal**: The app feels premium and alive with micro-interactions, loading animations, freemium visual indicators, and haptic feedback on key actions
-**Depends on**: Phase 14 (screens must exist to polish)
-**Requirements**: UX-01, UX-02, UX-03, UX-04
-**Success Criteria** (what must be TRUE):
-  1. Screen transitions use 200-300ms animations with natural easing (no instant jumps)
-  2. Loading states display contextual animations during quiz generation and content loading
-  3. Freemium-locked content shows lock icon overlay on glass surface (visual only, no payment wiring)
-  4. Haptic feedback fires on button press, quiz answer submission, and tab switch
-**Plans**: 2 plans
-
-Plans:
-- [x] 16-01-PLAN.md -- Haptics utility + animation constants + Reanimated migration + screen transitions + haptic feedback on buttons/tabs/quiz + tab screen entering animations
-- [x] 16-02-PLAN.md -- GlassLockOverlay component + freemium lock overlays on Home (3rd daily theme) and Explorer (suggestion cards 5+)
+- [ ] 20-01-PLAN.md -- Pipeline status tracking (backend status field + API exposure + iOS status indicators + ready transition animation)
 
 ## Progress
 
 **Execution Order:**
-Phases 12 → 13 → 14 → 16 (sequential, each depends on prior).
-Phase 15 can execute in parallel with 13/14/16 (backend is independent).
+Phase 17 and 18 can execute in parallel (backend SRS vs iOS triage are independent).
+Phase 19 depends on Phase 17 (SRS intervals).
+Phase 20 depends on Phase 18 (triage must exist).
+Recommended: 17 → 18 → 19 → 20 (serial for simplicity).
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -150,3 +143,7 @@ Phase 15 can execute in parallel with 13/14/16 (backend is independent).
 | 14. Screen Rebuild | v3.0 | 4/4 | Complete | 2026-02-12 |
 | 15. Backend Endpoints | v3.0 | 1/1 | Complete | 2026-02-12 |
 | 16. UX Polish | v3.0 | 2/2 | Complete | 2026-02-12 |
+| 17. SRS & Quiz Backend | v4.0 | 0/2 | Not started | - |
+| 18. Swipe Triage | v4.0 | 0/3 | Not started | - |
+| 19. Daily Digest | v4.0 | 0/2 | Not started | - |
+| 20. Pipeline Feedback | v4.0 | 0/1 | Not started | - |

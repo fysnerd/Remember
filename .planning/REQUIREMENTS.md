@@ -80,34 +80,34 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TRIAGE-01 | — | Pending |
-| TRIAGE-02 | — | Pending |
-| TRIAGE-03 | — | Pending |
-| TRIAGE-04 | — | Pending |
-| TRIAGE-05 | — | Pending |
-| TRIAGE-06 | — | Pending |
-| TRIAGE-07 | — | Pending |
-| TRIAGE-08 | — | Pending |
-| SRS-01 | — | Pending |
-| SRS-02 | — | Pending |
-| SRS-03 | — | Pending |
-| SRS-04 | — | Pending |
-| QUIZ-01 | — | Pending |
-| QUIZ-02 | — | Pending |
-| QUIZ-03 | — | Pending |
-| DIGEST-01 | — | Pending |
-| DIGEST-02 | — | Pending |
-| DIGEST-03 | — | Pending |
-| DIGEST-04 | — | Pending |
-| DIGEST-05 | — | Pending |
-| FEEDBACK-01 | — | Pending |
-| FEEDBACK-02 | — | Pending |
+| TRIAGE-01 | Phase 18 | Pending |
+| TRIAGE-02 | Phase 18 | Pending |
+| TRIAGE-03 | Phase 18 | Pending |
+| TRIAGE-04 | Phase 18 | Pending |
+| TRIAGE-05 | Phase 18 | Pending |
+| TRIAGE-06 | Phase 18 | Pending |
+| TRIAGE-07 | Phase 18 | Pending |
+| TRIAGE-08 | Phase 18 | Pending |
+| SRS-01 | Phase 17 | Pending |
+| SRS-02 | Phase 17 | Pending |
+| SRS-03 | Phase 17 | Pending |
+| SRS-04 | Phase 17 | Pending |
+| QUIZ-01 | Phase 17 | Pending |
+| QUIZ-02 | Phase 17 | Pending |
+| QUIZ-03 | Phase 17 | Pending |
+| DIGEST-01 | Phase 19 | Pending |
+| DIGEST-02 | Phase 19 | Pending |
+| DIGEST-03 | Phase 19 | Pending |
+| DIGEST-04 | Phase 19 | Pending |
+| DIGEST-05 | Phase 19 | Pending |
+| FEEDBACK-01 | Phase 20 | Pending |
+| FEEDBACK-02 | Phase 20 | Pending |
 
 **Coverage:**
 - v4.0 requirements: 22 total
-- Mapped to phases: 0
-- Unmapped: 22
+- Mapped to phases: 22
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-16*
-*Last updated: 2026-02-16 after initial definition*
+*Last updated: 2026-02-16 after roadmap creation*
