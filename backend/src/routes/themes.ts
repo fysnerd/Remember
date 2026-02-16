@@ -113,8 +113,8 @@ themeRouter.get('/daily', async (req: Request, res: Response, next: NextFunction
 
     scored.sort((a, b) => b.score - a.score);
 
-    // Return top 3
-    const daily = scored.slice(0, 3).map(t => ({
+    // Return top 3 non-empty themes
+    const daily = scored.filter(t => Number(t.contentCount) > 0).slice(0, 3).map(t => ({
       id: t.id,
       name: t.name,
       slug: t.slug,
@@ -287,15 +287,17 @@ themeRouter.get('/', async (req: Request, res: Response, next: NextFunction) => 
       ]));
     }
 
-    const result = themes.map(({ _count, themeTags, ...theme }) => {
-      const progress = progressMap.get(theme.id) || { totalCards: 0, masteredCards: 0, dueCards: 0, masteryPercent: 0 };
-      return {
-        ...theme,
-        contentCount: _count.contentThemes,
-        tags: themeTags.map((tt) => ({ id: tt.tag.id, name: tt.tag.name })),
-        ...progress,
-      };
-    });
+    const result = themes
+      .map(({ _count, themeTags, ...theme }) => {
+        const progress = progressMap.get(theme.id) || { totalCards: 0, masteredCards: 0, dueCards: 0, masteryPercent: 0 };
+        return {
+          ...theme,
+          contentCount: _count.contentThemes,
+          tags: themeTags.map((tt) => ({ id: tt.tag.id, name: tt.tag.name })),
+          ...progress,
+        };
+      })
+      .filter(t => t.contentCount > 0);
 
     return res.json({ themes: result });
   } catch (error) {
@@ -536,11 +538,13 @@ themeRouter.post('/discover', async (req: Request, res: Response, next: NextFunc
       orderBy: { name: 'asc' },
     });
 
-    const themeResult = themes.map(({ _count, themeTags, ...theme }) => ({
-      ...theme,
-      contentCount: _count.contentThemes,
-      tags: themeTags.map((tt) => ({ id: tt.tag.id, name: tt.tag.name })),
-    }));
+    const themeResult = themes
+      .map(({ _count, themeTags, ...theme }) => ({
+        ...theme,
+        contentCount: _count.contentThemes,
+        tags: themeTags.map((tt) => ({ id: tt.tag.id, name: tt.tag.name })),
+      }))
+      .filter(t => t.contentCount > 0);
 
     log.info({ userId, actions: results.length, results }, 'Theme discovery actions processed');
 
