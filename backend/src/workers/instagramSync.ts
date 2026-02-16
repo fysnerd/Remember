@@ -231,7 +231,7 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
           channelName: authorUsername ? `@${authorUsername}` : null,
           likeCount: item.like_count || null,
           commentCount: item.comment_count || null,
-          capturedAt: item.taken_at ? new Date(item.taken_at * 1000) : new Date(),
+          capturedAt: new Date(), // Use sync time, not taken_at (old posts would be buried in inbox)
           status: ContentStatus.INBOX,
         },
       });
