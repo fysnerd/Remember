@@ -488,6 +488,10 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
 
     // Create quizzes and cards in transaction
     await prisma.$transaction(async (tx) => {
+      // SRS-01: First review in 24h
+      const cardNextReview = new Date();
+      cardNextReview.setDate(cardNextReview.getDate() + 1);
+
       for (const q of result.questions) {
         // Create quiz
         const quiz = await tx.quiz.create({
@@ -506,7 +510,7 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
           data: {
             quizId: quiz.id,
             userId: content.userId,
-            // Default SM-2 values already set in schema
+            nextReviewAt: cardNextReview,
           },
         });
       }
@@ -648,6 +652,10 @@ export async function regenerateQuiz(contentId: string): Promise<boolean> {
     }
 
     await prisma.$transaction(async (tx) => {
+      // SRS-01: First review in 24h
+      const regenNextReview = new Date();
+      regenNextReview.setDate(regenNextReview.getDate() + 1);
+
       for (const q of result.questions) {
         const quiz = await tx.quiz.create({
           data: {
@@ -660,7 +668,7 @@ export async function regenerateQuiz(contentId: string): Promise<boolean> {
           },
         });
         await tx.card.create({
-          data: { quizId: quiz.id, userId: content.userId },
+          data: { quizId: quiz.id, userId: content.userId, nextReviewAt: regenNextReview },
         });
       }
       await tx.content.update({
