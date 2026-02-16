@@ -80,11 +80,11 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       ]
     });
 
-    // Match the WKWebView UA that created the cookies (NOT Safari — no "Version/Safari" suffix)
-    // WKWebView format: ...AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/XXXXX
+    // MUST match the exact UA hardcoded in ios/app/oauth/[platform].tsx
+    // The WebView creates cookies with this UA — Instagram checks it matches
     const context = await browser.newContext({
       viewport: { width: 390, height: 844 },
-      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_3_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/22D72',
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
       locale: 'fr-FR',
       timezoneId: 'Europe/Paris',
       isMobile: true,
@@ -108,9 +108,9 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
     log.info({ userId, jitterMs: Math.round(jitterMs) }, 'Applying jitter before navigation');
     await new Promise(resolve => setTimeout(resolve, jitterMs));
 
-    // Navigate directly to the likes page
-    log.info({ userId }, 'Navigating to likes page');
-    await page.goto('https://www.instagram.com/your_activity/interactions/likes/', {
+    // Navigate to Instagram to establish session context
+    log.info({ userId }, 'Navigating to Instagram');
+    await page.goto('https://www.instagram.com/', {
       waitUntil: 'networkidle',
       timeout: 30000,
     });
@@ -127,200 +127,142 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       return 0;
     }
 
-    log.info({ userId, finalUrl }, 'Likes page loaded');
+    log.info({ userId, finalUrl }, 'Instagram loaded, calling liked API from browser');
 
-    // Dismiss popups (cookies consent, notifications, etc.)
-    try {
-      for (const text of ['Not Now', 'Pas maintenant', 'Decline optional cookies', 'Refuser les cookies optionnels', 'Allow all cookies', 'Tout accepter']) {
-        const btn = page.locator(`button:has-text("${text}")`).first();
-        if (await btn.isVisible({ timeout: 1000 }).catch(() => false)) {
-          await btn.click();
-          await new Promise(resolve => setTimeout(resolve, 500));
+    // Call the liked API from within the browser context.
+    // fetch() from page.evaluate uses the browser's UA (matching the iOS WebView that created cookies)
+    // and includes cookies automatically via credentials: 'include'.
+    const apiResult = await page.evaluate(async (csrfToken: string) => {
+      try {
+        const resp = await fetch('https://www.instagram.com/api/v1/feed/liked/', {
+          method: 'GET',
+          headers: {
+            'X-CSRFToken': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': '*/*',
+          },
+          credentials: 'include',
+        });
+
+        const status = resp.status;
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          return { error: `API error ${status}: ${text.substring(0, 300)}`, items: [], status };
         }
+
+        const data = await resp.json();
+        return { error: null, items: data.items || [], status };
+      } catch (err: any) {
+        return { error: err.message || 'Unknown fetch error', items: [], status: 0 };
       }
-    } catch { /* best-effort */ }
-
-    // Wait for liked content to render — the SPA may need extra time
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    // Extract liked post data from the page
-    const extractedData = await page.evaluate(() => {
-      const result: {
-        postLinks: string[];
-        imgSrcs: string[];
-        debugInfo: string;
-        htmlSnippet: string;
-      } = { postLinks: [], imgSrcs: [], debugInfo: '', htmlSnippet: '' };
-
-      // Method 1: Extract post links from ANY attribute containing shortcode patterns
-      const allElements = document.querySelectorAll('*');
-      const seen = new Set<string>();
-
-      allElements.forEach(el => {
-        // Check href
-        const href = el.getAttribute('href') || '';
-        const hrefMatch = href.match(/\/(p|reel)\/([A-Za-z0-9_-]+)/);
-        if (hrefMatch && !seen.has(hrefMatch[2])) {
-          seen.add(hrefMatch[2]);
-          result.postLinks.push(hrefMatch[2]);
-        }
-
-        // Check all data-* attributes for shortcodes or post IDs
-        for (let i = 0; i < el.attributes.length; i++) {
-          const attr = el.attributes[i];
-          if (attr.name.startsWith('data-') || attr.name === 'aria-label') {
-            const match = attr.value.match(/\/(p|reel)\/([A-Za-z0-9_-]+)/);
-            if (match && !seen.has(match[2])) {
-              seen.add(match[2]);
-              result.postLinks.push(match[2]);
-            }
-          }
-        }
-      });
-
-      // Method 2: Extract image CDN URLs (may contain post identifiers)
-      const imgs = document.querySelectorAll('img');
-      imgs.forEach(img => {
-        const src = img.src || img.getAttribute('src') || '';
-        if (src.includes('instagram') || src.includes('cdninstagram') || src.includes('fbcdn')) {
-          result.imgSrcs.push(src.substring(0, 150));
-        }
-      });
-
-      // Method 3: Search ALL script tags for embedded post data
-      const scripts = document.querySelectorAll('script');
-      scripts.forEach((script) => {
-        const text = script.textContent || '';
-        // Look for shortcode patterns in inline scripts
-        const matches = text.matchAll(/\"code\":\"([A-Za-z0-9_-]{10,12})\"/g);
-        for (const m of matches) {
-          if (!seen.has(m[1])) {
-            seen.add(m[1]);
-            result.postLinks.push(m[1]);
-          }
-        }
-        // Also try pk/id patterns
-        const pkMatches = text.matchAll(/\"pk\":\"?(\d{15,20})\"?/g);
-        for (const m of pkMatches) {
-          if (!seen.has(m[1])) {
-            seen.add(m[1]);
-            result.postLinks.push(m[1]);
-          }
-        }
-      });
-
-      // Debug info
-      result.debugInfo = `Anchors: ${document.querySelectorAll('a').length}, ` +
-        `Images: ${imgs.length}, ` +
-        `Divs: ${document.querySelectorAll('div').length}, ` +
-        `Body length: ${document.body?.innerText?.length || 0}`;
-
-      // Grab a snippet of the page HTML around images for structural analysis
-      const mainContent = document.querySelector('main') || document.querySelector('[role="main"]') || document.body;
-      result.htmlSnippet = mainContent?.innerHTML?.substring(0, 1500) || '';
-
-      return result;
-    });
-
-    log.info({
-      userId,
-      postLinksCount: extractedData.postLinks.length,
-      postLinks: extractedData.postLinks.slice(0, 10),
-      imgCount: extractedData.imgSrcs.length,
-      imgSrcs: extractedData.imgSrcs.slice(0, 5),
-      debugInfo: extractedData.debugInfo,
-      htmlSnippet: extractedData.htmlSnippet.substring(0, 500),
-    }, 'Extracted data from likes page');
-
-    // If no links found, try scrolling to trigger lazy loading
-    if (extractedData.postLinks.length === 0) {
-      log.info({ userId }, 'No post links found, scrolling to trigger content load');
-      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-      await new Promise(resolve => setTimeout(resolve, 5000));
-
-      // Re-extract after scroll with the same thorough approach
-      const scrollData = await page.evaluate(() => {
-        const seen = new Set<string>();
-        const postLinks: string[] = [];
-
-        document.querySelectorAll('*').forEach(el => {
-          const href = el.getAttribute('href') || '';
-          const hrefMatch = href.match(/\/(p|reel)\/([A-Za-z0-9_-]+)/);
-          if (hrefMatch && !seen.has(hrefMatch[2])) {
-            seen.add(hrefMatch[2]);
-            postLinks.push(hrefMatch[2]);
-          }
-          for (let i = 0; i < el.attributes.length; i++) {
-            const attr = el.attributes[i];
-            if (attr.name.startsWith('data-') || attr.name === 'aria-label') {
-              const match = attr.value.match(/\/(p|reel)\/([A-Za-z0-9_-]+)/);
-              if (match && !seen.has(match[2])) {
-                seen.add(match[2]);
-                postLinks.push(match[2]);
-              }
-            }
-          }
-        });
-
-        // Search scripts again after scroll might have loaded new data
-        document.querySelectorAll('script').forEach((script) => {
-          const text = script.textContent || '';
-          for (const m of text.matchAll(/\"code\":\"([A-Za-z0-9_-]{10,12})\"/g)) {
-            if (!seen.has(m[1])) { seen.add(m[1]); postLinks.push(m[1]); }
-          }
-        });
-
-        return postLinks;
-      });
-      extractedData.postLinks = scrollData;
-      log.info({ userId, postLinksCount: scrollData.length }, 'Post links after scroll');
-    }
+    }, cookies.csrftoken || '');
 
     await browser.close();
 
-    if (extractedData.postLinks.length === 0) {
-      log.warn({ userId }, 'No liked posts found on page');
+    log.info({ userId, status: apiResult.status, itemCount: apiResult.items.length, error: apiResult.error }, 'API result');
+
+    if (apiResult.status === 401 || apiResult.status === 403) {
+      log.warn({ userId, status: apiResult.status }, 'Session expired (auth error from API)');
       await prisma.connectedPlatform.update({
         where: { id: connectionId },
-        data: { lastSyncAt: new Date(), lastSyncError: 'No liked posts found on page' },
+        data: { lastSyncError: 'Session expired. Please reconnect.' },
       });
       return 0;
     }
 
-    // DOM scraping only gives shortcodes — save all as INBOX,
-    // the transcription worker will detect videos vs photos
-    const shortcodes = extractedData.postLinks.slice(0, 20);
-    log.info({ userId, itemCount: shortcodes.length }, 'Processing shortcodes');
+    if (apiResult.status === 429) {
+      log.warn({ userId }, 'Rate limited by Instagram (429), skipping');
+      await prisma.connectedPlatform.update({
+        where: { id: connectionId },
+        data: { lastSyncError: 'Rate limited. Will retry later.' },
+      });
+      return 0;
+    }
 
-    // Batch check existing content (use shortcode as externalId)
+    if (apiResult.error) {
+      log.error({ userId, error: apiResult.error }, 'API error');
+      await prisma.connectedPlatform.update({
+        where: { id: connectionId },
+        data: { lastSyncError: apiResult.error },
+      });
+      return 0;
+    }
+
+    if (apiResult.items.length === 0) {
+      log.info({ userId }, 'No liked items returned from API');
+      await prisma.connectedPlatform.update({
+        where: { id: connectionId },
+        data: { lastSyncAt: new Date(), lastSyncError: null },
+      });
+      return 0;
+    }
+
+    // Process items from the API response
+    const allItems = apiResult.items;
+    log.info({ userId, itemCount: allItems.length }, 'Got items from API');
+
+    // Filter: only videos (media_type 2 = video, product_type 'clips' = reel)
+    const videos = allItems.filter((item: any) =>
+      item.media_type === 2 || item.product_type === 'clips'
+    );
+    log.info({ userId, videoCount: videos.length, skippedCount: allItems.length - videos.length }, 'Filtered to videos');
+
+    if (videos.length === 0) {
+      await prisma.connectedPlatform.update({
+        where: { id: connectionId },
+        data: { lastSyncAt: new Date(), lastSyncError: null },
+      });
+      return 0;
+    }
+
+    // Limit to 20 most recent
+    const items = videos.slice(0, 20);
+
+    // Batch check existing content
+    const externalIds = items
+      .map((item: any) => item.pk?.toString() || item.id?.toString() || item.code)
+      .filter((id: any): id is string => !!id);
+
     const existingContent = await prisma.content.findMany({
       where: {
         userId,
         platform: Platform.INSTAGRAM,
-        externalId: { in: shortcodes },
+        externalId: { in: externalIds },
       },
       select: { externalId: true },
     });
     const existingIds = new Set(existingContent.map(c => c.externalId));
 
     // Insert oldest-liked first so most-recently-liked gets the latest createdAt
-    const shortcodesReversed = [...shortcodes].reverse();
+    const itemsReversed = [...items].reverse();
 
-    for (const shortcode of shortcodesReversed) {
-      if (existingIds.has(shortcode)) {
+    for (const item of itemsReversed) {
+      const externalId = item.pk?.toString() || item.id?.toString() || item.code;
+      if (!externalId) continue;
+
+      if (existingIds.has(externalId)) {
         continue;
       }
 
-      const url = `https://www.instagram.com/reel/${shortcode}/`;
+      const shortcode = item.code || externalId;
+      const url = `https://www.instagram.com/p/${shortcode}/`;
+      const authorUsername = item.user?.username || null;
 
       await prisma.content.create({
         data: {
           userId,
           platform: Platform.INSTAGRAM,
-          externalId: shortcode,
+          externalId,
           url,
-          title: 'Instagram Reel',
-          capturedAt: new Date(),
+          title: item.caption?.text?.substring(0, 255) || 'Instagram Reel',
+          description: item.caption?.text || null,
+          thumbnailUrl: item.image_versions2?.candidates?.[0]?.url || null,
+          duration: item.video_duration || null,
+          authorUsername,
+          channelName: authorUsername ? `@${authorUsername}` : null,
+          likeCount: item.like_count || null,
+          commentCount: item.comment_count || null,
+          capturedAt: item.taken_at ? new Date(item.taken_at * 1000) : new Date(),
           status: ContentStatus.INBOX,
         },
       });
