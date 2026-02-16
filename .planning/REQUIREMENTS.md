@@ -1,112 +1,113 @@
-# Requirements: Ankora v3.0
+# Requirements: Ankora v4.0
 
-**Defined:** 2026-02-11
+**Defined:** 2026-02-16
 **Core Value:** L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans effort supplementaire de curation.
 
-## v3.0 Requirements
+## v4.0 Requirements
 
-Requirements for Night Blue Glass UI milestone. Each maps to roadmap phases.
+Requirements for the UX Triage & Daily Digest milestone. Each maps to roadmap phases.
 
-### Foundation
+### Triage
 
-- [ ] **FOUND-01**: App builds with new native dependencies (expo-blur, react-native-svg, lucide-react-native) and runs on iOS device
-- [ ] **FOUND-02**: App launches in dark mode with Night Blue background (#0a0f1a) and light status bar
-- [ ] **FOUND-03**: Geist font loads and renders correctly for all text weights in the app
+- [ ] **TRIAGE-01**: User can swipe right on inbox card to keep content (triggers learn/classify pipeline)
+- [ ] **TRIAGE-02**: User can swipe left on inbox card to dismiss content (archives it)
+- [ ] **TRIAGE-03**: User can toggle between swipe mode and bulk select mode via top-right button
+- [ ] **TRIAGE-04**: User can select/deselect multiple items in bulk mode and batch learn/archive
+- [ ] **TRIAGE-05**: User can filter inbox by source platform (YouTube, Spotify, TikTok, Instagram) in both modes
+- [ ] **TRIAGE-06**: User can pull-to-refresh to trigger platform sync in swipe mode
+- [ ] **TRIAGE-07**: Inbox cards display sorted most recent first (capturedAt desc)
+- [ ] **TRIAGE-08**: Swipe actions show animated visual feedback (card flies off-screen with spring physics)
 
-### Design System
+### SRS
 
-- [ ] **DS-01**: Night Blue color palette with Soft Gold (#D4A574) accent is applied across all screens with no light mode remnants
-- [ ] **DS-02**: Glass surface primitives (GlassSurface, GlassCard, GlassButton, GlassInput) are available as reusable components with blur, border, and shadow
-- [ ] **DS-03**: All icons use Lucide library instead of emoji (tab bar, cards, badges, action buttons)
-- [ ] **DS-04**: Existing UI components (Text, Button, Card, Input, Badge, TopicChip, Skeleton, Toast) are restyled for Night Blue / Glass UI
-- [ ] **DS-05**: Glass tab bar with blur background replaces current solid tab bar
+- [ ] **SRS-01**: First review is scheduled 24h after content triage (J+1), not immediately
+- [ ] **SRS-02**: Review intervals follow J+1, J+3, J+7, J+31 fixed progression
+- [ ] **SRS-03**: Failed review (rating < 3) resets card to J+1 interval
+- [ ] **SRS-04**: Card easeFactor adjusts based on user performance (SM-2 compatible)
 
-### Screens
+### Quiz
 
-- [ ] **SCREEN-01**: Home screen displays 3 daily themes in glass cards showing title, content count, and question count
-- [ ] **SCREEN-02**: Explorer screen has Suggestions tab with 8 AI-generated theme suggestions
-- [ ] **SCREEN-03**: Explorer screen has Library tab with content list, source/category filters, and search by title or author
-- [ ] **SCREEN-04**: Revisions screen shows revision cards with category filter and full-text search
-- [ ] **SCREEN-05**: Profile screen shows user info (name, avatar) and settings/preferences
+- [ ] **QUIZ-01**: Quiz questions include creator/channel name in question text
+- [ ] **QUIZ-02**: Quiz questions reference source platform context (e.g., "dans cette video YouTube de [creator]")
+- [ ] **QUIZ-03**: Quiz generation prompt uses self-referential framing with temporal context
 
-### Backend
+### Digest
 
-- [ ] **API-01**: Daily themes endpoint returns 3 themes prioritized by due reviews and new content
-- [ ] **API-02**: Theme suggestions endpoint returns 8 AI-generated theme ideas via Mistral
+- [ ] **DIGEST-01**: User can launch a daily digest session from home screen
+- [ ] **DIGEST-02**: Daily digest pre-selects 10-15 questions mixing due SRS cards and new cards
+- [ ] **DIGEST-03**: User sees question-by-question progress during digest (e.g., "Question 5/12")
+- [ ] **DIGEST-04**: User sees cognitive closure screen at end of session with stats summary (score, streak, time)
+- [ ] **DIGEST-05**: Daily digest prioritizes SRS due cards over new content cards
 
-### UX Polish
+### Feedback
 
-- [ ] **UX-01**: Screen transitions use 200-300ms animations with natural easing
-- [ ] **UX-02**: Loading states show contextual animations (quiz generation, content loading)
-- [ ] **UX-03**: Freemium-locked content displays lock icon overlay on glass surface
-- [ ] **UX-04**: Haptic feedback fires on key interactions (button press, quiz answer, tab switch)
+- [ ] **FEEDBACK-01**: User sees real-time processing status per content (transcribing, generating, ready)
+- [ ] **FEEDBACK-02**: User receives visual indicator when new content becomes quiz-ready after triage
 
-## Future Requirements (v3.1 -- Onboarding & Monetization)
+## Future Requirements
 
-### Onboarding
-
-- **ONBOARD-01**: 11-step onboarding flow (splash through home)
-- **ONBOARD-02**: Apple Sign-In alongside existing email/password
-- **ONBOARD-03**: Google Sign-In alongside existing email/password
-- **ONBOARD-04**: Magic link authentication (no password)
-- **ONBOARD-05**: Progress bar animated between onboarding steps
-- **ONBOARD-06**: First quiz during onboarding (3 questions: easy/easy/hard)
-
-### Monetization
-
-- **PAY-01**: RevenueCat integration for subscription management
-- **PAY-02**: 14-day free trial to annual subscription
-- **PAY-03**: Paywall soft triggered conditionally during onboarding
-- **PAY-04**: Freemium content gating enforced server-side
+Deferred to v4.1 or later.
 
 ### Notifications
 
-- **NOTIF-01**: Push notification permission prompt during onboarding
-- **NOTIF-02**: Daily review reminders at user-preferred time
-- **NOTIF-03**: New content alerts when sync finds new material
+- **NOTIF-01**: User receives push notification for daily digest reminder
+- **NOTIF-02**: User can configure notification time preference
+
+### Gamification
+
+- **GAME-01**: User earns streak for consecutive daily digest completions
+- **GAME-02**: User sees milestone badges (7d, 14d, 30d streaks)
+
+### Onboarding
+
+- **ONBD-01**: User completes guided first-use flow (platform connect + first triage)
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Light mode / theme toggle | Night Blue is the identity. No light mode. |
-| SwiftUI Liquid Glass (iOS 26+) | Requires iOS 26, not compatible with current user base. expo-blur covers Glass UI. |
-| Shared Element Transitions | Not production-ready on Reanimated 4 + New Architecture (Fabric). |
-| Actual payment processing | Deferred to v3.1 with RevenueCat. v3.0 is visual-only freemium. |
-| Android app | iOS only for now |
-| Gamification (streaks, badges) | Post-MVP |
-| A/B testing | Post-MVP |
-| Custom illustrations per theme | Complexity too high for v3.0. Lucide icons + color differentiation sufficient. |
+| Quiz during triage | Triage is fast curation, quiz is focused engagement -- different mental modes |
+| Infinite scroll in swipe mode | Card stack is finite (current inbox batch), not infinite feed |
+| Custom SRS intervals | Fixed J+1/J+3/J+7/J+31 per PRD research, no user override |
+| Audio playback during triage | Triage is visual-only quick decision, not content consumption |
+| Multi-session digest per day | One daily session is sufficient for habit formation |
+| Undo swipe (shake to undo) | Simplicity over features -- user can re-sync if needed |
+| Payment/subscription gating | Visual freemium already in v3.0, actual payment deferred |
 
 ## Traceability
 
+Which phases cover which requirements. Updated during roadmap creation.
+
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FOUND-01 | Phase 12 | Pending |
-| FOUND-02 | Phase 12 | Pending |
-| FOUND-03 | Phase 12 | Pending |
-| DS-01 | Phase 13 | Pending |
-| DS-02 | Phase 13 | Pending |
-| DS-03 | Phase 13 | Pending |
-| DS-04 | Phase 13 | Pending |
-| DS-05 | Phase 13 | Pending |
-| SCREEN-01 | Phase 14 | Pending |
-| SCREEN-02 | Phase 14 | Pending |
-| SCREEN-03 | Phase 14 | Pending |
-| SCREEN-04 | Phase 14 | Pending |
-| SCREEN-05 | Phase 14 | Pending |
-| API-01 | Phase 15 | Pending |
-| API-02 | Phase 15 | Pending |
-| UX-01 | Phase 16 | Pending |
-| UX-02 | Phase 16 | Pending |
-| UX-03 | Phase 16 | Pending |
-| UX-04 | Phase 16 | Pending |
+| TRIAGE-01 | — | Pending |
+| TRIAGE-02 | — | Pending |
+| TRIAGE-03 | — | Pending |
+| TRIAGE-04 | — | Pending |
+| TRIAGE-05 | — | Pending |
+| TRIAGE-06 | — | Pending |
+| TRIAGE-07 | — | Pending |
+| TRIAGE-08 | — | Pending |
+| SRS-01 | — | Pending |
+| SRS-02 | — | Pending |
+| SRS-03 | — | Pending |
+| SRS-04 | — | Pending |
+| QUIZ-01 | — | Pending |
+| QUIZ-02 | — | Pending |
+| QUIZ-03 | — | Pending |
+| DIGEST-01 | — | Pending |
+| DIGEST-02 | — | Pending |
+| DIGEST-03 | — | Pending |
+| DIGEST-04 | — | Pending |
+| DIGEST-05 | — | Pending |
+| FEEDBACK-01 | — | Pending |
+| FEEDBACK-02 | — | Pending |
 
 **Coverage:**
-- v3.0 requirements: 19 total
-- Mapped to phases: 19
-- Unmapped: 0
+- v4.0 requirements: 22 total
+- Mapped to phases: 0
+- Unmapped: 22
 
 ---
-*Requirements defined: 2026-02-11*
-*Last updated: 2026-02-11 after roadmap creation*
+*Requirements defined: 2026-02-16*
+*Last updated: 2026-02-16 after initial definition*
