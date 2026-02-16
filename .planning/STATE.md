@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-16)
 
 **Core value:** L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans effort supplementaire de curation.
-**Current focus:** v4.0 UX Triage & Daily Digest -- Phase 18 complete, Phase 19 next
+**Current focus:** v4.0 UX Triage & Daily Digest -- Phase 19 in progress (plan 01 of 02 complete)
 
 ## Current Position
 
-Phase: 18 of 20
-Plan: 2 of 2 in current phase (phase complete)
-Status: Phase 18 complete -- ready for Phase 19
-Last activity: 2026-02-16 -- Completed 18-02 (library screen integration)
+Phase: 19 of 20
+Plan: 1 of 2 in current phase
+Status: Plan 19-01 complete -- ready for 19-02
+Last activity: 2026-02-16 -- Completed 19-01 (digest card selection endpoint + hook)
 
-Progress: [####################################░░░░] 38/42 plans (90% overall, 50% v4.0)
+Progress: [#####################################░░░] 39/42 plans (93% overall, 63% v4.0)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 38 (10 v1.0 + 12 v2.0 + 12 v3.0 + 4 v4.0)
+- Total plans completed: 39 (10 v1.0 + 12 v2.0 + 12 v3.0 + 5 v4.0)
 - v1.0: ~25 min/plan avg (4 phases, 10 plans)
 - v2.0: ~3.75 min/plan avg (7 phases, 12 plans)
 - v3.0: 8 min/plan avg (5 phases, 12 plans)
@@ -53,6 +53,9 @@ Recent decisions affecting current work:
 - [18-02]: key={sourceFilter} on SwipeCardStack forces remount on filter change, resetting card index
 - [18-02]: Search bar only in bulk mode; swipe mode is for quick triage without search
 - [18-02]: SelectionBar guarded by triageMode === 'bulk' to prevent rendering in swipe mode
+- [19-01]: useMutation for digest fetch (not useQuery) to prevent duplicate QuizSession creation on re-fetches
+- [19-01]: No hard minimum on digest size -- return whatever cards are available (per research recommendation)
+- [19-01]: Include quiz.theme in digest card response for future UI theme indicators
 
 ### Pending Todos
 
@@ -67,6 +70,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Completed 18-02-PLAN.md (library screen integration) -- Phase 18 complete
-Next step: Execute Phase 19 (Daily Digest)
+Stopped at: Completed 19-01-PLAN.md (digest card selection endpoint + hook)
+Next step: Execute 19-02-PLAN.md (Digest session UI)
 Resume file: None
