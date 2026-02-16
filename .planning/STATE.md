@@ -5,13 +5,13 @@
 See: .planning/PROJECT.md (updated 2026-02-16)
 
 **Core value:** L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans effort supplementaire de curation.
-**Current focus:** v4.0 UX Triage & Daily Digest -- Phase 19 complete (2 of 2 plans done)
+**Current focus:** v4.0 UX Triage & Daily Digest -- Phase 19 complete, Phase 20 next
 
 ## Current Position
 
 Phase: 19 of 20
 Plan: 2 of 2 in current phase
-Status: Phase 19 complete -- all plans done
+Status: Phase 19 complete -- ready for Phase 20
 Last activity: 2026-02-16 -- Completed 19-02 (digest session UI + home screen CTA)
 
 Progress: [######################################░░] 40/42 plans (95% overall, 75% v4.0)
@@ -74,5 +74,5 @@ None.
 
 Last session: 2026-02-16
 Stopped at: Completed 19-02-PLAN.md (digest session UI + home screen CTA)
-Next step: Execute phase 20 (if exists) or milestone complete
+Next step: Execute Phase 20 (Pipeline Feedback)
 Resume file: None

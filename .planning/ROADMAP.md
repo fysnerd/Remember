@@ -53,7 +53,7 @@ Full details: [milestones/v2.0-ROADMAP.md](milestones/v2.0-ROADMAP.md)
 
 - [x] **Phase 17: SRS & Quiz Backend** - Align SRS intervals to J+1/J+3/J+7/J+31 and make quiz prompts self-referential with creator/platform context
 - [x] **Phase 18: Swipe Triage** - Full inbox overhaul with Tinder-like swipe as primary mode and bulk select as secondary
-- [ ] **Phase 19: Daily Digest** - Pre-built microlearning session with SRS-prioritized card selection and cognitive closure
+- [x] **Phase 19: Daily Digest** - Pre-built microlearning session with SRS-prioritized card selection and cognitive closure
 - [ ] **Phase 20: Pipeline Feedback** - Real-time processing status so users see content progress from triage to quiz-ready
 
 ## Phase Details
@@ -101,8 +101,8 @@ Plans:
 **Plans**: 2 plans (Wave 1: 19-01, Wave 2: 19-02)
 
 Plans:
-- [ ] 19-01-PLAN.md -- Digest session backend (POST /reviews/digest endpoint with card selection algorithm, useDigestCards hook)
-- [ ] 19-02-PLAN.md -- Digest session UI (ProgressBar, DigestClosure, DigestCTA components, digest.tsx screen, home screen integration)
+- [x] 19-01-PLAN.md -- Digest session backend (POST /reviews/digest endpoint with card selection algorithm, useDigestCards hook)
+- [x] 19-02-PLAN.md -- Digest session UI (ProgressBar, DigestClosure, DigestCTA components, digest.tsx screen, home screen integration)
 
 ### Phase 20: Pipeline Feedback
 **Goal**: Users see real-time processing status for their triaged content, so they understand why some content has quizzes and others are still processing
@@ -144,5 +144,5 @@ Recommended: 17 → 18 → 19 → 20 (serial for simplicity).
 | 16. UX Polish | v3.0 | 2/2 | Complete | 2026-02-12 |
 | 17. SRS & Quiz Backend | v4.0 | 2/2 | Complete | 2026-02-16 |
 | 18. Swipe Triage | v4.0 | 2/2 | Complete | 2026-02-16 |
-| 19. Daily Digest | v4.0 | 0/2 | Not started | - |
+| 19. Daily Digest | v4.0 | 2/2 | Complete | 2026-02-16 |
 | 20. Pipeline Feedback | v4.0 | 0/1 | Not started | - |
