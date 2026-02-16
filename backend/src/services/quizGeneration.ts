@@ -55,12 +55,24 @@ function chunkTranscript(text: string, maxChars: number): string[] {
 }
 
 /**
+ * Fetch existing quiz questions for a content to avoid repetitions
+ */
+async function fetchExistingQuestions(contentId: string): Promise<string[]> {
+  const existingQuizzes = await prisma.quiz.findMany({
+    where: { contentId },
+    select: { question: true },
+  });
+  return existingQuizzes.map(q => q.question);
+}
+
+/**
  * Generate quiz questions from transcript using configured LLM
  */
 export async function generateQuizFromTranscript(
   transcript: string,
   contentTitle: string,
-  contentType: 'video' | 'podcast'
+  contentType: 'video' | 'podcast',
+  existingQuestions: string[] = []
 ): Promise<QuizGenerationResult> {
   const llm = getLLMClient();
 
@@ -121,6 +133,11 @@ Réponds en JSON uniquement:
     };
   }
 
+  // Build anti-repetition block
+  const antiRepetitionBlock = existingQuestions.length > 0
+    ? `\nQUESTIONS DEJA POSEES (NE PAS repeter ni reformuler ces questions) :\n${existingQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}\n`
+    : '';
+
   // Generate questions from the transcript
   const allQuestions: GeneratedQuestion[] = [];
 
@@ -129,41 +146,57 @@ Réponds en JSON uniquement:
     const chunk = chunks[i];
     const questionsNeeded = i === 0 ? 3 : 2; // 3 from first chunk, 2 from second
 
-    const questionPrompt = `Génère ${questionsNeeded} questions de quiz à choix multiples basées sur cette transcription de ${contentType === 'video' ? 'vidéo' : 'podcast'}.
+    const questionPrompt = `Genere ${questionsNeeded} questions de quiz a choix multiples basees sur ce contenu.
 
 Titre: "${contentTitle}"
-Sujets principaux: ${assessment.mainTopics?.join(', ') || 'Culture générale'}
+Sujets principaux: ${assessment.mainTopics?.join(', ') || 'Culture generale'}
 Style du contenu: ${assessment.contentStyle || 'explicatif'}
 
-Transcription:
+Contenu source:
 """
 ${chunk}
 """
+${antiRepetitionBlock}
+OBJECTIF PEDAGOGIQUE:
+Les questions doivent tester les CONNAISSANCES ACQUISES par l'utilisateur (concepts, faits, mecanismes, applications).
+L'utilisateur doit pouvoir repondre grace a ce qu'il a APPRIS, pas en se souvenant des mots exacts du contenu.
 
-PRINCIPES PÉDAGOGIQUES (taxonomie de Bloom) - Varie les niveaux cognitifs:
-- Comprendre: "Que signifie [concept] selon l'auteur ?" / "Quel est le lien entre X et Y ?"
-- Appliquer: "Dans quelle situation utiliserait-on [concept] ?" / "Comment appliquer [idée] à [contexte] ?"
-- Analyser: "Pourquoi [fait] est-il important ?" / "Quelle est la cause principale de [phénomène] ?"
+FORMULATION DES QUESTIONS - REGLES STRICTES:
+- INTERDIT: "Que dit l'auteur...", "Selon la video...", "Que mentionne le createur...", "D'apres le podcast..."
+- INTERDIT: "Quel terme est utilise pour...", "Quelle expression est employee..."
+- INTERDIT: Toute reference a la transcription, au format (video/podcast), ou a l'auteur/createur
+- CORRECT: "Qu'est-ce que [concept] ?", "Comment fonctionne [mecanisme] ?", "Pourquoi [phenomene] se produit-il ?"
+- CORRECT: "Quelle est la difference entre X et Y ?", "Dans quel cas utilise-t-on [technique] ?"
 
-RÈGLES POUR LES DISTRACTEURS (options incorrectes):
-- Chaque distracteur doit être PLAUSIBLE (pas absurde ni évident)
-- Utiliser des erreurs de compréhension courantes comme distracteurs
-- Les distracteurs ne doivent PAS être partiellement corrects
-- Éviter les patterns prévisibles (option la plus longue = correcte, etc.)
-- Varier la position de la bonne réponse (pas toujours A ou B)
+PRINCIPES PEDAGOGIQUES (taxonomie de Bloom) - Varie les niveaux cognitifs:
+- Comprendre: "Qu'est-ce que [concept] ?" / "Quel est le lien entre X et Y ?"
+- Appliquer: "Dans quelle situation utiliserait-on [concept] ?" / "Comment appliquer [idee] a [contexte] ?"
+- Analyser: "Pourquoi [fait] est-il important ?" / "Quelle est la cause principale de [phenomene] ?"
 
-RÈGLES POUR LES QUESTIONS:
-1. Chaque question teste UN concept précis issu de la transcription
-2. La question doit être impossible à répondre correctement sans avoir compris le contenu
+VARIATION OBLIGATOIRE:
+- Chaque question doit aborder un ANGLE DIFFERENT (pas deux questions sur le meme sous-concept)
+- Varier les niveaux de difficulte (au moins 2 niveaux differents)
+- Varier les types: definition, mecanisme, application, comparaison, cause-effet
+
+REGLES POUR LES DISTRACTEURS (options incorrectes):
+- Chaque distracteur doit etre PLAUSIBLE (pas absurde ni evident)
+- Utiliser des erreurs de comprehension courantes comme distracteurs
+- Les distracteurs ne doivent PAS etre partiellement corrects
+- Eviter les patterns previsibles (option la plus longue = correcte, etc.)
+- Varier la position de la bonne reponse (pas toujours A ou B)
+
+REGLES POUR LES QUESTIONS:
+1. Chaque question teste UN concept precis
+2. La question doit etre impossible a repondre correctement sans avoir compris le sujet
 3. 4 options exactement (A, B, C, D), une seule correcte
-4. L'explication doit dire POURQUOI la bonne réponse est correcte ET pourquoi les autres ne le sont pas (1-2 phrases)
-5. Tout en FRANÇAIS
+4. L'explication doit dire POURQUOI la bonne reponse est correcte ET pourquoi les autres ne le sont pas (1-2 phrases)
+5. Tout en FRANCAIS
 
-Réponds uniquement en JSON:
+Reponds uniquement en JSON:
 {
   "questions": [
     {
-      "question": "Question claire et spécifique ?",
+      "question": "Question claire et specifique ?",
       "options": ["A) Option", "B) Option", "C) Option", "D) Option"],
       "correctAnswer": "A",
       "explanation": "Explication: pourquoi c'est correct et pourquoi les autres options ne le sont pas.",
@@ -177,21 +210,24 @@ Réponds uniquement en JSON:
         messages: [
           {
             role: 'system',
-            content: `Tu es un concepteur pédagogique expert en création de quiz basés sur la taxonomie de Bloom révisée.
+            content: `Tu es un concepteur pedagogique expert en creation de quiz. Tu crees des questions qui testent les CONNAISSANCES REELLES acquises, comme dans un examen universitaire ou un manuel scolaire.
 
-Tes questions suivent ces principes scientifiques:
-- Testing effect: les questions renforcent la mémorisation mieux que la relecture
-- Desirable difficulties: un niveau de difficulté optimal stimule l'apprentissage
+REGLE ABSOLUE: Ne fais JAMAIS reference a l'auteur, au createur, a la video, au podcast, ou a la transcription dans tes questions. Les questions doivent etre formulees comme des questions de connaissance generale sur le sujet, pas comme des questions de comprehension de texte.
+
+Principes scientifiques:
+- Testing effect: les questions renforcent la memorisation mieux que la relecture
+- Desirable difficulties: un niveau de difficulte optimal stimule l'apprentissage
 - Elaborative interrogation: demander "pourquoi" et "comment" ancre les connaissances
+- Transfer learning: les questions doivent permettre d'appliquer les connaissances dans d'autres contextes
 
-Génère des questions en FRANÇAIS qui testent la compréhension profonde, pas la mémorisation superficielle. Réponds uniquement en JSON valide.`,
+Genere des questions en FRANCAIS qui testent la comprehension profonde et l'acquisition de connaissances. Reponds uniquement en JSON valide.`,
           },
           {
             role: 'user',
             content: questionPrompt,
           },
         ],
-        temperature: 0.6,
+        temperature: 0.7,
         jsonMode: true,
       }));
 
@@ -566,13 +602,85 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
  * Regenerate quiz for content (user requested)
  */
 export async function regenerateQuiz(contentId: string): Promise<boolean> {
+  // Fetch existing questions BEFORE deleting for anti-repetition
+  const previousQuestions = await fetchExistingQuestions(contentId);
+
+  log.info(
+    { contentId, previousQuestionCount: previousQuestions.length },
+    'Regenerating quiz with anti-repetition context'
+  );
+
   // Delete existing quizzes and cards
   await prisma.quiz.deleteMany({
     where: { contentId },
   });
 
-  // Process again
-  return processContentQuiz(contentId);
+  const content = await prisma.content.findUnique({
+    where: { id: contentId },
+    include: { transcript: true, quizzes: true, tags: true },
+  });
+
+  if (!content || !content.transcript) {
+    log.error({ contentId }, 'Content or transcript not found for regeneration');
+    return false;
+  }
+
+  await prisma.content.update({
+    where: { id: contentId },
+    data: { status: ContentStatus.GENERATING },
+  });
+
+  try {
+    const contentType = content.platform === 'YOUTUBE' ? 'video' : 'podcast';
+    const result = await generateQuizFromTranscript(
+      content.transcript.text,
+      content.title,
+      contentType,
+      previousQuestions
+    );
+
+    if (!result.isEducational || result.questions.length === 0) {
+      await prisma.content.update({
+        where: { id: contentId },
+        data: { status: ContentStatus.READY },
+      });
+      return true;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      for (const q of result.questions) {
+        const quiz = await tx.quiz.create({
+          data: {
+            contentId: content.id,
+            question: q.question,
+            type: QuizType.MULTIPLE_CHOICE,
+            options: q.options,
+            correctAnswer: q.correctAnswer,
+            explanation: q.explanation,
+          },
+        });
+        await tx.card.create({
+          data: { quizId: quiz.id, userId: content.userId },
+        });
+      }
+      await tx.content.update({
+        where: { id: contentId },
+        data: { status: ContentStatus.READY },
+      });
+    });
+
+    log.info({ contentId, questionCount: result.questions.length }, 'Quiz regeneration completed');
+    return true;
+  } catch (error: any) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    const isTransient = /429|rate.limit|timeout|ECONNRESET|ECONNREFUSED|ETIMEDOUT|503|502|socket hang up/i.test(errorMsg);
+    if (isTransient) {
+      await prisma.content.update({ where: { id: contentId }, data: { status: ContentStatus.SELECTED } });
+    } else {
+      await prisma.content.update({ where: { id: contentId }, data: { status: ContentStatus.FAILED } });
+    }
+    return false;
+  }
 }
 
 /**

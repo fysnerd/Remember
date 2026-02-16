@@ -653,16 +653,23 @@ async function transcribeWithWhisper(audioPath: string): Promise<{
 
 /**
  * Parse wait time from Groq 429 error message.
- * E.g. "Please try again in 9m26s" → 566 seconds
+ * E.g. "Please try again in 9m26s" -> 566 seconds
  */
 function parseRateLimitWait(errorMessage: string): number | null {
-  const match = errorMessage.match(/try again in (\d+)m(\d+)s/i);
+  // Match "Xm Ys" or "XmYs" patterns
+  const match = errorMessage.match(/try again in (\d+)m\s*(\d+)s/i);
   if (match) {
     return parseInt(match[1]) * 60 + parseInt(match[2]);
   }
+  // Match seconds-only pattern
   const secMatch = errorMessage.match(/try again in (\d+)s/i);
   if (secMatch) {
     return parseInt(secMatch[1]);
+  }
+  // Match hours pattern (e.g. "1h30m")
+  const hourMatch = errorMessage.match(/try again in (\d+)h\s*(\d+)?m?/i);
+  if (hourMatch) {
+    return parseInt(hourMatch[1]) * 3600 + (hourMatch[2] ? parseInt(hourMatch[2]) * 60 : 0);
   }
   return null;
 }
@@ -670,10 +677,42 @@ function parseRateLimitWait(errorMessage: string): number | null {
 const CHUNK_MAX_RETRIES = 5;
 const CHUNK_DEFAULT_WAIT_SEC = 600; // 10 min fallback if can't parse wait time
 
+// Max in-line wait before bailing out and deferring to next worker run (2 minutes).
+// This prevents the worker from blocking the scheduler's runningJobs set for 60+ min.
+const MAX_INLINE_WAIT_SEC = 120;
+
+/**
+ * Custom error to signal that transcription should be deferred due to rate limiting.
+ * The worker releases the lock and the cache entry gets a nextRetryAt set so the
+ * next cron run picks it up after the Groq cooldown.
+ */
+class RateLimitDeferError extends Error {
+  public waitSec: number;
+  constructor(waitSec: number) {
+    super(`Rate limited by Groq, need to wait ${Math.round(waitSec / 60)}min — deferring to next run`);
+    this.name = 'RateLimitDeferError';
+    this.waitSec = waitSec;
+  }
+}
+
+/**
+ * Clean up remaining chunk files on error/defer
+ */
+function cleanupChunkFiles(chunkPaths: string[]): void {
+  for (const p of chunkPaths) {
+    try {
+      if (fs.existsSync(p)) fs.unlinkSync(p);
+    } catch { /* best effort */ }
+  }
+}
+
 /**
  * Transcribe audio with automatic chunking for long files
  * Splits into ~20min chunks, transcribes each, merges results
- * Handles Groq 429 rate limits with parsed wait times
+ * Handles Groq 429 rate limits:
+ *   - Short waits (<=MAX_INLINE_WAIT_SEC): sleep inline and retry
+ *   - Long waits (>MAX_INLINE_WAIT_SEC): throw RateLimitDeferError so
+ *     the worker can release the lock and let the next cron run pick it up
  */
 async function transcribeChunked(audioPath: string): Promise<{
   text: string;
@@ -720,11 +759,25 @@ async function transcribeChunked(audioPath: string): Promise<{
           const errMsg = error?.message || error?.error?.message || '';
           const parsedWait = parseRateLimitWait(errMsg);
           const waitSec = parsedWait ? parsedWait + 30 : CHUNK_DEFAULT_WAIT_SEC; // add 30s buffer
-          log.warn(
-            { chunk: i + 1, attempt: attempt + 1, waitSec, parsedWait },
-            `Rate limited on chunk, waiting ${Math.round(waitSec / 60)}min before retry`
-          );
-          await new Promise(resolve => setTimeout(resolve, waitSec * 1000));
+
+          // If wait is short enough, sleep inline; otherwise bail and defer
+          if (waitSec <= MAX_INLINE_WAIT_SEC) {
+            log.warn(
+              { chunk: i + 1, attempt: attempt + 1, waitSec, parsedWait },
+              `Rate limited on chunk, short wait — retrying in ${waitSec}s`
+            );
+            await new Promise(resolve => setTimeout(resolve, waitSec * 1000));
+          } else {
+            // Clean up ALL remaining chunk files before deferring
+            const remainingChunks = chunkPaths.slice(i);
+            cleanupChunkFiles(remainingChunks);
+
+            log.warn(
+              { chunk: i + 1, attempt: attempt + 1, waitSec, parsedWait },
+              `Rate limited on chunk, wait too long (${Math.round(waitSec / 60)}min) — deferring to next worker run`
+            );
+            throw new RateLimitDeferError(waitSec);
+          }
         } else {
           // Clean up chunk file on final failure
           if (fs.existsSync(chunkPath)) {
@@ -741,6 +794,8 @@ async function transcribeChunked(audioPath: string): Promise<{
     }
 
     if (!success) {
+      // Clean up remaining chunks
+      cleanupChunkFiles(chunkPaths.slice(i + 1));
       throw new Error(`Failed to transcribe chunk ${i + 1} after ${CHUNK_MAX_RETRIES} retries`);
     }
   }
@@ -840,9 +895,18 @@ export async function processPodcastTranscript(contentId: string): Promise<boole
   }
 }
 
+// Threshold for "short" podcasts that won't need chunking (30 minutes)
+const SHORT_PODCAST_THRESHOLD_SEC = 30 * 60;
+
 /**
  * Background worker to process pending podcast transcriptions
  * Uses global TranscriptCache to avoid redundant Whisper calls
+ *
+ * Optimization: processes SHORT podcasts first (<30min) because they:
+ *   1. Fit in a single Whisper request (no chunking)
+ *   2. Won't trigger Groq hourly rate limits
+ *   3. Complete fast, giving users quick results
+ * Long podcasts are processed after all short ones are done.
  */
 export async function runPodcastTranscriptionWorker(): Promise<void> {
   log.info('Starting podcast transcription worker');
@@ -873,7 +937,12 @@ export async function runPodcastTranscriptionWorker(): Promise<void> {
       ],
     },
     take: 20,
-    orderBy: { createdAt: 'asc' },
+    // Sort: SELECTED first (status asc), then by duration ascending (short first),
+    // with nulls last so items without a known duration don't block short ones
+    orderBy: [
+      { status: 'asc' },
+      { duration: { sort: 'asc', nulls: 'last' } },
+    ],
   });
 
   if (pendingContent.length === 0) {
@@ -889,16 +958,25 @@ export async function runPodcastTranscriptionWorker(): Promise<void> {
     }
   }
 
-  log.info({ total: pendingContent.length, unique: uniqueEpisodes.size }, 'Found pending podcasts');
+  // Partition into short and long for logging
+  const episodes = Array.from(uniqueEpisodes.values());
+  const shortCount = episodes.filter(c => c.duration && c.duration <= SHORT_PODCAST_THRESHOLD_SEC).length;
+  const longCount = episodes.length - shortCount;
+
+  log.info(
+    { total: pendingContent.length, unique: episodes.length, short: shortCount, long: longCount },
+    'Found pending podcasts (processing short first)'
+  );
 
   let success = 0;
   let cacheHits = 0;
   let failed = 0;
+  let deferred = 0;
 
   const limit = pLimit(1); // Sequential: chunked transcription is heavy + Groq rate limits
 
   const results = await Promise.allSettled(
-    Array.from(uniqueEpisodes.values()).map(content =>
+    episodes.map(content =>
       limit(() => processPodcastWithCache(workerId, content))
     )
   );
@@ -907,13 +985,14 @@ export async function runPodcastTranscriptionWorker(): Promise<void> {
     if (result.status === 'fulfilled') {
       if (result.value === 'success') success++;
       else if (result.value === 'cache_hit') cacheHits++;
+      else if (result.value === 'deferred') deferred++;
       else failed++;
     } else {
       failed++;
     }
   }
 
-  log.info({ success, cacheHits, failed }, 'Podcast transcription worker completed');
+  log.info({ success, cacheHits, failed, deferred }, 'Podcast transcription worker completed');
 }
 
 /**
@@ -921,8 +1000,8 @@ export async function runPodcastTranscriptionWorker(): Promise<void> {
  */
 async function processPodcastWithCache(
   workerId: string,
-  content: { id: string; platform: Platform; externalId: string; showName: string | null; title: string; url: string }
-): Promise<'success' | 'cache_hit' | 'failed'> {
+  content: { id: string; platform: Platform; externalId: string; showName: string | null; title: string; url: string; duration: number | null }
+): Promise<'success' | 'cache_hit' | 'failed' | 'deferred'> {
   // Try to get or create cache entry with lock
   const result = await getOrCreateCacheWithLock(content.platform, content.externalId, workerId);
 
@@ -961,7 +1040,7 @@ async function processPodcastWithCache(
 
   try {
     // Step 1: Find RSS feed and audio URL
-    log.debug({ showName: content.showName, episodeTitle: content.title }, 'Looking up RSS feed');
+    log.debug({ showName: content.showName, episodeTitle: content.title, durationMin: content.duration ? Math.round(content.duration / 60) : null }, 'Looking up RSS feed');
     const rssResult = await findPodcastRSS(content.showName || '', content.title);
 
     if (!rssResult.episodeAudioUrl) {
@@ -1011,6 +1090,35 @@ async function processPodcastWithCache(
     return 'success';
 
   } catch (error: any) {
+    // Handle rate-limit deferral: set nextRetryAt based on the required wait,
+    // release the lock, and revert content status so the next run picks it up.
+    if (error instanceof RateLimitDeferError) {
+      const nextRetryAt = new Date(Date.now() + error.waitSec * 1000);
+      await prisma.transcriptCache.update({
+        where: { id: cache.id },
+        data: {
+          status: TranscriptCacheStatus.FAILED,
+          failureReason: error.message,
+          lockedBy: null,
+          lockedAt: null,
+          lastAttemptAt: new Date(),
+          nextRetryAt,
+          // Do NOT increment attemptCount for rate limits — it's not a real failure
+        },
+      });
+      // Revert any TRANSCRIBING content back to INBOX so next run picks it up
+      await prisma.content.updateMany({
+        where: {
+          platform: Platform.SPOTIFY,
+          externalId: content.externalId,
+          status: ContentStatus.TRANSCRIBING,
+        },
+        data: { status: ContentStatus.INBOX },
+      });
+      log.info({ externalId: content.externalId, nextRetryAt: nextRetryAt.toISOString(), waitMin: Math.round(error.waitSec / 60) }, 'Podcast deferred due to rate limit');
+      return 'deferred';
+    }
+
     await markCacheFailed(cache.id, error, workerId);
     log.error({ err: error, externalId: content.externalId }, 'Podcast transcription error');
     return 'failed';

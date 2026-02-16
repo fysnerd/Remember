@@ -286,7 +286,7 @@ export async function processContentTranscript(contentId: string): Promise<boole
       await prisma.content.update({
         where: { id: contentId },
         data: {
-          status: ContentStatus.FAILED,
+          status: ContentStatus.UNSUPPORTED,
           transcriptionFailed: true,
           transcriptCacheId: cache.id,
         },
@@ -484,6 +484,7 @@ async function processWithCache(
 
   // If cache is UNAVAILABLE and not retrying, mark content as failed
   if (cache.status === TranscriptCacheStatus.UNAVAILABLE && !acquired) {
+    await linkCacheToContent(content.platform, content.externalId, cache.id);
     await markContentTranscriptionFailed(content.platform, content.externalId);
     return 'failed';
   }
@@ -592,6 +593,7 @@ async function markContentTranscriptionFailed(
     },
     data: {
       transcriptionFailed: true,
+      status: ContentStatus.UNSUPPORTED,
     },
   });
 }
