@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-16)
 
 **Core value:** L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans effort supplementaire de curation.
-**Current focus:** v4.0 UX Triage & Daily Digest -- Phase 19 in progress (plan 01 of 02 complete)
+**Current focus:** v4.0 UX Triage & Daily Digest -- Phase 19 complete (2 of 2 plans done)
 
 ## Current Position
 
 Phase: 19 of 20
-Plan: 1 of 2 in current phase
-Status: Plan 19-01 complete -- ready for 19-02
-Last activity: 2026-02-16 -- Completed 19-01 (digest card selection endpoint + hook)
+Plan: 2 of 2 in current phase
+Status: Phase 19 complete -- all plans done
+Last activity: 2026-02-16 -- Completed 19-02 (digest session UI + home screen CTA)
 
-Progress: [#####################################░░░] 39/42 plans (93% overall, 63% v4.0)
+Progress: [######################################░░] 40/42 plans (95% overall, 75% v4.0)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 39 (10 v1.0 + 12 v2.0 + 12 v3.0 + 5 v4.0)
+- Total plans completed: 40 (10 v1.0 + 12 v2.0 + 12 v3.0 + 6 v4.0)
 - v1.0: ~25 min/plan avg (4 phases, 10 plans)
 - v2.0: ~3.75 min/plan avg (7 phases, 12 plans)
 - v3.0: 8 min/plan avg (5 phases, 12 plans)
@@ -56,6 +56,9 @@ Recent decisions affecting current work:
 - [19-01]: useMutation for digest fetch (not useQuery) to prevent duplicate QuizSession creation on re-fetches
 - [19-01]: No hard minimum on digest size -- return whatever cards are available (per research recommendation)
 - [19-01]: Include quiz.theme in digest card response for future UI theme indicators
+- [19-02]: Option normalization duplicated inline in digest.tsx (not shared util) to keep screen self-contained
+- [19-02]: ReviewStats type updated to match actual backend response (adds dueToday, reviewDue, etc.)
+- [19-02]: gestureEnabled: false on /digest route to prevent accidental back-swipe during session
 
 ### Pending Todos
 
@@ -70,6 +73,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Completed 19-01-PLAN.md (digest card selection endpoint + hook)
-Next step: Execute 19-02-PLAN.md (Digest session UI)
+Stopped at: Completed 19-02-PLAN.md (digest session UI + home screen CTA)
+Next step: Execute phase 20 (if exists) or milestone complete
 Resume file: None
