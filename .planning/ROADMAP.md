@@ -98,11 +98,11 @@ Plans:
   2. The digest pre-selects 10-15 questions, prioritizing SRS due cards over new content cards
   3. User sees question-by-question progress indicator during the session (e.g., "Question 5/12")
   4. After the last question, user sees a cognitive closure screen with score percentage, answer streak, and session duration
-**Plans**: TBD
+**Plans**: 2 plans (Wave 1: 19-01, Wave 2: 19-02)
 
 Plans:
-- [ ] 19-01-PLAN.md -- Digest session backend (card selection algorithm: SRS due priority + new cards fill, 10-15 cap)
-- [ ] 19-02-PLAN.md -- Digest session UI (launch from home, question progress, answer flow, cognitive closure screen with stats)
+- [ ] 19-01-PLAN.md -- Digest session backend (POST /reviews/digest endpoint with card selection algorithm, useDigestCards hook)
+- [ ] 19-02-PLAN.md -- Digest session UI (ProgressBar, DigestClosure, DigestCTA components, digest.tsx screen, home screen integration)
 
 ### Phase 20: Pipeline Feedback
 **Goal**: Users see real-time processing status for their triaged content, so they understand why some content has quizzes and others are still processing
