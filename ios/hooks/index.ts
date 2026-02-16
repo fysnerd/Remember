@@ -15,3 +15,4 @@ export { useQuizRecommendations } from './useQuizRecommendations';
 export { useThemeSuggestions } from './useThemeSuggestions';
 export { useDebouncedValue } from './useDebouncedValue';
 export { useSubscription } from './useSubscription';
+export { useSwipeTriage } from './useSwipeTriage';

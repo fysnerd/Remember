@@ -6,6 +6,7 @@ import { create } from 'zustand';
 
 type ExplorerTab = 'suggestions' | 'library';
 type SourceFilter = 'all' | 'youtube' | 'spotify' | 'tiktok' | 'instagram';
+type TriageMode = 'swipe' | 'bulk';
 
 interface ContentStoreState {
   // Explorer top-level tab state
@@ -15,6 +16,10 @@ interface ContentStoreState {
   // Search state
   searchQuery: string;
   setSearchQuery: (query: string) => void;
+
+  // Triage mode state (swipe card stack vs bulk select grid)
+  triageMode: TriageMode;
+  setTriageMode: (mode: TriageMode) => void;
 
   // Filter state
   sourceFilter: SourceFilter;
@@ -30,6 +35,9 @@ export const useContentStore = create<ContentStoreState>((set) => ({
 
   searchQuery: '',
   setSearchQuery: (query) => set({ searchQuery: query }),
+
+  triageMode: 'swipe',
+  setTriageMode: (mode) => set({ triageMode: mode }),
 
   sourceFilter: 'all',
   themeFilter: null,
