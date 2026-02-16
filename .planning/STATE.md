@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-16)
 
 **Core value:** L'utilisateur apprend durablement a partir de ce qu'il consomme deja -- sans effort supplementaire de curation.
-**Current focus:** v4.0 UX Triage & Daily Digest -- Phase 18
+**Current focus:** v4.0 UX Triage & Daily Digest -- Phase 18 complete, Phase 19 next
 
 ## Current Position
 
 Phase: 18 of 20
-Plan: 1 of 2 in current phase
-Status: Executing Phase 18 -- Plan 01 complete
-Last activity: 2026-02-16 -- Completed 18-01 (swipe card stack infrastructure)
+Plan: 2 of 2 in current phase (phase complete)
+Status: Phase 18 complete -- ready for Phase 19
+Last activity: 2026-02-16 -- Completed 18-02 (library screen integration)
 
-Progress: [###################################░░░░░] 37/42 plans (88% overall, 38% v4.0)
+Progress: [####################################░░░░] 38/42 plans (90% overall, 50% v4.0)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 37 (10 v1.0 + 12 v2.0 + 12 v3.0 + 3 v4.0)
+- Total plans completed: 38 (10 v1.0 + 12 v2.0 + 12 v3.0 + 4 v4.0)
 - v1.0: ~25 min/plan avg (4 phases, 10 plans)
 - v2.0: ~3.75 min/plan avg (7 phases, 12 plans)
 - v3.0: 8 min/plan avg (5 phases, 12 plans)
@@ -49,6 +49,10 @@ Recent decisions affecting current work:
 - [18-01]: Default triageMode is 'swipe' since swipe is the primary triage experience per PRD
 - [18-01]: Spring configs: fly-off (stiffness 900, damping 120, mass 4), snap-back (damping 15, stiffness 150, mass 1)
 - [18-01]: CardDisplay inline in SwipeCardStack (not reusing ContentCard) for full-width swipe layout
+- [18-02]: Non-scrollable ScrollView wrapper for SwipeCardStack enables pull-to-refresh without gesture conflict
+- [18-02]: key={sourceFilter} on SwipeCardStack forces remount on filter change, resetting card index
+- [18-02]: Search bar only in bulk mode; swipe mode is for quick triage without search
+- [18-02]: SelectionBar guarded by triageMode === 'bulk' to prevent rendering in swipe mode
 
 ### Pending Todos
 
@@ -63,6 +67,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Completed 18-01-PLAN.md (swipe card stack infrastructure)
-Next step: Execute 18-02-PLAN.md (library screen integration)
+Stopped at: Completed 18-02-PLAN.md (library screen integration) -- Phase 18 complete
+Next step: Execute Phase 19 (Daily Digest)
 Resume file: None
