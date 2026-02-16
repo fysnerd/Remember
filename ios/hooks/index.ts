@@ -18,3 +18,4 @@ export { useSubscription } from './useSubscription';
 export { useSwipeTriage } from './useSwipeTriage';
 export { useDigestCards } from './useDigest';
 export type { DigestCard, DigestResponse } from './useDigest';
+export { usePipelineStatus } from './usePipelineStatus';

@@ -538,6 +538,39 @@ contentRouter.get('/stats', async (req: Request, res: Response, next: NextFuncti
   }
 });
 
+// GET /api/content/pipeline-status - Batch pipeline status for processing content
+contentRouter.get('/pipeline-status', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+
+    // All content currently in processing states
+    const processing = await prisma.content.findMany({
+      where: {
+        userId,
+        status: { in: [ContentStatus.SELECTED, ContentStatus.TRANSCRIBING, ContentStatus.GENERATING] },
+      },
+      select: { id: true, status: true, title: true, updatedAt: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    // Content that became READY in the last 5 minutes (for transition detection)
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const recentlyReady = await prisma.content.findMany({
+      where: {
+        userId,
+        status: ContentStatus.READY,
+        updatedAt: { gte: fiveMinAgo },
+      },
+      select: { id: true, title: true, updatedAt: true },
+      take: 20,
+    });
+
+    return res.json({ processing, recentlyReady });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 // ============================================================================
 // Inbox & Triage Endpoints (MUST be before /:id routes)
 // ============================================================================

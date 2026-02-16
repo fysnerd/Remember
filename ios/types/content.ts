@@ -10,7 +10,27 @@ export type ContentStatus =
   | 'TRANSCRIBING'
   | 'GENERATING'
   | 'READY'
+  | 'FAILED'
+  | 'UNSUPPORTED'
   | 'ARCHIVED';
+
+export interface PipelineItem {
+  id: string;
+  status: ContentStatus;
+  title: string;
+  updatedAt: string;
+}
+
+export interface PipelineReadyItem {
+  id: string;
+  title: string;
+  updatedAt: string;
+}
+
+export interface PipelineStatusResponse {
+  processing: PipelineItem[];
+  recentlyReady: PipelineReadyItem[];
+}
 
 export interface Content {
   id: string;
