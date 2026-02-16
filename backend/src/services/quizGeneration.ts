@@ -24,6 +24,47 @@ interface QuizGenerationResult {
 // Maximum tokens to send to LLM (roughly 4 chars per token)
 const MAX_TRANSCRIPT_CHARS = 12000;
 
+/** Map platform enum to content type and display label */
+function getContentTypeAndLabel(platform: string): { type: 'video' | 'podcast' | 'tiktok' | 'reel'; label: string } {
+  switch (platform) {
+    case 'YOUTUBE':   return { type: 'video', label: 'YouTube' };
+    case 'TIKTOK':    return { type: 'tiktok', label: 'TikTok' };
+    case 'INSTAGRAM': return { type: 'reel', label: 'Instagram' };
+    case 'SPOTIFY':
+    default:          return { type: 'podcast', label: 'Spotify' };
+  }
+}
+
+/** Resolve creator name from Content fields, returns null if none available */
+function getCreatorName(content: {
+  channelName?: string | null;
+  authorUsername?: string | null;
+  showName?: string | null;
+}): string | null {
+  return content.channelName || content.authorUsername || content.showName || null;
+}
+
+/** Build self-referential context string for quiz prompt injection */
+function buildCreatorContext(
+  platformLabel: string,
+  creatorName: string | null,
+  capturedAt?: Date | null
+): string {
+  const platformRef =
+    platformLabel === 'TikTok' ? 'video TikTok' :
+    platformLabel === 'Instagram' ? 'reel Instagram' :
+    platformLabel === 'YouTube' ? 'video YouTube' :
+    'podcast Spotify';
+
+  const creatorRef = creatorName ? ` de ${creatorName}` : '';
+
+  const temporalRef = capturedAt
+    ? ` (contenu que tu as ${platformLabel === 'Spotify' ? 'ecoute' : 'regarde'} le ${capturedAt.toLocaleDateString('fr-FR')})`
+    : '';
+
+  return `cette ${platformRef}${creatorRef}${temporalRef}`;
+}
+
 /**
  * Chunk a long transcript into manageable pieces
  */
@@ -71,10 +112,21 @@ async function fetchExistingQuestions(contentId: string): Promise<string[]> {
 export async function generateQuizFromTranscript(
   transcript: string,
   contentTitle: string,
-  contentType: 'video' | 'podcast',
+  _contentType: 'video' | 'podcast' | 'tiktok' | 'reel',
+  contentMetadata: {
+    creatorName: string | null;
+    platformLabel: string;
+    capturedAt?: Date | null;
+  },
   existingQuestions: string[] = []
 ): Promise<QuizGenerationResult> {
   const llm = getLLMClient();
+
+  const creatorContext = buildCreatorContext(
+    contentMetadata.platformLabel,
+    contentMetadata.creatorName,
+    contentMetadata.capturedAt
+  );
 
   // Chunk transcript if too long
   const chunks = chunkTranscript(transcript, MAX_TRANSCRIPT_CHARS);
@@ -83,7 +135,7 @@ export async function generateQuizFromTranscript(
   const assessmentChunk = chunks[0];
 
   // Assess content topics (very permissive - almost all content can have quiz questions)
-  const assessmentPrompt = `Analyse cette transcription de ${contentType === 'video' ? 'vidéo' : 'podcast'} et identifie les sujets principaux abordés.
+  const assessmentPrompt = `Analyse cette transcription de ${creatorContext} et identifie les sujets principaux abordés.
 
 Titre: "${contentTitle}"
 
@@ -161,12 +213,15 @@ OBJECTIF PEDAGOGIQUE:
 Les questions doivent tester les CONNAISSANCES ACQUISES par l'utilisateur (concepts, faits, mecanismes, applications).
 L'utilisateur doit pouvoir repondre grace a ce qu'il a APPRIS, pas en se souvenant des mots exacts du contenu.
 
-FORMULATION DES QUESTIONS - REGLES STRICTES:
-- INTERDIT: "Que dit l'auteur...", "Selon la video...", "Que mentionne le createur...", "D'apres le podcast..."
+FORMULATION DES QUESTIONS - CONTEXTUALISATION OBLIGATOIRE:
+- Chaque question DOIT mentionner la source: "${creatorContext}"
+- CORRECT: "Dans ${creatorContext}, quel concept est explique concernant [sujet] ?"
+- CORRECT: "Selon ${creatorContext}, pourquoi [phenomene] se produit-il ?"
+- CORRECT: "D'apres ${creatorContext}, comment fonctionne [mecanisme] ?"
+- CORRECT: "Quelle est la difference entre X et Y, telle que presentee dans ${creatorContext} ?"
 - INTERDIT: "Quel terme est utilise pour...", "Quelle expression est employee..."
-- INTERDIT: Toute reference a la transcription, au format (video/podcast), ou a l'auteur/createur
-- CORRECT: "Qu'est-ce que [concept] ?", "Comment fonctionne [mecanisme] ?", "Pourquoi [phenomene] se produit-il ?"
-- CORRECT: "Quelle est la difference entre X et Y ?", "Dans quel cas utilise-t-on [technique] ?"
+- INTERDIT: Toute reference a la transcription en tant que telle
+- La question doit rester une question de CONNAISSANCE, pas de memorisation de mots
 
 PRINCIPES PEDAGOGIQUES (taxonomie de Bloom) - Varie les niveaux cognitifs:
 - Comprendre: "Qu'est-ce que [concept] ?" / "Quel est le lien entre X et Y ?"
@@ -212,7 +267,7 @@ Reponds uniquement en JSON:
             role: 'system',
             content: `Tu es un concepteur pedagogique expert en creation de quiz. Tu crees des questions qui testent les CONNAISSANCES REELLES acquises, comme dans un examen universitaire ou un manuel scolaire.
 
-REGLE ABSOLUE: Ne fais JAMAIS reference a l'auteur, au createur, a la video, au podcast, ou a la transcription dans tes questions. Les questions doivent etre formulees comme des questions de connaissance generale sur le sujet, pas comme des questions de comprehension de texte.
+REGLE DE CONTEXTUALISATION: Chaque question DOIT mentionner le createur et la plateforme source pour creer un effet auto-referentiel. Utilise "${creatorContext}" comme reference dans chaque question. Les questions testent des CONNAISSANCES REELLES mais ancrees dans le contexte de consommation de l'utilisateur.
 
 Principes scientifiques:
 - Testing effect: les questions renforcent la memorisation mieux que la relecture
