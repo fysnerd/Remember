@@ -143,15 +143,25 @@ export function SwipeCardStack({
   );
 }
 
+const PLATFORM_LABELS: Record<string, string> = {
+  youtube: 'YouTube',
+  spotify: 'Spotify',
+  tiktok: 'TikTok',
+  instagram: 'Instagram',
+};
+
 /**
- * CardDisplay - Full-width card visual for swipe stack
- * Mirrors ContentCard styling but sized for swipe mode.
+ * CardDisplay - Full-page card visual for swipe stack
+ * Large thumbnail, source badge, title, author, synopsis, topics.
  */
 function CardDisplay({ item }: { item: Content }) {
   const durationText = formatDuration(item.duration);
+  const platformLabel = PLATFORM_LABELS[item.source] || item.source;
+  const synopsis = item.synopsis || item.description;
 
   return (
     <View style={styles.card}>
+      {/* Large thumbnail area */}
       <View style={styles.thumbnailContainer}>
         {item.thumbnailUrl ? (
           <Image
@@ -161,15 +171,9 @@ function CardDisplay({ item }: { item: Content }) {
           />
         ) : (
           <View style={styles.placeholder}>
-            <PlatformIcon platform={item.source} size={32} color={colors.textTertiary} />
+            <PlatformIcon platform={item.source} size={48} color={colors.textTertiary} />
           </View>
         )}
-        {/* Platform badge - top left */}
-        <View style={styles.badgeOverlay}>
-          <View style={styles.badge}>
-            <PlatformIcon platform={item.source} size={12} color="#FFFFFF" />
-          </View>
-        </View>
         {/* Duration badge - bottom right */}
         {durationText && (
           <View style={styles.durationOverlay}>
@@ -179,19 +183,53 @@ function CardDisplay({ item }: { item: Content }) {
           </View>
         )}
       </View>
+
+      {/* Info section */}
       <View style={styles.infoContainer}>
-        <Text variant="body" weight="semibold" numberOfLines={2} style={styles.title}>
+        {/* Source row: platform icon + label */}
+        <View style={styles.sourceRow}>
+          <PlatformIcon platform={item.source} size={14} colored />
+          <Text variant="caption" weight="medium" style={styles.sourceLabel}>
+            {platformLabel}
+          </Text>
+        </View>
+
+        {/* Title */}
+        <Text variant="body" weight="semibold" numberOfLines={3} style={styles.title}>
           {item.title}
         </Text>
+
+        {/* Author */}
         {item.channelName && (
           <Text variant="caption" color="secondary" numberOfLines={1} style={styles.channelName}>
             {item.channelName}
           </Text>
         )}
+
+        {/* Synopsis */}
+        {synopsis && (
+          <Text variant="caption" color="secondary" numberOfLines={4} style={styles.synopsis}>
+            {synopsis}
+          </Text>
+        )}
+
+        {/* Topics tags */}
+        {item.topics && item.topics.length > 0 && (
+          <View style={styles.topicsRow}>
+            {item.topics.slice(0, 4).map((topic) => (
+              <View key={topic} style={styles.topicChip}>
+                <Text style={styles.topicText}>{topic}</Text>
+              </View>
+            ))}
+          </View>
+        )}
       </View>
     </View>
   );
 }
+
+const SCREEN_HEIGHT = Dimensions.get('window').height;
+const CARD_HEIGHT = SCREEN_HEIGHT * 0.72; // Full-page feel, leaves room for header/tabs
 
 const styles = StyleSheet.create({
   container: {
@@ -200,23 +238,23 @@ const styles = StyleSheet.create({
   cardsArea: {
     flex: 1,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
   },
   cardWrapper: {
     justifyContent: 'flex-start',
   },
   card: {
     width: '100%',
-    borderRadius: borderRadius.lg,
+    height: CARD_HEIGHT,
+    borderRadius: borderRadius.xl,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.borderLight,
     overflow: 'hidden',
-    ...shadows.md,
+    ...shadows.lg,
   },
   thumbnailContainer: {
     width: '100%',
-    aspectRatio: 16 / 9,
+    height: CARD_HEIGHT * 0.45,
     position: 'relative',
     backgroundColor: colors.surfaceElevated,
   },
@@ -231,19 +269,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeOverlay: {
-    position: 'absolute',
-    top: spacing.sm,
-    left: spacing.sm,
-  },
-  badge: {
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    borderRadius: borderRadius.xs,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   durationOverlay: {
     position: 'absolute',
     bottom: spacing.sm,
@@ -251,23 +276,62 @@ const styles = StyleSheet.create({
   },
   durationBadge: {
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    borderRadius: borderRadius.xs,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
   durationText: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#FFFFFF',
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
   },
   infoContainer: {
-    padding: spacing.md,
+    flex: 1,
+    padding: spacing.lg,
+    gap: spacing.sm,
+  },
+  sourceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  sourceLabel: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    letterSpacing: 0.3,
   },
   title: {
     color: colors.text,
+    fontSize: 18,
+    lineHeight: 24,
   },
   channelName: {
+    fontSize: 14,
+  },
+  synopsis: {
+    fontSize: 13,
+    lineHeight: 18,
     marginTop: spacing.xs,
+  },
+  topicsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 'auto' as any,
+    paddingTop: spacing.sm,
+  },
+  topicChip: {
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  topicText: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    fontWeight: '500',
   },
 });
