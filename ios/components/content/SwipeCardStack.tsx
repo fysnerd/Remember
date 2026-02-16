@@ -1,21 +1,24 @@
 /**
- * SwipeCardStack - Card stack manager rendering 2-3 visible cards with depth illusion
+ * SwipeCardStack - Cinematic full-page card stack for triage
  *
- * Only the top card is interactive (wrapped in SwipeCard with Gesture.Pan).
- * Behind cards are scaled down and offset for depth. Advances through items
- * on swipe. Fires onNearEnd when 5 items remain for pagination pre-fetch.
+ * Editorial design: full-bleed thumbnail with gradient fade,
+ * glass platform badge, refined info hierarchy, topic chips.
+ * 2-3 visible cards with depth illusion, top card interactive.
  */
 
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { View, StyleSheet, Image, Dimensions } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { User, Clock } from 'lucide-react-native';
 import { SwipeCard } from './SwipeCard';
 import { PlatformIcon } from '../icons';
 import { Text } from '../ui';
-import { colors, spacing, borderRadius, shadows } from '../../theme';
+import { colors, fonts, spacing, borderRadius, glass } from '../../theme';
 import type { Content } from '../../types/content';
 
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const VISIBLE_COUNT = 3;
-const SCREEN_WIDTH = Dimensions.get('window').width;
+const CARD_HEIGHT = SCREEN_HEIGHT * 0.74;
 
 interface SwipeCardStackProps {
   items: Content[];
@@ -25,7 +28,6 @@ interface SwipeCardStackProps {
   onNearEnd?: () => void;
 }
 
-// Format duration in mm:ss or hh:mm:ss
 function formatDuration(seconds?: number): string | null {
   if (!seconds) return null;
   const hrs = Math.floor(seconds / 3600);
@@ -49,14 +51,12 @@ export function SwipeCardStack({
 
   const visibleItems = items.slice(currentIndex, currentIndex + VISIBLE_COUNT);
 
-  // Fire onNearEnd when approaching end of loaded items
   useEffect(() => {
     if (items.length - currentIndex <= 5 && items.length > 0) {
       onNearEnd?.();
     }
   }, [currentIndex, items.length, onNearEnd]);
 
-  // Fire onEmpty when no more visible items
   useEffect(() => {
     if (currentIndex >= items.length && items.length > 0) {
       onEmpty();
@@ -64,7 +64,6 @@ export function SwipeCardStack({
   }, [currentIndex, items.length, onEmpty]);
 
   const advanceCard = useCallback(() => {
-    // Small delay to avoid gesture/render race condition
     setTimeout(() => {
       currentIndexRef.current += 1;
       setCurrentIndex(currentIndexRef.current);
@@ -91,7 +90,6 @@ export function SwipeCardStack({
     return null;
   }
 
-  // Render cards in REVERSE order so bottom card renders first (correct z-order)
   const reversedItems = [...visibleItems].reverse();
 
   return (
@@ -103,14 +101,12 @@ export function SwipeCardStack({
 
           const depthStyle = {
             transform: [
-              { scale: 1 - actualIndex * 0.05 },
-              { translateY: actualIndex * -8 },
+              { scale: 1 - actualIndex * 0.04 },
+              { translateY: actualIndex * -10 },
             ],
           };
 
-          const cardContent = (
-            <CardDisplay key={item.id} item={item} />
-          );
+          const cardContent = <CardDisplay key={item.id} item={item} />;
 
           if (isTop) {
             return (
@@ -143,6 +139,10 @@ export function SwipeCardStack({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Platform config
+// ---------------------------------------------------------------------------
+
 const PLATFORM_LABELS: Record<string, string> = {
   youtube: 'YouTube',
   spotify: 'Spotify',
@@ -150,19 +150,27 @@ const PLATFORM_LABELS: Record<string, string> = {
   instagram: 'Instagram',
 };
 
-/**
- * CardDisplay - Full-page card visual for swipe stack
- * Large thumbnail, source badge, title, author, synopsis, topics.
- */
+const PLATFORM_COLORS: Record<string, string> = {
+  youtube: '#FF0000',
+  spotify: '#1DB954',
+  tiktok: '#00F2EA',
+  instagram: '#E4405F',
+};
+
+// ---------------------------------------------------------------------------
+// CardDisplay — cinematic editorial card
+// ---------------------------------------------------------------------------
+
 function CardDisplay({ item }: { item: Content }) {
   const durationText = formatDuration(item.duration);
   const platformLabel = PLATFORM_LABELS[item.source] || item.source;
+  const platformColor = PLATFORM_COLORS[item.source] || colors.accent;
   const synopsis = item.synopsis || item.description;
 
   return (
     <View style={styles.card}>
-      {/* Large thumbnail area */}
-      <View style={styles.thumbnailContainer}>
+      {/* ---- Thumbnail with gradient fade ---- */}
+      <View style={styles.thumbnailArea}>
         {item.thumbnailUrl ? (
           <Image
             source={{ uri: item.thumbnailUrl }}
@@ -171,49 +179,71 @@ function CardDisplay({ item }: { item: Content }) {
           />
         ) : (
           <View style={styles.placeholder}>
-            <PlatformIcon platform={item.source} size={48} color={colors.textTertiary} />
+            <PlatformIcon platform={item.source} size={56} color={colors.textTertiary} />
           </View>
         )}
-        {/* Duration badge - bottom right */}
+
+        {/* Gradient fade — 5 strips from transparent to surface color */}
+        <View style={styles.gradientContainer} pointerEvents="none">
+          <View style={[styles.gradientStrip, { backgroundColor: 'transparent' }]} />
+          <View style={[styles.gradientStrip, { backgroundColor: colors.surface, opacity: 0.15 }]} />
+          <View style={[styles.gradientStrip, { backgroundColor: colors.surface, opacity: 0.4 }]} />
+          <View style={[styles.gradientStrip, { backgroundColor: colors.surface, opacity: 0.7 }]} />
+          <View style={[styles.gradientStrip, { backgroundColor: colors.surface, opacity: 0.92 }]} />
+          <View style={[styles.gradientStrip, { backgroundColor: colors.surface }]} />
+        </View>
+
+        {/* Platform badge — frosted glass pill, top-left */}
+        <View style={styles.platformBadgeWrap}>
+          <BlurView intensity={50} tint="dark" style={styles.platformBadge}>
+            <View style={[styles.platformDot, { backgroundColor: platformColor }]} />
+            <Text style={styles.platformLabel}>{platformLabel}</Text>
+          </BlurView>
+        </View>
+
+        {/* Duration badge — frosted glass pill, bottom-right */}
         {durationText && (
-          <View style={styles.durationOverlay}>
-            <View style={styles.durationBadge}>
+          <View style={styles.durationWrap}>
+            <BlurView intensity={50} tint="dark" style={styles.durationBadge}>
+              <Clock size={11} color="rgba(255,255,255,0.7)" strokeWidth={2} />
               <Text style={styles.durationText}>{durationText}</Text>
-            </View>
+            </BlurView>
           </View>
         )}
       </View>
 
-      {/* Info section */}
+      {/* ---- Info section ---- */}
       <View style={styles.infoContainer}>
-        {/* Source row: platform icon + label */}
-        <View style={styles.sourceRow}>
-          <PlatformIcon platform={item.source} size={14} colored />
-          <Text variant="caption" weight="medium" style={styles.sourceLabel}>
-            {platformLabel}
-          </Text>
-        </View>
-
         {/* Title */}
-        <Text variant="body" weight="semibold" numberOfLines={3} style={styles.title}>
+        <Text numberOfLines={2} style={styles.title}>
           {item.title}
         </Text>
 
-        {/* Author */}
+        {/* Author row */}
         {item.channelName && (
-          <Text variant="caption" color="secondary" numberOfLines={1} style={styles.channelName}>
-            {item.channelName}
-          </Text>
+          <View style={styles.authorRow}>
+            <View style={styles.authorIconWrap}>
+              <User size={12} color={colors.accent} strokeWidth={2} />
+            </View>
+            <Text numberOfLines={1} style={styles.authorName}>
+              {item.channelName}
+            </Text>
+          </View>
         )}
+
+        {/* Divider */}
+        <View style={styles.divider} />
 
         {/* Synopsis */}
-        {synopsis && (
-          <Text variant="caption" color="secondary" numberOfLines={4} style={styles.synopsis}>
+        {synopsis ? (
+          <Text numberOfLines={4} style={styles.synopsis}>
             {synopsis}
           </Text>
+        ) : (
+          <Text style={styles.synopsisEmpty}>Pas encore de resume disponible</Text>
         )}
 
-        {/* Topics tags */}
+        {/* Topics — pinned to bottom */}
         {item.topics && item.topics.length > 0 && (
           <View style={styles.topicsRow}>
             {item.topics.slice(0, 4).map((topic) => (
@@ -228,8 +258,11 @@ function CardDisplay({ item }: { item: Content }) {
   );
 }
 
-const SCREEN_HEIGHT = Dimensions.get('window').height;
-const CARD_HEIGHT = SCREEN_HEIGHT * 0.72; // Full-page feel, leaves room for header/tabs
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
+
+const THUMBNAIL_RATIO = 0.48;
 
 const styles = StyleSheet.create({
   container: {
@@ -237,24 +270,28 @@ const styles = StyleSheet.create({
   },
   cardsArea: {
     flex: 1,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
   },
   cardWrapper: {
     justifyContent: 'flex-start',
   },
+
+  // Card shell
   card: {
     width: '100%',
     height: CARD_HEIGHT,
-    borderRadius: borderRadius.xl,
+    borderRadius: 24,
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
     overflow: 'hidden',
-    ...shadows.lg,
+    borderWidth: 1,
+    borderColor: glass.border,
+    ...glass.shadow,
   },
-  thumbnailContainer: {
+
+  // ---- Thumbnail ----
+  thumbnailArea: {
     width: '100%',
-    height: CARD_HEIGHT * 0.45,
+    height: CARD_HEIGHT * THUMBNAIL_RATIO,
     position: 'relative',
     backgroundColor: colors.surfaceElevated,
   },
@@ -269,69 +306,151 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  durationOverlay: {
+
+  // Gradient fade strips
+  gradientContainer: {
     position: 'absolute',
-    bottom: spacing.sm,
-    right: spacing.sm,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 100,
+    flexDirection: 'column',
   },
-  durationBadge: {
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  durationText: {
-    fontSize: 13,
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontVariant: ['tabular-nums'],
-  },
-  infoContainer: {
+  gradientStrip: {
     flex: 1,
-    padding: spacing.lg,
-    gap: spacing.sm,
   },
-  sourceRow: {
+
+  // Platform badge
+  platformBadgeWrap: {
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  platformBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    gap: 7,
   },
-  sourceLabel: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    letterSpacing: 0.3,
+  platformDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
+  platformLabel: {
+    fontFamily: fonts.semibold,
+    fontSize: 12,
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+
+  // Duration badge
+  durationWrap: {
+    position: 'absolute',
+    bottom: 20,
+    right: 14,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  durationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    gap: 5,
+  },
+  durationText: {
+    fontFamily: fonts.medium,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.9)',
+    fontVariant: ['tabular-nums'],
+  },
+
+  // ---- Info section ----
+  infoContainer: {
+    flex: 1,
+    paddingHorizontal: 22,
+    paddingTop: 2,
+    paddingBottom: 20,
+  },
+
+  // Title
   title: {
+    fontFamily: fonts.bold,
+    fontSize: 20,
+    lineHeight: 26,
     color: colors.text,
-    fontSize: 18,
-    lineHeight: 24,
+    letterSpacing: -0.3,
   },
-  channelName: {
+
+  // Author
+  authorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    gap: 8,
+  },
+  authorIconWrap: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(212, 165, 116, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  authorName: {
+    fontFamily: fonts.medium,
     fontSize: 14,
+    color: colors.accent,
+    flex: 1,
   },
+
+  // Divider
+  divider: {
+    height: 1,
+    backgroundColor: glass.border,
+    marginTop: 14,
+    marginBottom: 14,
+  },
+
+  // Synopsis
   synopsis: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: spacing.xs,
+    fontFamily: fonts.regular,
+    fontSize: 14,
+    lineHeight: 21,
+    color: colors.textSecondary,
   },
+  synopsisEmpty: {
+    fontFamily: fonts.regular,
+    fontSize: 14,
+    color: colors.textTertiary,
+    fontStyle: 'italic',
+  },
+
+  // Topics
   topicsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 8,
     marginTop: 'auto' as any,
-    paddingTop: spacing.sm,
+    paddingTop: 14,
   },
   topicChip: {
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    backgroundColor: 'rgba(30, 41, 59, 0.7)',
     borderWidth: 1,
-    borderColor: colors.borderLight,
+    borderColor: glass.borderLight,
   },
   topicText: {
+    fontFamily: fonts.medium,
     fontSize: 11,
     color: colors.textSecondary,
-    fontWeight: '500',
+    letterSpacing: 0.3,
   },
 });
