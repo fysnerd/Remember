@@ -143,71 +143,81 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
     // Wait for liked content to render — the SPA may need extra time
     await new Promise(resolve => setTimeout(resolve, 3000));
 
-    // Extract liked post data from the page DOM and embedded Relay store
+    // Extract liked post data from the page
     const extractedData = await page.evaluate(() => {
       const result: {
         postLinks: string[];
-        relayItems: any[];
-        scriptData: string[];
+        imgSrcs: string[];
         debugInfo: string;
-      } = { postLinks: [], relayItems: [], scriptData: [], debugInfo: '' };
+        htmlSnippet: string;
+      } = { postLinks: [], imgSrcs: [], debugInfo: '', htmlSnippet: '' };
 
-      // Method 1: Extract post links from DOM <a href="/p/SHORTCODE/"> or <a href="/reel/SHORTCODE/">
-      const links = document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]');
+      // Method 1: Extract post links from ANY attribute containing shortcode patterns
+      const allElements = document.querySelectorAll('*');
       const seen = new Set<string>();
-      links.forEach(link => {
-        const href = link.getAttribute('href') || '';
-        const match = href.match(/\/(p|reel)\/([A-Za-z0-9_-]+)/);
-        if (match && !seen.has(match[2])) {
-          seen.add(match[2]);
-          result.postLinks.push(match[2]);
-        }
-      });
 
-      // Method 2: Check for Relay store data (Instagram's SPA data store)
-      try {
-        // Try various known Instagram data stores
-        const stores = [
-          (window as any).__relay_store__,
-          (window as any).__RELAY_STORE__,
-          (window as any).__initialData,
-          (window as any)._sharedData,
-          (window as any).__additionalDataLoaded,
-        ];
-        for (const store of stores) {
-          if (store) {
-            const storeStr = JSON.stringify(store).substring(0, 200);
-            result.debugInfo += `Found store: ${storeStr}... `;
+      allElements.forEach(el => {
+        // Check href
+        const href = el.getAttribute('href') || '';
+        const hrefMatch = href.match(/\/(p|reel)\/([A-Za-z0-9_-]+)/);
+        if (hrefMatch && !seen.has(hrefMatch[2])) {
+          seen.add(hrefMatch[2]);
+          result.postLinks.push(hrefMatch[2]);
+        }
+
+        // Check all data-* attributes for shortcodes or post IDs
+        for (let i = 0; i < el.attributes.length; i++) {
+          const attr = el.attributes[i];
+          if (attr.name.startsWith('data-') || attr.name === 'aria-label') {
+            const match = attr.value.match(/\/(p|reel)\/([A-Za-z0-9_-]+)/);
+            if (match && !seen.has(match[2])) {
+              seen.add(match[2]);
+              result.postLinks.push(match[2]);
+            }
           }
         }
-      } catch (e) {
-        result.debugInfo += `Store error: ${(e as Error).message} `;
-      }
+      });
 
-      // Method 3: Check embedded JSON in script tags
-      const scripts = document.querySelectorAll('script[type="application/json"]');
-      scripts.forEach((script, i) => {
-        const text = script.textContent || '';
-        if (text.includes('liked') || text.includes('media_type') || text.includes('/p/')) {
-          result.scriptData.push(`script[${i}]: ${text.substring(0, 200)}`);
+      // Method 2: Extract image CDN URLs (may contain post identifiers)
+      const imgs = document.querySelectorAll('img');
+      imgs.forEach(img => {
+        const src = img.src || img.getAttribute('src') || '';
+        if (src.includes('instagram') || src.includes('cdninstagram') || src.includes('fbcdn')) {
+          result.imgSrcs.push(src.substring(0, 150));
         }
       });
 
-      // Method 4: Check __NEXT_DATA__ (Next.js style)
-      const nextDataEl = document.getElementById('__NEXT_DATA__');
-      if (nextDataEl) {
-        const text = nextDataEl.textContent || '';
-        result.debugInfo += `__NEXT_DATA__ length: ${text.length} `;
-        if (text.includes('liked') || text.includes('media_type')) {
-          result.scriptData.push(`__NEXT_DATA__: ${text.substring(0, 200)}`);
+      // Method 3: Search ALL script tags for embedded post data
+      const scripts = document.querySelectorAll('script');
+      scripts.forEach((script) => {
+        const text = script.textContent || '';
+        // Look for shortcode patterns in inline scripts
+        const matches = text.matchAll(/\"code\":\"([A-Za-z0-9_-]{10,12})\"/g);
+        for (const m of matches) {
+          if (!seen.has(m[1])) {
+            seen.add(m[1]);
+            result.postLinks.push(m[1]);
+          }
         }
-      }
+        // Also try pk/id patterns
+        const pkMatches = text.matchAll(/\"pk\":\"?(\d{15,20})\"?/g);
+        for (const m of pkMatches) {
+          if (!seen.has(m[1])) {
+            seen.add(m[1]);
+            result.postLinks.push(m[1]);
+          }
+        }
+      });
 
-      // Debug: count all elements and provide page structure info
-      result.debugInfo += `Total links: ${links.length}, ` +
-        `All anchors: ${document.querySelectorAll('a').length}, ` +
-        `Images: ${document.querySelectorAll('img').length}, ` +
-        `Body text length: ${document.body?.innerText?.length || 0}`;
+      // Debug info
+      result.debugInfo = `Anchors: ${document.querySelectorAll('a').length}, ` +
+        `Images: ${imgs.length}, ` +
+        `Divs: ${document.querySelectorAll('div').length}, ` +
+        `Body length: ${document.body?.innerText?.length || 0}`;
+
+      // Grab a snippet of the page HTML around images for structural analysis
+      const mainContent = document.querySelector('main') || document.querySelector('[role="main"]') || document.body;
+      result.htmlSnippet = mainContent?.innerHTML?.substring(0, 1500) || '';
 
       return result;
     });
@@ -216,10 +226,10 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       userId,
       postLinksCount: extractedData.postLinks.length,
       postLinks: extractedData.postLinks.slice(0, 10),
-      relayItemsCount: extractedData.relayItems.length,
-      scriptDataCount: extractedData.scriptData.length,
-      scriptData: extractedData.scriptData.slice(0, 3),
+      imgCount: extractedData.imgSrcs.length,
+      imgSrcs: extractedData.imgSrcs.slice(0, 5),
       debugInfo: extractedData.debugInfo,
+      htmlSnippet: extractedData.htmlSnippet.substring(0, 500),
     }, 'Extracted data from likes page');
 
     // If no links found, try scrolling to trigger lazy loading
@@ -228,23 +238,42 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
       await new Promise(resolve => setTimeout(resolve, 5000));
 
-      // Re-extract after scroll
-      const scrollLinks = await page.evaluate(() => {
-        const links = document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]');
+      // Re-extract after scroll with the same thorough approach
+      const scrollData = await page.evaluate(() => {
         const seen = new Set<string>();
-        const result: string[] = [];
-        links.forEach(link => {
-          const href = link.getAttribute('href') || '';
-          const match = href.match(/\/(p|reel)\/([A-Za-z0-9_-]+)/);
-          if (match && !seen.has(match[2])) {
-            seen.add(match[2]);
-            result.push(match[2]);
+        const postLinks: string[] = [];
+
+        document.querySelectorAll('*').forEach(el => {
+          const href = el.getAttribute('href') || '';
+          const hrefMatch = href.match(/\/(p|reel)\/([A-Za-z0-9_-]+)/);
+          if (hrefMatch && !seen.has(hrefMatch[2])) {
+            seen.add(hrefMatch[2]);
+            postLinks.push(hrefMatch[2]);
+          }
+          for (let i = 0; i < el.attributes.length; i++) {
+            const attr = el.attributes[i];
+            if (attr.name.startsWith('data-') || attr.name === 'aria-label') {
+              const match = attr.value.match(/\/(p|reel)\/([A-Za-z0-9_-]+)/);
+              if (match && !seen.has(match[2])) {
+                seen.add(match[2]);
+                postLinks.push(match[2]);
+              }
+            }
           }
         });
-        return result;
+
+        // Search scripts again after scroll might have loaded new data
+        document.querySelectorAll('script').forEach((script) => {
+          const text = script.textContent || '';
+          for (const m of text.matchAll(/\"code\":\"([A-Za-z0-9_-]{10,12})\"/g)) {
+            if (!seen.has(m[1])) { seen.add(m[1]); postLinks.push(m[1]); }
+          }
+        });
+
+        return postLinks;
       });
-      extractedData.postLinks = scrollLinks;
-      log.info({ userId, postLinksCount: scrollLinks.length }, 'Post links after scroll');
+      extractedData.postLinks = scrollData;
+      log.info({ userId, postLinksCount: scrollData.length }, 'Post links after scroll');
     }
 
     await browser.close();
