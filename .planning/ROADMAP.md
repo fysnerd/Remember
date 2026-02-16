@@ -5,7 +5,7 @@
 - ✅ **v1.0 Admin & Observability** -- Phases 1-4 (shipped 2026-02-10)
 - ✅ **v2.0 Themes-first UX** -- Phases 5-11 (shipped 2026-02-11)
 - ✅ **v3.0 Night Blue Glass UI** -- Phases 12-16 (shipped 2026-02-12)
-- 🚧 **v4.0 UX Triage & Daily Digest** -- Phases 17-20 (in progress)
+- ✅ **v4.0 UX Triage & Daily Digest** -- Phases 17-20 (shipped 2026-02-16)
 
 ## Phases
 
@@ -47,14 +47,14 @@ Full details: [milestones/v2.0-ROADMAP.md](milestones/v2.0-ROADMAP.md)
 
 </details>
 
-### 🚧 v4.0 UX Triage & Daily Digest
+### ✅ v4.0 UX Triage & Daily Digest -- SHIPPED 2026-02-16
 
 **Milestone Goal:** Refonte complete du flow de triage inbox (swipe Tinder-like + bulk toggle) et implementation du Daily Digest (session microlearning quotidienne avec cloture cognitive). Alignement SRS J+1/J+3/J+7/J+31 et quiz autoreferentiels.
 
 - [x] **Phase 17: SRS & Quiz Backend** - Align SRS intervals to J+1/J+3/J+7/J+31 and make quiz prompts self-referential with creator/platform context
 - [x] **Phase 18: Swipe Triage** - Full inbox overhaul with Tinder-like swipe as primary mode and bulk select as secondary
 - [x] **Phase 19: Daily Digest** - Pre-built microlearning session with SRS-prioritized card selection and cognitive closure
-- [ ] **Phase 20: Pipeline Feedback** - Real-time processing status so users see content progress from triage to quiz-ready
+- [x] **Phase 20: Pipeline Feedback** - Real-time processing status so users see content progress from triage to quiz-ready
 
 ## Phase Details
 
@@ -114,7 +114,7 @@ Plans:
 **Plans**: 1 plan (Wave 1: 20-01)
 
 Plans:
-- [ ] 20-01-PLAN.md -- Pipeline feedback (batch pipeline-status endpoint + usePipelineStatus polling hook + PipelineStatusBadge on ContentCard + status-specific content detail text + ready transition haptic)
+- [x] 20-01-PLAN.md -- Pipeline feedback (batch pipeline-status endpoint + usePipelineStatus polling hook + PipelineStatusBadge on ContentCard + status-specific content detail text + ready transition haptic)
 
 ## Progress
 
@@ -145,4 +145,4 @@ Recommended: 17 → 18 → 19 → 20 (serial for simplicity).
 | 17. SRS & Quiz Backend | v4.0 | 2/2 | Complete | 2026-02-16 |
 | 18. Swipe Triage | v4.0 | 2/2 | Complete | 2026-02-16 |
 | 19. Daily Digest | v4.0 | 2/2 | Complete | 2026-02-16 |
-| 20. Pipeline Feedback | v4.0 | 0/1 | Not started | - |
+| 20. Pipeline Feedback | v4.0 | 1/1 | Complete | 2026-02-16 |
