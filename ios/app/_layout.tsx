@@ -115,6 +115,15 @@ export default function RootLayout() {
           }}
         />
         <Stack.Screen
+          name="digest"
+          options={{
+            headerShown: false,
+            presentation: 'card',
+            animation: 'fade',
+            gestureEnabled: false,
+          }}
+        />
+        <Stack.Screen
           name="memo/[id]"
           options={{
             headerShown: true,

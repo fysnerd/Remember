@@ -23,7 +23,7 @@ export function DigestCTA({ dueCount, onPress }: DigestCTAProps) {
       <GlassCard padding="lg" onPress={onPress}>
         <View style={styles.row}>
           <View style={styles.textContainer}>
-            <Text variant="body" weight="semiBold">
+            <Text variant="body" weight="semibold">
               Revision du jour
             </Text>
             <Text variant="body" color="secondary">

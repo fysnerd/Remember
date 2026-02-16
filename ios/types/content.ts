@@ -63,9 +63,25 @@ export interface Review {
 }
 
 export interface ReviewStats {
-  streak: number;
-  todayCount: number;
-  totalCount: number;
+  // Due counts
+  dueToday: number;
+  reviewDue: number;
+  newDue: number;
+  // New cards limit
+  newCardsToday: number;
+  newCardsLimit: number;
+  remainingNewToday: number;
+  // Totals
+  totalCards: number;
+  // Streak
+  currentStreak: number;
+  longestStreak: number;
+  // Activity
+  reviewsLast7Days: number;
+  // Legacy (kept for backward compat)
+  streak?: number;
+  todayCount?: number;
+  totalCount?: number;
 }
 
 export interface Memo {

@@ -16,7 +16,8 @@ import { EmptyState } from '../../components/EmptyState';
 import { GreetingHeader } from '../../components/home/GreetingHeader';
 import { QuizRecommendationCard } from '../../components/home/QuizRecommendationCard';
 import { STAGGER_DELAY, STAGGER_CAP } from '../../lib/animations';
-import { useQuizRecommendations } from '../../hooks';
+import { useQuizRecommendations, useReviewStats } from '../../hooks';
+import { DigestCTA } from '../../components/home/DigestCTA';
 import { useSubscription } from '../../hooks/useSubscription';
 import { useAuthStore } from '../../stores/authStore';
 import { colors, spacing } from '../../theme';
@@ -29,6 +30,7 @@ export default function HomeScreen() {
 
   const { user } = useAuthStore();
   const { data: recommendations, isLoading } = useQuizRecommendations();
+  const { data: reviewStats } = useReviewStats();
   const { data: subscription } = useSubscription();
   const isFree = subscription?.plan !== 'PRO';
 
@@ -37,7 +39,10 @@ export default function HomeScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await queryClient.invalidateQueries({ queryKey: ['home', 'recommendations'] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['home', 'recommendations'] }),
+        queryClient.invalidateQueries({ queryKey: ['reviews', 'stats'] }),
+      ]);
     } catch (error) {
       console.error('[Home] Refresh error:', error);
     } finally {
@@ -73,6 +78,11 @@ export default function HomeScreen() {
       }
     >
       <GreetingHeader userName={userName} />
+
+      <DigestCTA
+        dueCount={reviewStats?.dueToday ?? 0}
+        onPress={() => router.push('/digest')}
+      />
 
       <View style={styles.cardsList}>
         {items.map((rec, index) => (
