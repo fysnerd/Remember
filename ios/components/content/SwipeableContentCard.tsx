@@ -10,7 +10,7 @@ import { ContentCard } from './ContentCard';
 import { Text } from '../ui';
 import { colors, spacing, borderRadius } from '../../theme';
 
-type ContentSource = 'youtube' | 'spotify' | 'tiktok' | 'instagram';
+import type { ContentSource, ContentStatus } from '../../types/content';
 
 interface SwipeableContentCardProps {
   id: string;
@@ -23,6 +23,7 @@ interface SwipeableContentCardProps {
   onLongPress?: () => void;
   isSelected?: boolean;
   selectionMode?: boolean;
+  status?: ContentStatus;
   onDelete: () => void;
 }
 

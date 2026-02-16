@@ -16,7 +16,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { GreetingHeader } from '../../components/home/GreetingHeader';
 import { QuizRecommendationCard } from '../../components/home/QuizRecommendationCard';
 import { STAGGER_DELAY, STAGGER_CAP } from '../../lib/animations';
-import { useQuizRecommendations, useReviewStats } from '../../hooks';
+import { useQuizRecommendations, useReviewStats, usePipelineStatus } from '../../hooks';
 import { DigestCTA } from '../../components/home/DigestCTA';
 import { useSubscription } from '../../hooks/useSubscription';
 import { useAuthStore } from '../../stores/authStore';
@@ -31,6 +31,8 @@ export default function HomeScreen() {
   const { user } = useAuthStore();
   const { data: recommendations, isLoading } = useQuizRecommendations();
   const { data: reviewStats } = useReviewStats();
+  // Pipeline polling — runs on home screen, fires haptic when content becomes ready
+  usePipelineStatus();
   const { data: subscription } = useSubscription();
   const isFree = subscription?.plan !== 'PRO';
 

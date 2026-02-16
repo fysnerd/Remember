@@ -14,7 +14,7 @@ import { SwipeableContentCard } from '../../components/content';
 import { ContentCard } from '../../components/content';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
-import { useThemeDetail, useRemoveContentFromTheme } from '../../hooks';
+import { useThemeDetail, useRemoveContentFromTheme, usePipelineStatus } from '../../hooks';
 import { haptics } from '../../lib/haptics';
 import api from '../../lib/api';
 import { colors, spacing, borderRadius } from '../../theme';
@@ -34,6 +34,7 @@ export default function ThemeDetailScreen() {
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   const { data, isLoading } = useThemeDetail(id);
   const removeContent = useRemoveContentFromTheme();
+  const { processingMap } = usePipelineStatus();
 
   const selectionMode = selectedIds.size > 0;
 
@@ -210,6 +211,7 @@ export default function ThemeDetailScreen() {
                     onLongPress={() => handleLongPress(item.id)}
                     isSelected={selectedIds.has(item.id)}
                     selectionMode={true}
+                    status={processingMap.get(item.id) ?? item.status}
                   />
                 ) : (
                   <SwipeableContentCard
@@ -222,6 +224,7 @@ export default function ThemeDetailScreen() {
                     onPress={() => handleContentPress(item.id)}
                     onLongPress={() => handleLongPress(item.id)}
                     onDelete={() => handleRemoveContent(item.id)}
+                    status={processingMap.get(item.id) ?? item.status}
                   />
                 )}
               </View>
