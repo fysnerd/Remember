@@ -52,7 +52,7 @@ Full details: [milestones/v2.0-ROADMAP.md](milestones/v2.0-ROADMAP.md)
 **Milestone Goal:** Refonte complete du flow de triage inbox (swipe Tinder-like + bulk toggle) et implementation du Daily Digest (session microlearning quotidienne avec cloture cognitive). Alignement SRS J+1/J+3/J+7/J+31 et quiz autoreferentiels.
 
 - [x] **Phase 17: SRS & Quiz Backend** - Align SRS intervals to J+1/J+3/J+7/J+31 and make quiz prompts self-referential with creator/platform context
-- [ ] **Phase 18: Swipe Triage** - Full inbox overhaul with Tinder-like swipe as primary mode and bulk select as secondary
+- [x] **Phase 18: Swipe Triage** - Full inbox overhaul with Tinder-like swipe as primary mode and bulk select as secondary
 - [ ] **Phase 19: Daily Digest** - Pre-built microlearning session with SRS-prioritized card selection and cognitive closure
 - [ ] **Phase 20: Pipeline Feedback** - Real-time processing status so users see content progress from triage to quiz-ready
 
@@ -86,8 +86,8 @@ Plans:
 **Plans**: 2 plans (Wave 1: 18-01, Wave 2: 18-02)
 
 Plans:
-- [ ] 18-01-PLAN.md -- Swipe card infrastructure (GestureHandlerRootView, SwipeCard with pan+spring, SwipeCardStack, SwipeOverlay, useSwipeTriage hook, TriageModeToggle, triageMode state)
-- [ ] 18-02-PLAN.md -- Library screen integration (swipe mode as default Bibliotheque tab, bulk select toggle, SourcePills in both modes, pull-to-refresh, pagination pre-fetch, empty states)
+- [x] 18-01-PLAN.md -- Swipe card infrastructure (GestureHandlerRootView, SwipeCard with pan+spring, SwipeCardStack, SwipeOverlay, useSwipeTriage hook, TriageModeToggle, triageMode state)
+- [x] 18-02-PLAN.md -- Library screen integration (swipe mode as default Bibliotheque tab, bulk select toggle, SourcePills in both modes, pull-to-refresh, pagination pre-fetch, empty states)
 
 ### Phase 19: Daily Digest
 **Goal**: Users have a single daily learning session that mixes SRS due cards and new content into a focused 10-15 question experience, ending with a cognitive closure screen showing their performance
@@ -143,6 +143,6 @@ Recommended: 17 → 18 → 19 → 20 (serial for simplicity).
 | 15. Backend Endpoints | v3.0 | 1/1 | Complete | 2026-02-12 |
 | 16. UX Polish | v3.0 | 2/2 | Complete | 2026-02-12 |
 | 17. SRS & Quiz Backend | v4.0 | 2/2 | Complete | 2026-02-16 |
-| 18. Swipe Triage | v4.0 | 0/2 | Not started | - |
+| 18. Swipe Triage | v4.0 | 2/2 | Complete | 2026-02-16 |
 | 19. Daily Digest | v4.0 | 0/2 | Not started | - |
 | 20. Pipeline Feedback | v4.0 | 0/1 | Not started | - |
