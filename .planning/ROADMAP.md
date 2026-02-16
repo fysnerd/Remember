@@ -83,12 +83,11 @@ Plans:
   2. User can tap a top-right button to toggle from swipe mode into bulk select mode, then select/deselect multiple items and batch learn or archive them
   3. User can filter inbox cards by source platform (YouTube, Spotify, TikTok, Instagram) using filter pills, available in both modes
   4. User can pull-to-refresh in swipe mode to trigger a platform sync, and inbox cards display sorted most recent first
-**Plans**: TBD
+**Plans**: 2 plans (Wave 1: 18-01, Wave 2: 18-02)
 
 Plans:
-- [ ] 18-01-PLAN.md -- Swipe card stack component (gesture handler, spring animations, swipe right=keep, swipe left=dismiss)
-- [ ] 18-02-PLAN.md -- Bulk select toggle mode (multi-select UI, batch learn/archive actions)
-- [ ] 18-03-PLAN.md -- Source filter pills + pull-to-refresh sync + capturedAt desc sorting
+- [ ] 18-01-PLAN.md -- Swipe card infrastructure (GestureHandlerRootView, SwipeCard with pan+spring, SwipeCardStack, SwipeOverlay, useSwipeTriage hook, TriageModeToggle, triageMode state)
+- [ ] 18-02-PLAN.md -- Library screen integration (swipe mode as default Bibliotheque tab, bulk select toggle, SourcePills in both modes, pull-to-refresh, pagination pre-fetch, empty states)
 
 ### Phase 19: Daily Digest
 **Goal**: Users have a single daily learning session that mixes SRS due cards and new content into a focused 10-15 question experience, ending with a cognitive closure screen showing their performance
@@ -144,6 +143,6 @@ Recommended: 17 → 18 → 19 → 20 (serial for simplicity).
 | 15. Backend Endpoints | v3.0 | 1/1 | Complete | 2026-02-12 |
 | 16. UX Polish | v3.0 | 2/2 | Complete | 2026-02-12 |
 | 17. SRS & Quiz Backend | v4.0 | 2/2 | Complete | 2026-02-16 |
-| 18. Swipe Triage | v4.0 | 0/3 | Not started | - |
+| 18. Swipe Triage | v4.0 | 0/2 | Not started | - |
 | 19. Daily Digest | v4.0 | 0/2 | Not started | - |
 | 20. Pipeline Feedback | v4.0 | 0/1 | Not started | - |
