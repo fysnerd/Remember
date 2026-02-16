@@ -49,25 +49,39 @@ export function SwipeCardStack({
   const currentIndexRef = useRef(0);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  const visibleItems = items.slice(currentIndex, currentIndex + VISIBLE_COUNT);
+  // Stable snapshot: prevents query refetch from removing swiped items mid-stack.
+  // Only append truly new items (from pagination); never shrink.
+  const seenIdsRef = useRef(new Set<string>(items.map((i) => i.id)));
+  const [snapshot, setSnapshot] = useState<Content[]>(items);
 
   useEffect(() => {
-    if (items.length - currentIndex <= 5 && items.length > 0) {
+    const newItems = items.filter((item) => !seenIdsRef.current.has(item.id));
+    if (newItems.length > 0) {
+      newItems.forEach((item) => seenIdsRef.current.add(item.id));
+      setSnapshot((prev) => [...prev, ...newItems]);
+    }
+  }, [items]);
+
+  const visibleItems = snapshot.slice(currentIndex, currentIndex + VISIBLE_COUNT);
+
+  useEffect(() => {
+    if (snapshot.length - currentIndex <= 5 && snapshot.length > 0) {
       onNearEnd?.();
     }
-  }, [currentIndex, items.length, onNearEnd]);
+  }, [currentIndex, snapshot.length, onNearEnd]);
 
   useEffect(() => {
-    if (currentIndex >= items.length && items.length > 0) {
+    if (currentIndex >= snapshot.length && snapshot.length > 0) {
       onEmpty();
     }
-  }, [currentIndex, items.length, onEmpty]);
+  }, [currentIndex, snapshot.length, onEmpty]);
 
   const advanceCard = useCallback(() => {
+    // 250ms lets the fly-off animation clear the screen before unmounting
     setTimeout(() => {
       currentIndexRef.current += 1;
       setCurrentIndex(currentIndexRef.current);
-    }, 50);
+    }, 250);
   }, []);
 
   const handleSwipeRight = useCallback(

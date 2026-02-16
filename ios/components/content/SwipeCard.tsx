@@ -27,8 +27,8 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.35; // 35% of screen
 const VELOCITY_THRESHOLD = 500; // px/s fast flick
 
-// Fast fly-off: high stiffness, heavy damping, no bounce
-const FLY_OFF_SPRING = { stiffness: 900, damping: 120, mass: 4 };
+// Snappy fly-off: light mass for fast exit
+const FLY_OFF_SPRING = { stiffness: 600, damping: 55, mass: 1 };
 // Bouncy snap-back: low damping for satisfying bounce
 const SNAP_BACK_SPRING = { damping: 15, stiffness: 150, mass: 1 };
 
@@ -91,26 +91,12 @@ export function SwipeCard({
         event.velocityX < -VELOCITY_THRESHOLD;
 
       if (shouldSwipeRight) {
-        translateX.value = withSpring(
-          SCREEN_WIDTH * 1.5,
-          FLY_OFF_SPRING,
-          (finished) => {
-            if (finished) {
-              runOnJS(onSwipeRight)();
-            }
-          }
-        );
+        translateX.value = withSpring(SCREEN_WIDTH * 1.5, FLY_OFF_SPRING);
+        runOnJS(onSwipeRight)();
         runOnJS(triggerSuccessHaptic)();
       } else if (shouldSwipeLeft) {
-        translateX.value = withSpring(
-          -SCREEN_WIDTH * 1.5,
-          FLY_OFF_SPRING,
-          (finished) => {
-            if (finished) {
-              runOnJS(onSwipeLeft)();
-            }
-          }
-        );
+        translateX.value = withSpring(-SCREEN_WIDTH * 1.5, FLY_OFF_SPRING);
+        runOnJS(onSwipeLeft)();
         runOnJS(triggerWarningHaptic)();
       } else {
         // Snap back
