@@ -17,7 +17,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { Search, BookOpen, Sparkles } from 'lucide-react-native';
 import { ThemeGridCard } from '../../components/explorer/ThemeGridCard';
 import { GlassLockOverlay } from '../../components/glass';
-import { useInbox, useInboxCount, useTriageMutation, useDebouncedValue, useThemes, useDeleteTheme } from '../../hooks';
+import { useInbox, useInboxCount, useTriageMutation, useDebouncedValue, useThemes, useToggleFavoriteTheme, useDeleteTheme } from '../../hooks';
 import { useSubscription } from '../../hooks/useSubscription';
 import { useContentStore } from '../../stores/contentStore';
 import type { Content } from '../../types/content';
@@ -60,6 +60,7 @@ export default function LibraryScreen() {
   const { data: inboxItems, isLoading: inboxLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInbox();
   const triageMutation = useTriageMutation();
   const { data: themes, isLoading: themesLoading } = useThemes();
+  const toggleFavoriteMutation = useToggleFavoriteTheme();
   const deleteThemeMutation = useDeleteTheme();
 
   const { show: showToast, ToastComponent } = useToast();
@@ -215,8 +216,10 @@ export default function LibraryScreen() {
                   name={theme.name}
                   contentCount={theme.contentCount}
                   dueCards={theme.dueCards}
+                  isFavorite={theme.isFavorite}
                   onPress={() => handleThemePress(theme.id)}
                   onLongPress={() => handleThemeLongPress(theme.id, theme.name)}
+                  onToggleFavorite={() => toggleFavoriteMutation.mutate(theme.id)}
                 />
               </GlassLockOverlay>
             </Animated.View>

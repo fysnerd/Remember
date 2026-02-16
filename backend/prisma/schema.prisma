@@ -393,6 +393,7 @@ model Theme {
   emoji         String         @default("📚")
   memo          String?
   memoGeneratedAt DateTime?
+  isFavorite    Boolean        @default(false)
   discoveredAt  DateTime?     // null = pending discovery, set = user confirmed
   contentThemes ContentTheme[]
   themeTags     ThemeTag[]

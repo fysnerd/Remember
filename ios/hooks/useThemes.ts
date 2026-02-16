@@ -104,6 +104,36 @@ export function useUpdateTheme() {
   });
 }
 
+// Toggle theme favorite status
+export function useToggleFavoriteTheme() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data } = await api.put<{ isFavorite: boolean }>(`/themes/${id}/favorite`);
+      return data;
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['themes'] });
+      const previous = queryClient.getQueryData<ThemeListItem[]>(['themes']);
+      if (previous) {
+        queryClient.setQueryData<ThemeListItem[]>(['themes'], (old) =>
+          old?.map((t) => (t.id === id ? { ...t, isFavorite: !t.isFavorite } : t))
+        );
+      }
+      return { previous };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['themes'], context.previous);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['themes'] });
+    },
+  });
+}
+
 // Delete a theme
 export function useDeleteTheme() {
   const queryClient = useQueryClient();

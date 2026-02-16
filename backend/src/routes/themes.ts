@@ -246,7 +246,7 @@ themeRouter.get('/', async (req: Request, res: Response, next: NextFunction) => 
           },
         },
       },
-      orderBy: { name: 'asc' },
+      orderBy: [{ isFavorite: 'desc' }, { name: 'asc' }],
     });
 
     // Compute per-theme progress (only for discovered/all, not pending)
@@ -535,7 +535,7 @@ themeRouter.post('/discover', async (req: Request, res: Response, next: NextFunc
           },
         },
       },
-      orderBy: { name: 'asc' },
+      orderBy: [{ isFavorite: 'desc' }, { name: 'asc' }],
     });
 
     const themeResult = themes
@@ -677,6 +677,34 @@ themeRouter.put('/:id', async (req: Request, res: Response, next: NextFunction) 
         details: error.errors,
       });
     }
+    return next(error);
+  }
+});
+
+// ============================================================================
+// PUT /:id/favorite -- Toggle theme favorite status
+// ============================================================================
+
+themeRouter.put('/:id/favorite', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+    const themeId = req.params.id as string;
+
+    const theme = await prisma.theme.findFirst({
+      where: { id: themeId, userId },
+    });
+
+    if (!theme) {
+      return res.status(404).json({ error: 'Theme not found' });
+    }
+
+    const updated = await prisma.theme.update({
+      where: { id: themeId },
+      data: { isFavorite: !theme.isFavorite },
+    });
+
+    return res.json({ isFavorite: updated.isFavorite });
+  } catch (error) {
     return next(error);
   }
 });

@@ -103,6 +103,7 @@ export interface ThemeListItem {
   masteredCards: number;
   dueCards: number;
   masteryPercent: number;
+  isFavorite: boolean;
   createdAt: string;
   updatedAt: string;
 }
