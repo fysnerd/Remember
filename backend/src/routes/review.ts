@@ -381,6 +381,141 @@ reviewRouter.get('/stats', async (req: Request, res: Response, next: NextFunctio
   }
 });
 
+// ============================================================================
+// Daily Digest Endpoint
+// ============================================================================
+
+// POST /api/reviews/digest - Build and return a daily digest session
+reviewRouter.post('/digest', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+    // Ideal range: 10-15 cards. No hard minimum enforced -- return whatever is available.
+    const MAX_DIGEST = 15;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // 1. SRS due cards (priority) - most overdue first
+    const dueCards = await prisma.card.findMany({
+      where: {
+        userId,
+        repetitions: { gt: 0 },
+        nextReviewAt: { lte: new Date() },
+      },
+      orderBy: { nextReviewAt: 'asc' },
+      take: MAX_DIGEST,
+      include: {
+        quiz: {
+          include: {
+            content: {
+              select: {
+                id: true,
+                title: true,
+                url: true,
+                platform: true,
+              },
+            },
+            theme: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // 2. New card budget
+    const settings = await prisma.userSettings.findUnique({
+      where: { userId },
+    });
+    const newCardsPerDay = settings?.newCardsPerDay ?? 20;
+
+    const firstReviewsToday = await prisma.review.count({
+      where: {
+        userId,
+        createdAt: { gte: today },
+        card: {
+          repetitions: 1,
+        },
+      },
+    });
+
+    const remainingNewToday = Math.max(0, newCardsPerDay - firstReviewsToday);
+    const newSlots = Math.min(Math.max(0, MAX_DIGEST - dueCards.length), remainingNewToday);
+
+    // 3. New cards (fill remaining slots) - oldest first
+    const newCards = newSlots > 0
+      ? await prisma.card.findMany({
+          where: {
+            userId,
+            repetitions: 0,
+            nextReviewAt: { lte: new Date() },
+          },
+          orderBy: { createdAt: 'asc' },
+          take: newSlots,
+          include: {
+            quiz: {
+              include: {
+                content: {
+                  select: {
+                    id: true,
+                    title: true,
+                    url: true,
+                    platform: true,
+                  },
+                },
+                theme: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        })
+      : [];
+
+    // 4. Combine and shuffle
+    const allCards = [...dueCards, ...newCards].sort(() => Math.random() - 0.5);
+
+    // 5. Empty check
+    if (allCards.length === 0) {
+      return res.json({
+        cards: [],
+        session: null,
+        reason: 'no_cards_due',
+        count: 0,
+        stats: { dueCount: 0, newCount: 0 },
+      });
+    }
+
+    // 6. Auto-create session
+    const session = await prisma.quizSession.create({
+      data: {
+        userId,
+        questionLimit: allCards.length,
+        mode: 'due',
+      },
+    });
+
+    // 7. Return digest
+    return res.json({
+      cards: allCards,
+      count: allCards.length,
+      session: { id: session.id },
+      stats: {
+        dueCount: dueCards.length,
+        newCount: newCards.length,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 // Validation schema for review submission
 const submitReviewSchema = z.object({
   cardId: z.string(),
