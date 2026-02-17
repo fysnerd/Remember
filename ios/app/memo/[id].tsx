@@ -1,5 +1,6 @@
 /**
  * Memo Screen - Displays AI-generated memo in markdown
+ * Header shows content title, themes, and generation date
  */
 
 import { View, ScrollView, StyleSheet, Pressable, Share } from 'react-native';
@@ -9,7 +10,7 @@ import Markdown from 'react-native-markdown-display';
 import { Text, Button, useToast } from '../../components/ui';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { ErrorState } from '../../components/ErrorState';
-import { useMemo } from '../../hooks';
+import { useMemo, useContent } from '../../hooks';
 import { colors, spacing, borderRadius } from '../../theme';
 
 // Markdown styles
@@ -90,7 +91,8 @@ export default function MemoScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { data: memo, isLoading, error, refetch } = useMemo(id!);
+  const { data: memo, isLoading: memoLoading, error: memoError, refetch } = useMemo(id!);
+  const { data: content } = useContent(id!);
   const { show, ToastComponent } = useToast();
 
   const handleDone = () => {
@@ -103,20 +105,24 @@ export default function MemoScreen() {
     try {
       await Share.share({
         message: memo.content,
-        title: 'Mémo Ankora',
+        title: content?.title || 'Memo Ankora',
       });
     } catch (error) {
       show('Erreur lors du partage', 'error');
     }
   };
 
-  if (isLoading) {
+  if (memoLoading) {
     return <LoadingScreen />;
   }
 
-  if (error || !memo) {
-    return <ErrorState message="Mémo introuvable" onRetry={refetch} hasHeader />;
+  if (memoError || !memo) {
+    return <ErrorState message="Memo introuvable" onRetry={refetch} hasHeader />;
   }
+
+  const dateStr = memo.generatedAt
+    ? new Date(memo.generatedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+    : null;
 
   return (
     <>
@@ -128,14 +134,7 @@ export default function MemoScreen() {
             <Pressable
               onPress={handleShare}
               hitSlop={8}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                backgroundColor: colors.surface,
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
+              style={styles.shareButton}
             >
               <Text variant="body" style={{ textAlign: 'center' }}>📤</Text>
             </Pressable>
@@ -147,22 +146,33 @@ export default function MemoScreen() {
         style={styles.container}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.lg }]}
       >
-        {/* Header */}
-        <Text variant="caption" color="secondary" style={styles.label}>
-          MÉMO
-        </Text>
+        {/* Header: title + themes + date */}
+        {content && (
+          <View style={styles.header}>
+            <Text variant="h2" style={styles.title}>
+              {content.title}
+            </Text>
+            <View style={styles.meta}>
+              {content.themes && content.themes.length > 0 && (
+                <View style={styles.themes}>
+                  {content.themes.map((theme) => (
+                    <View key={theme.id} style={[styles.themeChip, { borderColor: theme.color }]}>
+                      <Text variant="caption">{theme.emoji} {theme.name}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+              {dateStr && (
+                <Text variant="caption" color="secondary">
+                  {dateStr}
+                </Text>
+              )}
+            </View>
+          </View>
+        )}
 
         {/* Markdown Content */}
         <Markdown style={markdownStyles}>{memo.content}</Markdown>
-
-        {/* Footer */}
-        {memo.generatedAt && (
-          <View style={styles.footer}>
-            <Text variant="caption" color="secondary">
-              Généré le {new Date(memo.generatedAt).toLocaleDateString('fr-FR')}
-            </Text>
-          </View>
-        )}
 
         {/* Done button */}
         <View style={styles.doneButton}>
@@ -178,7 +188,36 @@ export default function MemoScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg },
-  label: { marginBottom: spacing.md, letterSpacing: 1 },
-  footer: { alignItems: 'center', paddingTop: spacing.xl, marginTop: spacing.lg },
+  shareButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  header: {
+    marginBottom: spacing.lg,
+    paddingBottom: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  title: {
+    marginBottom: spacing.sm,
+  },
+  meta: {
+    gap: spacing.sm,
+  },
+  themes: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  themeChip: {
+    borderWidth: 1,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
   doneButton: { marginTop: spacing.xl },
 });
