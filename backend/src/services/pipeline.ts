@@ -151,7 +151,7 @@ async function generateUserQuizzes(userId: string): Promise<number> {
       userId,
       transcript: { isNot: null },
       quizzes: { none: {} },
-      status: { in: ['INBOX', 'SELECTED'] },
+      status: 'SELECTED',
     },
     select: { id: true },
     take: 10, // Quiz gen is expensive (~3 LLM calls each)

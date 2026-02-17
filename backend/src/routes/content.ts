@@ -162,7 +162,7 @@ contentRouter.get('/', async (req: Request, res: Response, next: NextFunction) =
       tags,
       dateFrom,
       dateTo,
-      sortBy = 'capturedAt',
+      sortBy = 'createdAt',
       sortOrder = 'desc',
     } = req.query;
 
