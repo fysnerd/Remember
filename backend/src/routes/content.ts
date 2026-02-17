@@ -291,20 +291,10 @@ contentRouter.get('/', async (req: Request, res: Response, next: NextFunction) =
     const orderByField = validSortFields.includes(sortBy as string) ? sortBy as string : 'capturedAt';
     const orderByDirection = sortOrder === 'asc' ? 'asc' : 'desc';
 
-    // Build orderBy array
-    const orderBy: Prisma.ContentOrderByWithRelationInput[] = [];
-
-    // UX v2.0: Si tri explicite par capturedAt desc, priorité au tri chronologique
-    const explicitChronoSort = sortBy === 'capturedAt' && sortOrder === 'desc';
-
-    // Legacy: prioritize listened content for Spotify (sauf si tri chrono explicite)
-    if (!explicitChronoSort && (!platform || platform === 'SPOTIFY')) {
-      orderBy.push({ fullyPlayed: 'desc' });  // Fully played first
-      orderBy.push({ listenProgress: 'desc' }); // Then by progress percentage
-    }
-
-    // Apply the user's sort preference
-    orderBy.push({ [orderByField]: orderByDirection });
+    // Build orderBy array — always sort by date, nothing else
+    const orderBy: Prisma.ContentOrderByWithRelationInput[] = [
+      { [orderByField]: orderByDirection },
+    ];
 
     const [rawContents, total] = await Promise.all([
       prisma.content.findMany({
