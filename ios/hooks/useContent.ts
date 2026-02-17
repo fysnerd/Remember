@@ -32,6 +32,7 @@ interface BackendContent {
   tags?: { name: string }[];
   themes?: { id: string; name: string; slug: string; color: string; emoji: string }[];
   quizzes?: { id: string }[];
+  _count?: { quizzes: number };
   createdAt: string;
 }
 
@@ -60,7 +61,7 @@ function mapContent(item: BackendContent): Content {
     channelName: item.channelName,
     url: item.url,
     status: item.status as Content['status'],
-    quizCount: item.quizzes?.length,
+    quizCount: item._count?.quizzes ?? item.quizzes?.length ?? 0,
     topics: item.tags?.map((t) => t.name) ?? [],
     themes: item.themes ?? [],
     createdAt: item.createdAt,
