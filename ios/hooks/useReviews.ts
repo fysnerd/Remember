@@ -21,6 +21,7 @@ export interface QuizSessionContent {
   title: string;
   platform: string;
   thumbnailUrl: string | null;
+  channelName: string | null;
 }
 
 export interface QuizSessionItem {

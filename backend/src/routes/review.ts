@@ -1061,6 +1061,7 @@ reviewRouter.get('/sessions', async (req: Request, res: Response, next: NextFunc
                         title: true,
                         platform: true,
                         thumbnailUrl: true,
+                        channelName: true,
                         contentThemes: {
                           select: {
                             theme: {
@@ -1081,7 +1082,7 @@ reviewRouter.get('/sessions', async (req: Request, res: Response, next: NextFunc
 
     const items = sessions.map(session => {
       // Extract unique contents with themes
-      const contentMap = new Map<string, { id: string; title: string; platform: string; thumbnailUrl: string | null; themes: { id: string; name: string; emoji: string }[] }>();
+      const contentMap = new Map<string, { id: string; title: string; platform: string; thumbnailUrl: string | null; channelName: string | null; themes: { id: string; name: string; emoji: string }[] }>();
       for (const review of session.reviews) {
         const content = review.card.quiz.content;
         if (!content) continue;
@@ -1091,6 +1092,7 @@ reviewRouter.get('/sessions', async (req: Request, res: Response, next: NextFunc
             title: content.title,
             platform: content.platform,
             thumbnailUrl: content.thumbnailUrl,
+            channelName: content.channelName,
             themes: content.contentThemes?.map((ct) => ct.theme) ?? [],
           });
         }

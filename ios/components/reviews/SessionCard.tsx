@@ -43,6 +43,10 @@ export function SessionCard({ session, onPress }: SessionCardProps) {
   const platforms = [...new Set(session.contents.map(c => c.platform.toLowerCase()))];
   const accuracyColor = getAccuracyColor(session.accuracy);
 
+  // Pick creator name from the first content that has one
+  const creatorName = session.contents.find(c => c.channelName)?.channelName;
+  const displayTitle = creatorName || contentNames;
+
   return (
     <GlassCard padding="md" onPress={onPress}>
       <View style={styles.row}>
@@ -71,10 +75,10 @@ export function SessionCard({ session, onPress }: SessionCardProps) {
         {/* Center: info */}
         <View style={styles.info}>
           <Text variant="body" weight="medium" numberOfLines={1}>
-            Quiz - {session.totalCount} question{session.totalCount > 1 ? 's' : ''}
+            {displayTitle}
           </Text>
           <Text variant="caption" color="secondary" numberOfLines={1}>
-            {contentNames}
+            {session.totalCount} question{session.totalCount > 1 ? 's' : ''}
           </Text>
           <Text variant="caption" color="tertiary">
             {formatRelativeDate(session.completedAt)}
