@@ -103,13 +103,6 @@ export default function SessionMemoScreen() {
     }
   };
 
-  const handleRegenerate = () => {
-    if (!id) return;
-    memoMutation.mutate({ sessionId: id, force: true }, {
-      onError: () => show('Erreur lors de la generation', 'error'),
-    });
-  };
-
   if (isLoading) return <LoadingScreen />;
   if (!session) return <ErrorState message="Session introuvable" onRetry={refetch} hasHeader />;
 
@@ -199,14 +192,6 @@ export default function SessionMemoScreen() {
         {/* Actions */}
         {memo && (
           <View style={styles.actions}>
-            <Button
-              variant="secondary"
-              fullWidth
-              onPress={handleRegenerate}
-              disabled={memoMutation.isPending}
-            >
-              {memoMutation.isPending ? 'Generation...' : 'Regenerer'}
-            </Button>
             <Button variant="primary" fullWidth onPress={() => router.back()}>
               OK
             </Button>
