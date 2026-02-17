@@ -464,10 +464,6 @@ export async function processContentTranscript(contentId: string): Promise<boole
     if (!cacheResult) {
       // Cache is locked, wait and retry
       log.debug({ contentId }, 'Cache locked, will retry later');
-      await prisma.content.update({
-        where: { id: contentId },
-        data: { status: ContentStatus.SELECTED },
-      });
       return false;
     }
 
@@ -477,10 +473,6 @@ export async function processContentTranscript(contentId: string): Promise<boole
     if (cache.status === TranscriptCacheStatus.SUCCESS && cache.text) {
       await linkCacheToContent(content.platform, content.externalId, cache.id);
       await copyTranscriptFromCache(contentId, cache);
-      await prisma.content.update({
-        where: { id: contentId },
-        data: { status: ContentStatus.SELECTED },
-      });
       log.info({ contentId, cacheHit: true }, 'Transcription completed from cache');
       return true;
     }
@@ -488,10 +480,6 @@ export async function processContentTranscript(contentId: string): Promise<boole
     // Need to fetch transcript
     if (!acquired) {
       // Cache is being processed by another worker
-      await prisma.content.update({
-        where: { id: contentId },
-        data: { status: ContentStatus.SELECTED },
-      });
       return false;
     }
 
@@ -534,12 +522,7 @@ export async function processContentTranscript(contentId: string): Promise<boole
       },
     });
 
-    // Update content status back to SELECTED (quiz worker picks up SELECTED + transcript)
-    await prisma.content.update({
-      where: { id: contentId },
-      data: { status: ContentStatus.SELECTED },
-    });
-
+    // Don't change status — INBOX stays INBOX (pre-transcribed), SELECTED stays SELECTED
     log.info({ contentId, externalId: content.externalId, chars: result.text.length, language: result.language }, 'Transcription completed');
     return true;
 

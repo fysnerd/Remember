@@ -836,11 +836,7 @@ export async function processPodcastTranscript(contentId: string): Promise<boole
     return false;
   }
 
-  // Update status to transcribing
-  await prisma.content.update({
-    where: { id: contentId },
-    data: { status: ContentStatus.TRANSCRIBING },
-  });
+  // Don't change status — INBOX stays INBOX, SELECTED stays SELECTED
 
   try {
     // Step 1: Find RSS feed and audio URL
@@ -874,12 +870,6 @@ export async function processPodcastTranscript(contentId: string): Promise<boole
         language: result.language,
         source: TranscriptSource.WHISPER,
       },
-    });
-
-    // Update content status
-    await prisma.content.update({
-      where: { id: contentId },
-      data: { status: ContentStatus.SELECTED },
     });
 
     log.info({ episodeTitle: content.title, chars: result.text.length, language: result.language }, 'Podcast transcription completed');
@@ -1074,16 +1064,6 @@ async function processPodcastWithCache(
       segments: transcript.segments,
       language: transcript.language,
       source: TranscriptSource.WHISPER,
-    });
-
-    // Update status for all content with this externalId
-    await prisma.content.updateMany({
-      where: {
-        platform: Platform.SPOTIFY,
-        externalId: content.externalId,
-        status: ContentStatus.TRANSCRIBING,
-      },
-      data: { status: ContentStatus.SELECTED },
     });
 
     log.info({ externalId: content.externalId, chars: transcript.text.length, language: transcript.language }, 'Podcast transcription completed successfully');

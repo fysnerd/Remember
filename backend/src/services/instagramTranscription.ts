@@ -239,11 +239,7 @@ export async function processInstagramTranscript(contentId: string): Promise<boo
     return false;
   }
 
-  // Update status to transcribing
-  await prisma.content.update({
-    where: { id: contentId },
-    data: { status: ContentStatus.TRANSCRIBING },
-  });
+  // Don't change status — INBOX stays INBOX, SELECTED stays SELECTED
 
   const tempDir = os.tmpdir();
   const videoPath = path.join(tempDir, `instagram_${contentId}.mp4`);
@@ -309,12 +305,7 @@ export async function processInstagramTranscript(contentId: string): Promise<boo
       },
     });
 
-    // Update content status back to SELECTED
-    await prisma.content.update({
-      where: { id: contentId },
-      data: { status: ContentStatus.SELECTED },
-    });
-
+    // Don't change status — INBOX stays INBOX (pre-transcribed), SELECTED stays SELECTED
     log.info({ contentId, title: content.title, chars: result.text.length, language: result.language }, 'Instagram transcription completed');
     return true;
 
@@ -512,16 +503,6 @@ async function processInstagramWithCache(
       segments: transcript.segments,
       language: transcript.language,
       source: TranscriptSource.WHISPER,
-    });
-
-    // Update status for all content with this externalId
-    await prisma.content.updateMany({
-      where: {
-        platform: Platform.INSTAGRAM,
-        externalId: content.externalId,
-        status: ContentStatus.TRANSCRIBING,
-      },
-      data: { status: ContentStatus.SELECTED },
     });
 
     log.info({ externalId: content.externalId, title: content.title, chars: transcript.text.length, language: transcript.language }, 'Instagram transcription completed successfully');
