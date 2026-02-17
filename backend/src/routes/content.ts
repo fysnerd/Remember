@@ -175,6 +175,9 @@ contentRouter.get('/', async (req: Request, res: Response, next: NextFunction) =
       where.platform = platform as Platform;
     }
 
+    // Statuses that are always hidden from the user
+    const HIDDEN_STATUSES = [ContentStatus.UNSUPPORTED, ContentStatus.FAILED];
+
     // Status filter
     if (status && typeof status === 'string') {
       where.status = status as ContentStatus;
@@ -183,19 +186,27 @@ contentRouter.get('/', async (req: Request, res: Response, next: NextFunction) =
     // Category filter (UX v2.0: active vs passed)
     const { category, excludeArchived } = req.query;
     if (category === 'learning') {
-      // Learning = everything except INBOX and ARCHIVED
-      where.status = { notIn: [ContentStatus.INBOX, ContentStatus.ARCHIVED] };
+      // Learning = everything except INBOX, ARCHIVED, and hidden
+      where.status = { notIn: [ContentStatus.INBOX, ContentStatus.ARCHIVED, ...HIDDEN_STATUSES] };
     } else if (category === 'archived') {
       // Archived = only ARCHIVED status (passé)
       where.status = ContentStatus.ARCHIVED;
     } else if (excludeArchived === 'true') {
-      // UX v2.0: "Actifs" = show INBOX (nouveau) + all ready content, exclude ARCHIVED
-      where.status = { not: ContentStatus.ARCHIVED };
+      // UX v2.0: "Actifs" = show INBOX (nouveau) + all ready content, exclude ARCHIVED + hidden
+      where.status = { notIn: [ContentStatus.ARCHIVED, ...HIDDEN_STATUSES] };
     }
-    // Default: if no category filter, show everything except INBOX
+    // Default: if no category filter, show everything except INBOX and hidden
     if (!status && !category && excludeArchived !== 'true') {
-      where.status = { not: ContentStatus.INBOX };
+      where.status = { notIn: [ContentStatus.INBOX, ...HIDDEN_STATUSES] };
     }
+
+    // Filter out short TikTok/Instagram videos (<10s) — not useful for learning
+    where.NOT = [
+      {
+        platform: { in: [Platform.TIKTOK, Platform.INSTAGRAM] },
+        duration: { not: null, lt: 10 },
+      },
+    ];
 
     // Hybrid search: keyword + vector (for queries >= 3 chars)
     let vectorMatchIds: string[] = [];
@@ -603,6 +614,13 @@ contentRouter.get('/inbox', async (req: Request, res: Response, next: NextFuncti
     const where: any = {
       userId: req.user!.id,
       status: ContentStatus.INBOX,
+      // Filter out short TikTok/Instagram videos (<10s)
+      NOT: [
+        {
+          platform: { in: [Platform.TIKTOK, Platform.INSTAGRAM] },
+          duration: { not: null, lt: 10 },
+        },
+      ],
     };
     if (platform && ['YOUTUBE', 'SPOTIFY', 'TIKTOK', 'INSTAGRAM'].includes(platform.toUpperCase())) {
       where.platform = platform.toUpperCase();
@@ -642,6 +660,12 @@ contentRouter.get('/inbox/count', async (req: Request, res: Response, next: Next
       where: {
         userId: req.user!.id,
         status: ContentStatus.INBOX,
+        NOT: [
+          {
+            platform: { in: [Platform.TIKTOK, Platform.INSTAGRAM] },
+            duration: { not: null, lt: 10 },
+          },
+        ],
       },
     });
 
