@@ -97,6 +97,14 @@ api.interceptors.response.use(
       }
     }
 
+    // Retry on 429 (rate limited) with backoff
+    if (error.response?.status === 429 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      const retryAfter = Number(error.response.headers['retry-after']) || 2;
+      await new Promise((r) => setTimeout(r, retryAfter * 1000));
+      return api(originalRequest);
+    }
+
     return Promise.reject(error);
   }
 );

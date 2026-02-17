@@ -60,7 +60,7 @@ app.use(admin.options.rootPath, adminPanelRouter);
 // Rate limiting (scoped to /api only, excludes /admin)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  max: 500, // limit each IP to 500 requests per 15 min window
   message: { error: 'Too many requests, please try again later.' },
 });
 app.use('/api', limiter);
