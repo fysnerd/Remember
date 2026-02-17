@@ -1,4 +1,4 @@
-// User Pipeline Service — chains transcription → quiz → tags after sync
+// User Pipeline Service — chains transcription → quiz → tags → themes after sync
 // Runs in background after /content/refresh completes sync phase
 //
 // Scalability safeguards:
@@ -17,6 +17,7 @@ import { processInstagramTranscript } from './instagramTranscription.js';
 import { processPodcastTranscript } from './podcastTranscription.js';
 import { processContentQuiz } from './quizGeneration.js';
 import { autoTagContent } from './tagging.js';
+import { classifyContentForUser } from './themeClassification.js';
 import { logger } from '../config/logger.js';
 import pLimit from 'p-limit';
 
@@ -61,12 +62,15 @@ export async function runUserPipeline(userId: string): Promise<void> {
       // Phase 3: Auto-tag content that is READY but has no tags
       const tagged = await tagUserContent(userId);
 
+      // Phase 4: Classify tagged content into themes (so themes show before triage)
+      const themed = await classifyUserContent(userId);
+
       const elapsed = Date.now() - startTime;
 
       // Only log if we actually did work
-      if (transcribed > 0 || quizzed > 0 || tagged > 0) {
+      if (transcribed > 0 || quizzed > 0 || tagged > 0 || themed > 0) {
         log.info(
-          { userId, transcribed, quizzed, tagged, elapsedMs: elapsed },
+          { userId, transcribed, quizzed, tagged, themed, elapsedMs: elapsed },
           'User pipeline completed'
         );
       } else {
@@ -215,6 +219,47 @@ async function tagUserContent(userId: string): Promise<number> {
           if (tags.length > 0) success++;
         } catch (error) {
           log.error({ err: error, contentId: content.id }, 'Pipeline auto-tagging failed');
+        }
+      })
+    )
+  );
+
+  return success;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4: Theme classification
+// ---------------------------------------------------------------------------
+
+async function classifyUserContent(userId: string): Promise<number> {
+  // Find content that has tags but no themes yet
+  const pending = await prisma.content.findMany({
+    where: {
+      userId,
+      tags: { some: {} },
+      contentThemes: { none: {} },
+      user: { themes: { some: {} } },
+    },
+    select: { id: true },
+    take: 20,
+    orderBy: { createdAt: 'asc' },
+  });
+
+  if (pending.length === 0) return 0;
+
+  log.info({ userId, count: pending.length }, 'Pipeline: classifying into themes');
+
+  const limit = pLimit(3);
+  let success = 0;
+
+  await Promise.allSettled(
+    pending.map((content) =>
+      limit(async () => {
+        try {
+          await classifyContentForUser(content.id, userId);
+          success++;
+        } catch (error) {
+          log.error({ err: error, contentId: content.id }, 'Pipeline theme classification failed');
         }
       })
     )
