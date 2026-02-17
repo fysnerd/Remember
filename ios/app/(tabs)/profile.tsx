@@ -47,6 +47,8 @@ export default function ProfileScreen() {
       useAuthStore.setState((state) => ({
         user: state.user ? { ...state.user, plan: data.plan } : null,
       }));
+      // Invalidate subscription cache so all screens re-read the plan
+      queryClient.invalidateQueries({ queryKey: ['subscription'] });
     } catch (error) {
       Alert.alert('Erreur', 'Impossible de changer le plan');
     } finally {

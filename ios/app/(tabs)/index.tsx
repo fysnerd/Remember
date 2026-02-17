@@ -17,7 +17,6 @@ import { GreetingHeader } from '../../components/home/GreetingHeader';
 import { QuizRecommendationCard } from '../../components/home/QuizRecommendationCard';
 import { STAGGER_DELAY, STAGGER_CAP } from '../../lib/animations';
 import { useQuizRecommendations, usePipelineStatus } from '../../hooks';
-import { useSubscription } from '../../hooks/useSubscription';
 import { useAuthStore } from '../../stores/authStore';
 import { colors, spacing } from '../../theme';
 
@@ -31,8 +30,7 @@ export default function HomeScreen() {
   const { data: recommendations, isLoading } = useQuizRecommendations();
   // Pipeline polling — runs on home screen, fires haptic when content becomes ready
   usePipelineStatus();
-  const { data: subscription } = useSubscription();
-  const isFree = subscription?.plan !== 'PRO';
+  const isFree = user?.plan !== 'PRO' && user?.plan !== 'LIFETIME';
 
   const userName = user?.name || user?.email?.split('@')[0] || 'there';
 
@@ -54,7 +52,10 @@ export default function HomeScreen() {
     if (rec.type === 'content') {
       router.push({ pathname: '/content/[id]' as any, params: { id: rec.id } });
     } else {
-      router.push({ pathname: '/quiz/theme/[id]' as any, params: { id: rec.id } });
+      router.push({
+        pathname: '/quiz/preview/[id]' as any,
+        params: { id: rec.id, type: rec.type },
+      });
     }
   };
 
