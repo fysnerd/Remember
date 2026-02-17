@@ -4,26 +4,30 @@
  * Editorial design: full-bleed thumbnail with gradient fade,
  * glass platform badge, refined info hierarchy, topic chips.
  * 2-3 visible cards with depth illusion, top card interactive.
+ *
+ * Action buttons: Archive (X), Skip (→), Learn (♥)
  */
 
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { View, StyleSheet, Image, Dimensions } from 'react-native';
+import { View, StyleSheet, Image, Dimensions, Pressable } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { User, Clock } from 'lucide-react-native';
-import { SwipeCard } from './SwipeCard';
+import { User, Clock, X, SkipForward, Heart } from 'lucide-react-native';
+import { SwipeCard, SwipeCardRef } from './SwipeCard';
 import { PlatformIcon } from '../icons';
 import { Text } from '../ui';
 import { colors, fonts, spacing, borderRadius, glass } from '../../theme';
+import { haptics } from '../../lib/haptics';
 import type { Content } from '../../types/content';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const VISIBLE_COUNT = 3;
-const CARD_HEIGHT = SCREEN_HEIGHT * 0.74;
+const CARD_HEIGHT = SCREEN_HEIGHT * 0.64;
 
 interface SwipeCardStackProps {
   items: Content[];
   onSwipeRight: (item: Content) => void;
   onSwipeLeft: (item: Content) => void;
+  onSkip?: (item: Content) => void;
   onEmpty: () => void;
   onNearEnd?: () => void;
 }
@@ -43,11 +47,13 @@ export function SwipeCardStack({
   items,
   onSwipeRight,
   onSwipeLeft,
+  onSkip,
   onEmpty,
   onNearEnd,
 }: SwipeCardStackProps) {
   const currentIndexRef = useRef(0);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const topCardRef = useRef<SwipeCardRef>(null);
 
   // Stable snapshot: prevents query refetch from removing swiped items mid-stack.
   // Only append truly new items (from pagination); never shrink.
@@ -84,6 +90,12 @@ export function SwipeCardStack({
     }, 250);
   }, []);
 
+  // Instant advance (no animation delay) for skip
+  const advanceCardInstant = useCallback(() => {
+    currentIndexRef.current += 1;
+    setCurrentIndex(currentIndexRef.current);
+  }, []);
+
   const handleSwipeRight = useCallback(
     (item: Content) => {
       onSwipeRight(item);
@@ -99,6 +111,40 @@ export function SwipeCardStack({
     },
     [onSwipeLeft, advanceCard]
   );
+
+  // Button handlers
+  const handleButtonArchive = useCallback(() => {
+    if (visibleItems.length === 0) return;
+    const item = visibleItems[0];
+    if (topCardRef.current) {
+      topCardRef.current.swipeLeft();
+      // advanceCard is called after animation delay
+      advanceCard();
+    } else {
+      onSwipeLeft(item);
+      advanceCardInstant();
+    }
+  }, [visibleItems, onSwipeLeft, advanceCard, advanceCardInstant]);
+
+  const handleButtonLearn = useCallback(() => {
+    if (visibleItems.length === 0) return;
+    const item = visibleItems[0];
+    if (topCardRef.current) {
+      topCardRef.current.swipeRight();
+      advanceCard();
+    } else {
+      onSwipeRight(item);
+      advanceCardInstant();
+    }
+  }, [visibleItems, onSwipeRight, advanceCard, advanceCardInstant]);
+
+  const handleButtonSkip = useCallback(() => {
+    if (visibleItems.length === 0) return;
+    const item = visibleItems[0];
+    haptics.light();
+    onSkip?.(item);
+    advanceCardInstant();
+  }, [visibleItems, onSkip, advanceCardInstant]);
 
   if (visibleItems.length === 0) {
     return null;
@@ -129,6 +175,7 @@ export function SwipeCardStack({
                 style={[StyleSheet.absoluteFill, styles.cardWrapper]}
               >
                 <SwipeCard
+                  ref={topCardRef}
                   onSwipeRight={() => handleSwipeRight(item)}
                   onSwipeLeft={() => handleSwipeLeft(item)}
                   enabled={true}
@@ -148,6 +195,33 @@ export function SwipeCardStack({
             </View>
           );
         })}
+      </View>
+
+      {/* Action buttons */}
+      <View style={styles.actionsRow}>
+        <Pressable
+          style={({ pressed }) => [styles.actionBtn, styles.archiveBtn, pressed && styles.actionBtnPressed]}
+          onPress={handleButtonArchive}
+          hitSlop={4}
+        >
+          <X size={22} color={colors.error} strokeWidth={2.5} />
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [styles.actionBtn, styles.skipBtn, pressed && styles.actionBtnPressed]}
+          onPress={handleButtonSkip}
+          hitSlop={4}
+        >
+          <SkipForward size={18} color={colors.textSecondary} strokeWidth={2.5} />
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [styles.actionBtn, styles.learnBtn, pressed && styles.actionBtnPressed]}
+          onPress={handleButtonLearn}
+          hitSlop={4}
+        >
+          <Heart size={22} color={colors.success} strokeWidth={2.5} />
+        </Pressable>
       </View>
     </View>
   );
@@ -250,7 +324,7 @@ function CardDisplay({ item }: { item: Content }) {
 
         {/* Synopsis */}
         {synopsis ? (
-          <Text numberOfLines={4} style={styles.synopsis}>
+          <Text numberOfLines={3} style={styles.synopsis}>
             {synopsis}
           </Text>
         ) : (
@@ -277,6 +351,8 @@ function CardDisplay({ item }: { item: Content }) {
 // ---------------------------------------------------------------------------
 
 const THUMBNAIL_RATIO = 0.48;
+const ACTION_BTN_SIZE = 56;
+const SKIP_BTN_SIZE = 44;
 
 const styles = StyleSheet.create({
   container: {
@@ -389,7 +465,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 22,
     paddingTop: 2,
-    paddingBottom: 20,
+    paddingBottom: 16,
   },
 
   // Title
@@ -466,5 +542,44 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.textSecondary,
     letterSpacing: 0.3,
+  },
+
+  // ---- Action buttons ----
+  actionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 24,
+    paddingVertical: spacing.md,
+  },
+  actionBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+  },
+  actionBtnPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.92 }],
+  },
+  archiveBtn: {
+    width: ACTION_BTN_SIZE,
+    height: ACTION_BTN_SIZE,
+    borderRadius: ACTION_BTN_SIZE / 2,
+    backgroundColor: 'rgba(239, 68, 68, 0.10)',
+    borderColor: 'rgba(239, 68, 68, 0.30)',
+  },
+  skipBtn: {
+    width: SKIP_BTN_SIZE,
+    height: SKIP_BTN_SIZE,
+    borderRadius: SKIP_BTN_SIZE / 2,
+    backgroundColor: 'rgba(148, 163, 184, 0.08)',
+    borderColor: 'rgba(148, 163, 184, 0.20)',
+  },
+  learnBtn: {
+    width: ACTION_BTN_SIZE,
+    height: ACTION_BTN_SIZE,
+    borderRadius: ACTION_BTN_SIZE / 2,
+    backgroundColor: 'rgba(34, 197, 94, 0.10)',
+    borderColor: 'rgba(34, 197, 94, 0.30)',
   },
 });

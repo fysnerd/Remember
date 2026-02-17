@@ -143,6 +143,10 @@ export default function LibraryScreen() {
     swipeTriage.mutate({ contentId: item.id, action: 'archive' });
   }, [swipeTriage]);
 
+  const handleSkip = useCallback((_item: Content) => {
+    // Skip: just advance the card, no backend action
+  }, []);
+
   const handleSwipeEmpty = useCallback(() => {}, []);
 
   const handleNearEnd = useCallback(() => {
@@ -355,6 +359,7 @@ export default function LibraryScreen() {
             items={filteredInboxItems}
             onSwipeRight={handleSwipeRight}
             onSwipeLeft={handleSwipeLeft}
+            onSkip={handleSkip}
             onEmpty={handleSwipeEmpty}
             onNearEnd={handleNearEnd}
           />

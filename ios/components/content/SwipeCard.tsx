@@ -8,9 +8,10 @@
  * - Haptic feedback at threshold crossing and on swipe completion
  * - Rotation based on swipe direction for natural card feel
  * - SwipeOverlay rendered inside for keep/dismiss visual indicators
+ * - Imperative swipeLeft/swipeRight methods for button-driven actions
  */
 
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { Dimensions, StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -39,12 +40,15 @@ interface SwipeCardProps {
   enabled?: boolean;
 }
 
-export function SwipeCard({
-  onSwipeLeft,
-  onSwipeRight,
-  children,
-  enabled = true,
-}: SwipeCardProps) {
+export interface SwipeCardRef {
+  swipeLeft: () => void;
+  swipeRight: () => void;
+}
+
+export const SwipeCard = forwardRef<SwipeCardRef, SwipeCardProps>(function SwipeCard(
+  { onSwipeLeft, onSwipeRight, children, enabled = true },
+  ref,
+) {
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const hasTriggeredHaptic = useRef(false);
@@ -60,6 +64,20 @@ export function SwipeCard({
   const triggerWarningHaptic = useCallback(() => {
     haptics.warning();
   }, []);
+
+  // Imperative methods for button-driven swipes
+  useImperativeHandle(ref, () => ({
+    swipeLeft: () => {
+      translateX.value = withSpring(-SCREEN_WIDTH * 1.5, FLY_OFF_SPRING);
+      onSwipeLeft();
+      haptics.warning();
+    },
+    swipeRight: () => {
+      translateX.value = withSpring(SCREEN_WIDTH * 1.5, FLY_OFF_SPRING);
+      onSwipeRight();
+      haptics.success();
+    },
+  }), [onSwipeLeft, onSwipeRight, translateX]);
 
   const panGesture = Gesture.Pan()
     .enabled(enabled)
@@ -128,7 +146,7 @@ export function SwipeCard({
       </Animated.View>
     </GestureDetector>
   );
-}
+});
 
 const styles = StyleSheet.create({
   cardContainer: {
