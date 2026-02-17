@@ -13,6 +13,7 @@ import { syncUserYouTube } from '../workers/youtubeSync.js';
 import { syncUserSpotify } from '../workers/spotifySync.js';
 import { syncTikTokForUser } from '../workers/tiktokSync.js';
 import { syncInstagramForUser } from '../workers/instagramSync.js';
+import { runUserPipeline } from '../services/pipeline.js';
 import { generateText, generateEmbedding } from '../services/llm.js';
 import { logger } from '../config/logger.js';
 
@@ -136,6 +137,13 @@ contentRouter.post('/refresh', async (req: Request, res: Response, next: NextFun
       const fulfilled = results.filter((r) => r.status === 'fulfilled').length;
       const rejected = results.filter((r) => r.status === 'rejected').length;
       log.info({ userId, fulfilled, rejected, platforms: syncingPlatforms }, 'Background refresh completed');
+
+      // Chain pipeline: transcription → quiz → tags (runs in background)
+      // Always run — even if sync found 0 new items, there may be
+      // content from previous syncs still waiting for transcription/quiz
+      runUserPipeline(userId).catch((err) => {
+        log.error({ err, userId }, 'User pipeline failed after refresh');
+      });
     });
   } catch (error) {
     return next(error);
