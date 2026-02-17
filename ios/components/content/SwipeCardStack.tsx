@@ -384,7 +384,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cardsArea: {
-    flex: 1,
+    height: CARD_HEIGHT,
     paddingHorizontal: spacing.md,
   },
   cardWrapper: {
