@@ -164,11 +164,20 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
     // Small human-like delay after page load
     await page.waitForTimeout(2000 + Math.random() * 2000);
 
-    // Step 2: Fetch liked feed from page context
-    // This is the key improvement: fetch() runs inside Instagram's own page,
-    // so it uses the browser's Safari UA, TLS fingerprint, and cookies natively.
-    // No more Barcelona UA mismatch.
-    log.info({ userId }, 'Fetching liked feed from page context');
+    // Step 2: Intercept the API call to inject Barcelona UA (required by /api/v1/)
+    // while keeping the browser's real TLS fingerprint and cookie handling.
+    // page.route() modifies headers on the outgoing request but the request itself
+    // goes through the browser engine (better fingerprint than context.request).
+    await page.route('**/api/v1/feed/liked/**', async (route) => {
+      const headers = {
+        ...route.request().headers(),
+        'user-agent': 'Barcelona 289.0.0.77.109 Android',
+        'x-ig-app-id': '1217981644879628',
+      };
+      await route.continue({ headers });
+    });
+
+    log.info({ userId }, 'Fetching liked feed via page.evaluate + route interception');
 
     const fetchResult = await page.evaluate(async () => {
       try {
