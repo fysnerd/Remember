@@ -1,33 +1,28 @@
 /**
- * Explorer Tab - Mes themes (grid) + Bibliotheque (inbox triage)
+ * Explorer Tab - Bibliotheque (inbox triage)
  *
- * Bibliotheque supports two triage modes:
+ * Supports two triage modes:
  * - Swipe mode (default): SwipeCardStack for one-at-a-time triage
  * - Bulk mode: FlatList grid with multi-select and batch actions
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { View, ScrollView, FlatList, StyleSheet, Pressable, RefreshControl, Dimensions, Alert, ActivityIndicator } from 'react-native';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-import { useRouter } from 'expo-router';
+import { View, ScrollView, FlatList, StyleSheet, RefreshControl, Dimensions, ActivityIndicator } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { Text, Badge, Skeleton } from '../../components/ui';
+import { Text, Badge } from '../../components/ui';
 import { useToast } from '../../components/ui/Toast';
 import { ContentCard, SourcePills, SelectionBar, SwipeCardStack, TriageModeToggle } from '../../components/content';
 import { SearchInput } from '../../components/explorer/SearchInput';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
-import { Search, BookOpen, Sparkles, PartyPopper } from 'lucide-react-native';
-import { ThemeGridCard } from '../../components/explorer/ThemeGridCard';
-import { GlassLockOverlay } from '../../components/glass';
-import { useInbox, useInboxCount, useTriageMutation, useDebouncedValue, useThemes, useToggleFavoriteTheme, useDeleteTheme, useSwipeTriage } from '../../hooks';
-import { useSubscription } from '../../hooks/useSubscription';
+import { Search, Sparkles, PartyPopper } from 'lucide-react-native';
+import { useInbox, useInboxCount, useTriageMutation, useDebouncedValue, useSwipeTriage } from '../../hooks';
 import { useContentStore } from '../../stores/contentStore';
 import type { Content } from '../../types/content';
 import { colors, spacing } from '../../theme';
 import api from '../../lib/api';
-import { STAGGER_DELAY, STAGGER_CAP } from '../../lib/animations';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_GAP = spacing.sm;
@@ -35,7 +30,6 @@ const GRID_PADDING = spacing.lg;
 const COLUMN_WIDTH = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP) / 2;
 
 export default function LibraryScreen() {
-  const router = useRouter();
   const queryClient = useQueryClient();
   const tabBarHeight = useBottomTabBarHeight();
   const [refreshing, setRefreshing] = useState(false);
@@ -44,8 +38,6 @@ export default function LibraryScreen() {
 
   // Store state
   const {
-    activeExplorerTab,
-    setActiveExplorerTab,
     searchQuery,
     setSearchQuery,
     sourceFilter,
@@ -53,10 +45,6 @@ export default function LibraryScreen() {
     triageMode,
     setTriageMode,
   } = useContentStore();
-
-  // Subscription
-  const { data: subscription } = useSubscription();
-  const isFree = subscription?.plan !== 'PRO';
 
   // Debounce search for filtering (bulk mode only)
   const debouncedSearch = useDebouncedValue(searchQuery, 300);
@@ -66,9 +54,6 @@ export default function LibraryScreen() {
   const { data: inboxItems, isLoading: inboxLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInbox(sourceFilter);
   const triageMutation = useTriageMutation();
   const swipeTriage = useSwipeTriage();
-  const { data: themes, isLoading: themesLoading } = useThemes();
-  const toggleFavoriteMutation = useToggleFavoriteTheme();
-  const deleteThemeMutation = useDeleteTheme();
 
   const { show: showToast, ToastComponent } = useToast();
   const selectionMode = selectedIds.size > 0;
@@ -96,10 +81,7 @@ export default function LibraryScreen() {
       : `/admin/sync/${sourceFilter}`;
     api.post(syncEndpoint).catch(() => {});
     // Refresh local data immediately
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['inbox'] }),
-      queryClient.invalidateQueries({ queryKey: ['themes'] }),
-    ]);
+    await queryClient.invalidateQueries({ queryKey: ['inbox'] });
     setRefreshing(false);
   }, [queryClient, sourceFilter]);
 
@@ -189,79 +171,6 @@ export default function LibraryScreen() {
 
   const handleInboxItemPress = (id: string) => {
     handleToggleSelection(id);
-  };
-
-  const handleThemePress = (themeId: string) => {
-    router.push({ pathname: '/theme/[id]' as any, params: { id: themeId } });
-  };
-
-  const handleThemeLongPress = (themeId: string, themeName: string) => {
-    Alert.alert(
-      'Supprimer le theme',
-      `Voulez-vous supprimer "${themeName}" ? Les contenus ne seront pas supprimes.`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: () => deleteThemeMutation.mutate(themeId),
-        },
-      ]
-    );
-  };
-
-  // --- Render: Mes themes tab content (2-column grid) ---
-  const renderThemesTab = () => {
-    if (themesLoading) {
-      return (
-        <View style={styles.themesGrid}>
-          {[0, 1, 2, 3].map((i) => (
-            <View key={i} style={styles.themeGridItem}>
-              <Skeleton height={100} width="100%" />
-            </View>
-          ))}
-        </View>
-      );
-    }
-
-    if (!themes?.length) {
-      return (
-        <EmptyState
-          message="Triez du contenu pour decouvrir vos themes"
-          icon={BookOpen}
-          hasHeader
-        />
-      );
-    }
-
-    return (
-      <ScrollView
-        contentContainerStyle={[styles.themesContainer, { paddingBottom: tabBarHeight + spacing.lg }]}
-      >
-        <View style={styles.themesGrid}>
-          {themes.map((theme, index) => (
-            <Animated.View
-              key={theme.id}
-              style={styles.themeGridItem}
-              entering={FadeInDown.delay(Math.min(index, STAGGER_CAP) * STAGGER_DELAY).duration(200)}
-            >
-              <GlassLockOverlay locked={isFree && index >= 2}>
-                <ThemeGridCard
-                  emoji={theme.emoji}
-                  name={theme.name}
-                  contentCount={theme.contentCount}
-                  dueCards={theme.dueCards}
-                  isFavorite={theme.isFavorite}
-                  onPress={() => handleThemePress(theme.id)}
-                  onLongPress={() => handleThemeLongPress(theme.id, theme.name)}
-                  onToggleFavorite={() => toggleFavoriteMutation.mutate(theme.id)}
-                />
-              </GlassLockOverlay>
-            </Animated.View>
-          ))}
-        </View>
-      </ScrollView>
-    );
   };
 
   // Render a single inbox card (for FlatList in bulk mode)
@@ -427,51 +336,22 @@ export default function LibraryScreen() {
 
   return (
     <Animated.View entering={FadeIn.duration(200)} style={styles.container}>
-      {/* Top-level tabs: Suggestions | Bibliotheque + mode toggle */}
+      {/* Header: title + mode toggle */}
       <View style={styles.topTabBar}>
-        <View style={styles.topTabGroup}>
-          <Pressable
-            style={styles.topTab}
-            onPress={() => setActiveExplorerTab('suggestions')}
-          >
-            <Text
-              variant="body"
-              weight={activeExplorerTab === 'suggestions' ? 'medium' : 'regular'}
-              style={activeExplorerTab === 'suggestions' ? styles.topTabTextActive : styles.topTabTextInactive}
-            >
-              Mes themes
-            </Text>
-            {activeExplorerTab === 'suggestions' && <View style={styles.topTabIndicator} />}
-          </Pressable>
-          <Pressable
-            style={styles.topTab}
-            onPress={() => setActiveExplorerTab('library')}
-          >
-            <View style={styles.topTabWithBadge}>
-              <Text
-                variant="body"
-                weight={activeExplorerTab === 'library' ? 'medium' : 'regular'}
-                style={activeExplorerTab === 'library' ? styles.topTabTextActive : styles.topTabTextInactive}
-              >
-                Bibliotheque
-              </Text>
-              {(inboxCount ?? 0) > 0 && <Badge count={inboxCount ?? 0} size="sm" />}
-            </View>
-            {activeExplorerTab === 'library' && <View style={styles.topTabIndicator} />}
-          </Pressable>
+        <View style={styles.topTabWithBadge}>
+          <Text variant="body" weight="medium" style={styles.topTabTextActive}>
+            Bibliotheque
+          </Text>
+          {(inboxCount ?? 0) > 0 && <Badge count={inboxCount ?? 0} size="sm" />}
         </View>
-
-        {/* Triage mode toggle (only visible on library tab) */}
-        {activeExplorerTab === 'library' && (
-          <TriageModeToggle mode={triageMode} onToggle={handleToggleMode} />
-        )}
+        <TriageModeToggle mode={triageMode} onToggle={handleToggleMode} />
       </View>
 
-      {/* Tab content */}
-      {activeExplorerTab === 'suggestions' ? renderThemesTab() : renderLibraryTab()}
+      {/* Library content */}
+      {renderLibraryTab()}
 
       {/* Selection bar - appears when items selected in bulk triage mode */}
-      {selectionMode && activeExplorerTab === 'library' && triageMode === 'bulk' && (
+      {selectionMode && triageMode === 'bulk' && (
         <SelectionBar
           selectedCount={selectedIds.size}
           onLearn={handleBatchLearn}
@@ -492,7 +372,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
 
-  // --- Top-level tabs (Suggestions | Bibliotheque) ---
+  // --- Header ---
   topTabBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -503,28 +383,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
   },
-  topTabGroup: {
-    flexDirection: 'row',
-    gap: spacing.lg,
-  },
-  topTab: {
-    paddingVertical: spacing.sm,
-    position: 'relative',
-  },
   topTabTextActive: {
     color: colors.text,
-  },
-  topTabTextInactive: {
-    color: colors.textTertiary,
-  },
-  topTabIndicator: {
-    position: 'absolute',
-    bottom: -spacing.md,
-    left: 0,
-    right: 0,
-    height: 2,
-    backgroundColor: colors.accent,
-    borderRadius: 1,
   },
   topTabWithBadge: {
     flexDirection: 'row',
@@ -545,19 +405,6 @@ const styles = StyleSheet.create({
   swipeEmptyContainer: {
     flexGrow: 1,
     justifyContent: 'center',
-  },
-
-  // --- Themes grid ---
-  themesContainer: {
-    padding: spacing.lg,
-  },
-  themesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: GRID_GAP,
-  },
-  themeGridItem: {
-    width: COLUMN_WIDTH,
   },
 
   // --- Content area ---
