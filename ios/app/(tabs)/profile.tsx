@@ -9,7 +9,7 @@ import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { ChevronRight } from 'lucide-react-native';
+import { ChevronRight, Wrench } from 'lucide-react-native';
 import { Text } from '../../components/ui';
 import { GlassCard } from '../../components/glass/GlassCard';
 import { PlatformIcon } from '../../components/icons';
@@ -33,6 +33,26 @@ export default function ProfileScreen() {
   const { data: oauthStatus, isLoading } = useOAuthStatus();
   const queryClient = useQueryClient();
   const [loadingPlatform, setLoadingPlatform] = useState<string | null>(null);
+  const [switchingPlan, setSwitchingPlan] = useState(false);
+
+  const plans = ['FREE', 'PRO', 'LIFETIME'] as const;
+  const currentPlan = user?.plan || 'FREE';
+
+  const handleSwitchPlan = async (plan: string) => {
+    if (plan === currentPlan || switchingPlan) return;
+    setSwitchingPlan(true);
+    try {
+      const { data } = await api.patch('/users/dev/plan', { plan });
+      // Update local auth store with new plan
+      useAuthStore.setState((state) => ({
+        user: state.user ? { ...state.user, plan: data.plan } : null,
+      }));
+    } catch (error) {
+      Alert.alert('Erreur', 'Impossible de changer le plan');
+    } finally {
+      setSwitchingPlan(false);
+    }
+  };
 
   const handleLogout = () => {
     logout();
@@ -202,6 +222,41 @@ export default function ProfileScreen() {
           </Pressable>
         </GlassCard>
       </View>
+      {/* Dev Tools */}
+      <View style={styles.section}>
+        <View style={styles.devHeader}>
+          <Wrench size={14} color={colors.textSecondary} strokeWidth={2} />
+          <Text variant="h3" color="secondary" style={styles.devTitle}>
+            Dev Tools
+          </Text>
+        </View>
+        <GlassCard padding="md">
+          <Text variant="caption" color="secondary" style={styles.devLabel}>
+            Plan actif
+          </Text>
+          <View style={styles.planRow}>
+            {plans.map((plan) => (
+              <Pressable
+                key={plan}
+                style={[
+                  styles.planChip,
+                  currentPlan === plan && styles.planChipActive,
+                ]}
+                onPress={() => handleSwitchPlan(plan)}
+                disabled={switchingPlan}
+              >
+                <Text
+                  variant="caption"
+                  weight={currentPlan === plan ? 'medium' : 'regular'}
+                  style={currentPlan === plan ? styles.planChipTextActive : styles.planChipText}
+                >
+                  {plan}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </GlassCard>
+      </View>
     </ScrollView>
     </Animated.View>
   );
@@ -240,4 +295,23 @@ const styles = StyleSheet.create({
   },
   logoutText: { color: colors.error },
   disconnectText: { color: colors.error },
+  devHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.md },
+  devTitle: { fontSize: 15 },
+  devLabel: { marginBottom: spacing.sm },
+  planRow: { flexDirection: 'row', gap: spacing.sm },
+  planChip: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  planChipActive: {
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    borderColor: colors.accent,
+  },
+  planChipText: { color: colors.textSecondary },
+  planChipTextActive: { color: colors.accent },
 });

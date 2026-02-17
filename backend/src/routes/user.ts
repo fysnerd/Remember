@@ -97,6 +97,26 @@ userRouter.patch('/profile', async (req: Request, res: Response, next: NextFunct
   }
 });
 
+// PATCH /api/users/dev/plan - Dev tool: switch plan for testing
+userRouter.patch('/dev/plan', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { plan } = req.body;
+    if (!plan || !['FREE', 'PRO', 'LIFETIME'].includes(plan)) {
+      return res.status(400).json({ error: 'Invalid plan. Use FREE, PRO, or LIFETIME.' });
+    }
+
+    const user = await prisma.user.update({
+      where: { id: req.user!.id },
+      data: { plan },
+      select: { id: true, email: true, name: true, plan: true },
+    });
+
+    return res.json(user);
+  } catch (error) {
+    return next(error);
+  }
+});
+
 // DELETE /api/users/account - Delete user account (GDPR)
 userRouter.delete('/account', async (req: Request, res: Response, next: NextFunction) => {
   try {
