@@ -21,7 +21,7 @@ import type { Content } from '../../types/content';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const VISIBLE_COUNT = 3;
-const CARD_HEIGHT = SCREEN_HEIGHT * 0.64;
+const CARD_HEIGHT = SCREEN_HEIGHT * 0.55;
 
 interface SwipeCardStackProps {
   items: Content[];
