@@ -176,7 +176,7 @@ contentRouter.get('/', async (req: Request, res: Response, next: NextFunction) =
     }
 
     // Statuses that are always hidden from the user
-    const HIDDEN_STATUSES = [ContentStatus.UNSUPPORTED, ContentStatus.FAILED];
+    const HIDDEN_STATUSES = [ContentStatus.UNSUPPORTED, ContentStatus.FAILED, ContentStatus.ARCHIVED];
 
     // Status filter
     if (status && typeof status === 'string') {
@@ -184,19 +184,13 @@ contentRouter.get('/', async (req: Request, res: Response, next: NextFunction) =
     }
 
     // Category filter (UX v2.0: active vs passed)
-    const { category, excludeArchived } = req.query;
+    const { category } = req.query;
     if (category === 'learning') {
-      // Learning = everything except INBOX, ARCHIVED, and hidden
-      where.status = { notIn: [ContentStatus.INBOX, ContentStatus.ARCHIVED, ...HIDDEN_STATUSES] };
-    } else if (category === 'archived') {
-      // Archived = only ARCHIVED status (passé)
-      where.status = ContentStatus.ARCHIVED;
-    } else if (excludeArchived === 'true') {
-      // UX v2.0: "Actifs" = show INBOX (nouveau) + all ready content, exclude ARCHIVED + hidden
-      where.status = { notIn: [ContentStatus.ARCHIVED, ...HIDDEN_STATUSES] };
+      // Learning = everything except INBOX and hidden
+      where.status = { notIn: [ContentStatus.INBOX, ...HIDDEN_STATUSES] };
     }
     // Default: if no category filter, show everything except INBOX and hidden
-    if (!status && !category && excludeArchived !== 'true') {
+    if (!status && !category) {
       where.status = { notIn: [ContentStatus.INBOX, ...HIDDEN_STATUSES] };
     }
 
