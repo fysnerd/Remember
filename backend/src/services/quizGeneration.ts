@@ -586,7 +586,7 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
     // Generate memo + synopsis in parallel (non-blocking, after quiz creation)
     const postProcessing: Promise<void>[] = [];
 
-    // Memo generation
+    // Memo generation (stored on Content, not in transcript segments)
     postProcessing.push(
       (async () => {
         log.debug({ contentId, title: content.title }, 'Generating memo');
@@ -597,15 +597,9 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
             content.title,
             tagNames
           );
-          await prisma.transcript.update({
-            where: { id: content.transcript!.id },
-            data: {
-              segments: {
-                ...(content.transcript!.segments as object || {}),
-                memo,
-                memoGeneratedAt: new Date().toISOString(),
-              },
-            },
+          await prisma.content.update({
+            where: { id: contentId },
+            data: { memo, memoGeneratedAt: new Date() },
           });
           log.info({ contentId }, 'Memo generated and cached');
         } catch (memoError) {

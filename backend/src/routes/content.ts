@@ -1304,12 +1304,11 @@ contentRouter.get('/:id/memo', async (req: Request, res: Response, next: NextFun
       return res.status(400).json({ error: 'Content has no transcript - cannot generate memo' });
     }
 
-    // Check if memo already exists (stored in transcript metadata)
-    const transcriptMeta = content.transcript.segments as any;
-    if (transcriptMeta?.memo) {
+    // Check if memo already exists on Content
+    if (content.memo) {
       return res.json({
-        memo: transcriptMeta.memo,
-        generatedAt: transcriptMeta.memoGeneratedAt,
+        memo: content.memo,
+        generatedAt: content.memoGeneratedAt?.toISOString() ?? null,
         cached: true,
       });
     }
@@ -1318,21 +1317,16 @@ contentRouter.get('/:id/memo', async (req: Request, res: Response, next: NextFun
     const tagNames = content.tags.map(t => t.name);
     const memo = await generateMemoFromTranscript(content.transcript.text, content.title, tagNames);
 
-    // Cache the memo in transcript segments
-    await prisma.transcript.update({
-      where: { id: content.transcript.id },
-      data: {
-        segments: {
-          ...(content.transcript.segments as object || {}),
-          memo,
-          memoGeneratedAt: new Date().toISOString(),
-        },
-      },
+    // Cache the memo on Content
+    const now = new Date();
+    await prisma.content.update({
+      where: { id: contentId },
+      data: { memo, memoGeneratedAt: now },
     });
 
     return res.json({
       memo,
-      generatedAt: new Date().toISOString(),
+      generatedAt: now.toISOString(),
       cached: false,
     });
   } catch (error) {
@@ -1364,21 +1358,16 @@ contentRouter.post('/:id/memo/regenerate', async (req: Request, res: Response, n
     const tagNames = content.tags.map(t => t.name);
     const memo = await generateMemoFromTranscript(content.transcript.text, content.title, tagNames);
 
-    // Update cached memo
-    await prisma.transcript.update({
-      where: { id: content.transcript.id },
-      data: {
-        segments: {
-          ...(content.transcript.segments as object || {}),
-          memo,
-          memoGeneratedAt: new Date().toISOString(),
-        },
-      },
+    // Update cached memo on Content
+    const now = new Date();
+    await prisma.content.update({
+      where: { id: contentId },
+      data: { memo, memoGeneratedAt: now },
     });
 
     return res.json({
       memo,
-      generatedAt: new Date().toISOString(),
+      generatedAt: now.toISOString(),
       regenerated: true,
     });
   } catch (error) {
@@ -1414,9 +1403,8 @@ contentRouter.get('/topic/:name/memo', async (req: Request, res: Response, next:
     // Collect memos from all contents
     const contentMemos: string[] = [];
     for (const content of contents) {
-      const transcriptMeta = content.transcript?.segments as any;
-      if (transcriptMeta?.memo) {
-        contentMemos.push(`**${content.title}**\n${transcriptMeta.memo}`);
+      if (content.memo) {
+        contentMemos.push(`**${content.title}**\n${content.memo}`);
       }
     }
 

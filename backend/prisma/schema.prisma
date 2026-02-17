@@ -169,6 +169,10 @@ model Content {
   // AI-generated synopsis (from transcription + description)
   synopsis      String?
 
+  // AI-generated study memo
+  memo            String?
+  memoGeneratedAt DateTime?
+
   // For TikTok/Instagram videos
   authorUsername String?   // TikTok/Instagram @username
   viewCount      Int?      // Number of views
