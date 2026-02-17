@@ -219,12 +219,16 @@ export default function LibraryScreen() {
   // --- Mode switching ---
   const handleOpenTriage = useCallback(() => {
     setSelectedIds(new Set());
+    // Refetch inbox to get fresh data (items may have been triaged since last fetch)
+    queryClient.invalidateQueries({ queryKey: ['inbox'] });
     setViewMode('triage');
-  }, [setViewMode]);
+  }, [setViewMode, queryClient]);
 
   const handleCloseTriage = useCallback(() => {
     setViewMode('browse');
+    // Invalidate both library (new items appeared) and inbox (items removed)
     queryClient.invalidateQueries({ queryKey: ['content', 'library'] });
+    queryClient.invalidateQueries({ queryKey: ['inbox'] });
   }, [setViewMode, queryClient]);
 
   // --- Render content card ---
