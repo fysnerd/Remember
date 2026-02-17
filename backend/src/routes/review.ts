@@ -649,21 +649,26 @@ reviewRouter.post('/', async (req: Request, res: Response, next: NextFunction) =
 // Practice Mode Endpoint
 // ============================================================================
 
-// POST /api/reviews/practice - Get ALL cards for a content (practice mode)
+// POST /api/reviews/practice - Get ALL cards for a content or multiple contents (practice mode)
 reviewRouter.post('/practice', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { contentId } = req.body;
+    const { contentId, contentIds } = req.body;
 
-    if (!contentId) {
-      return res.status(400).json({ error: 'contentId is required' });
+    // Support both single contentId and contentIds array
+    const ids: string[] = contentIds && Array.isArray(contentIds) && contentIds.length > 0
+      ? contentIds
+      : contentId ? [contentId] : [];
+
+    if (ids.length === 0) {
+      return res.status(400).json({ error: 'contentId or contentIds is required' });
     }
 
     const userId = req.user!.id;
 
-    // Verify content belongs to user and has quizzes
-    const content = await prisma.content.findFirst({
+    // Verify contents belong to user and have quizzes
+    const contents = await prisma.content.findMany({
       where: {
-        id: contentId,
+        id: { in: ids },
         userId,
         status: 'READY',
       },
@@ -672,20 +677,18 @@ reviewRouter.post('/practice', async (req: Request, res: Response, next: NextFun
       },
     });
 
-    if (!content) {
-      return res.status(404).json({ error: 'Content not found' });
+    const withQuizzes = contents.filter(c => c._count.quizzes > 0);
+
+    if (withQuizzes.length === 0) {
+      return res.status(404).json({ error: 'No content with quizzes found' });
     }
 
-    if (content._count.quizzes === 0) {
-      return res.status(400).json({ error: 'Content has no quizzes' });
-    }
-
-    // Get ALL cards for this content (not just due ones)
+    // Get ALL cards for these contents (not just due ones)
     const cards = await prisma.card.findMany({
       where: {
         userId,
         quiz: {
-          contentId,
+          contentId: { in: withQuizzes.map(c => c.id) },
         },
       },
       orderBy: { createdAt: 'asc' },
@@ -708,11 +711,10 @@ reviewRouter.post('/practice', async (req: Request, res: Response, next: NextFun
     return res.json({
       cards,
       count: cards.length,
-      content: {
-        id: content.id,
-        title: content.title,
-        platform: content.platform,
-      },
+      content: withQuizzes.length === 1
+        ? { id: withQuizzes[0].id, title: withQuizzes[0].title, platform: withQuizzes[0].platform }
+        : { id: 'multi', title: `${withQuizzes.length} contenus`, platform: 'MIXED' },
+      contentCount: withQuizzes.length,
       isPractice: true,
     });
   } catch (error) {

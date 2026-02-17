@@ -1,8 +1,12 @@
 /**
  * Quiz Session Screen
+ *
+ * Supports:
+ * - Single content: /quiz/[id] (uses useQuiz)
+ * - Multi content: /quiz/multi?ids=id1,id2,id3 (uses useMultiQuiz)
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text, Button } from '../../components/ui';
@@ -10,15 +14,29 @@ import { QuestionCard, AnswerFeedback, QuizSummary } from '../../components/quiz
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { ErrorState } from '../../components/ErrorState';
 import { haptics } from '../../lib/haptics';
-import { useQuiz, useSubmitAnswer, useCreateSession, useCompleteSession } from '../../hooks';
+import { useQuiz, useMultiQuiz, useSubmitAnswer, useCreateSession, useCompleteSession } from '../../hooks';
 import { colors, spacing } from '../../theme';
 
 type QuizState = 'question' | 'feedback' | 'summary';
 
 export default function QuizScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, ids } = useLocalSearchParams<{ id: string; ids?: string }>();
   const router = useRouter();
-  const { data: quiz, isLoading, error, refetch } = useQuiz(id!);
+
+  // Parse multi-content IDs if provided
+  const contentIds = useMemo(() => {
+    if (ids) return ids.split(',').filter(Boolean);
+    return [];
+  }, [ids]);
+  const isMulti = contentIds.length > 1;
+
+  // Use appropriate hook based on mode
+  const singleQuiz = useQuiz(isMulti ? '' : id!);
+  const multiQuiz = useMultiQuiz(isMulti ? contentIds : []);
+  const quiz = isMulti ? multiQuiz.data : singleQuiz.data;
+  const isLoading = isMulti ? multiQuiz.isLoading : singleQuiz.isLoading;
+  const refetch = isMulti ? multiQuiz.refetch : singleQuiz.refetch;
+
   const submitMutation = useSubmitAnswer();
   const createSessionMutation = useCreateSession();
   const completeSessionMutation = useCompleteSession();
@@ -33,13 +51,16 @@ export default function QuizScreen() {
   // Create session when quiz loads
   useEffect(() => {
     if (quiz && !sessionId && !createSessionMutation.isPending) {
-      createSessionMutation.mutate({ contentId: id! }, {
+      const params = isMulti
+        ? { contentIds }
+        : { contentId: id! };
+      createSessionMutation.mutate(params, {
         onSuccess: (session) => {
           setSessionId(session.id);
         },
       });
     }
-  }, [quiz, id]);
+  }, [quiz, id, isMulti]);
 
   if (isLoading) {
     return <LoadingScreen />;
@@ -87,7 +108,13 @@ export default function QuizScreen() {
   };
 
   const handleQuit = () => router.back();
-  const handleViewMemo = () => router.replace(`/memo/${id}`);
+  const handleViewMemo = () => {
+    if (isMulti) {
+      router.replace('/(tabs)');
+    } else {
+      router.replace(`/memo/${id}`);
+    }
+  };
   const handleClose = () => router.replace('/(tabs)');
 
   if (state === 'summary') {
@@ -118,7 +145,6 @@ export default function QuizScreen() {
               selectedId={selectedAnswer}
               onSelect={(optionId) => {
                 haptics.selection();
-                console.log('[Quiz] Option selected:', optionId);
                 setSelectedAnswer(optionId);
               }}
             />
@@ -143,7 +169,7 @@ export default function QuizScreen() {
             />
             <View style={styles.buttonContainer}>
               <Button variant="primary" fullWidth onPress={handleNext}>
-                {currentIndex < total - 1 ? 'Question suivante' : 'Voir le résultat'}
+                {currentIndex < total - 1 ? 'Question suivante' : 'Voir le resultat'}
               </Button>
             </View>
           </>

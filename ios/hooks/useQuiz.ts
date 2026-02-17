@@ -102,6 +102,21 @@ export function useQuiz(contentId: string) {
   });
 }
 
+// Get quiz for multiple contents (practice mode - mixed questions)
+export function useMultiQuiz(contentIds: string[]) {
+  const key = contentIds.sort().join(',');
+  return useQuery({
+    queryKey: ['quiz', 'multi', key],
+    queryFn: async () => {
+      const { data } = await api.post<PracticeResponse>('/reviews/practice', { contentIds });
+      const quiz = transformCardsToQuiz(data.cards, `multi:${key}`);
+      return { ...quiz, contentCount: contentIds.length };
+    },
+    enabled: contentIds.length > 0,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 interface TopicPracticeResponse {
   cards: BackendCard[];
   count: number;

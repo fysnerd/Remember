@@ -4,6 +4,7 @@
  * Default: Browse mode showing all non-archived content (INBOX with "Nouveau" badge,
  * processing with pipeline badge, READY normal). Filterable by platform + theme.
  *
+ * Long-press: Enters selection mode for multi-content quiz launch.
  * Triage: Activated via "Trier" button, uses SwipeCardStack for inbox items.
  */
 
@@ -13,18 +14,19 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
-import { Text } from '../../components/ui';
+import { Text, Button } from '../../components/ui';
 import { useToast } from '../../components/ui/Toast';
 import { ContentCard, SourcePills, SwipeCardStack, TriageModeToggle } from '../../components/content';
 import { ThemePills } from '../../components/reviews/ThemePills';
 import { SearchInput } from '../../components/explorer/SearchInput';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
-import { Search, PartyPopper, X, BookOpen } from 'lucide-react-native';
+import { Search, PartyPopper, X, BookOpen, Play } from 'lucide-react-native';
 import { useLibraryContent, useInbox, useInboxCount, useSwipeTriage, useDebouncedValue, useThemes } from '../../hooks';
 import { useContentStore } from '../../stores/contentStore';
+import { haptics } from '../../lib/haptics';
 import type { Content } from '../../types/content';
-import { colors, spacing } from '../../theme';
+import { colors, spacing, borderRadius } from '../../theme';
 import api from '../../lib/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -37,7 +39,10 @@ export default function LibraryScreen() {
   const queryClient = useQueryClient();
   const tabBarHeight = useBottomTabBarHeight();
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const autoSwitchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const selectionMode = selectedIds.size > 0;
 
   // Store state
   const {
@@ -96,6 +101,14 @@ export default function LibraryScreen() {
     return inboxItems ?? [];
   }, [inboxItems]);
 
+  // Count how many selected items are READY (have quizzes available)
+  const selectedReadyCount = useMemo(() => {
+    if (!libraryItems || selectedIds.size === 0) return 0;
+    return libraryItems.filter(
+      (item) => selectedIds.has(item.id) && item.status === 'READY' && (item.quizCount ?? 0) > 0
+    ).length;
+  }, [libraryItems, selectedIds]);
+
   // Auto-switch back to browse when triage completes
   useEffect(() => {
     if (viewMode === 'triage' && filteredInboxItems.length === 0 && !inboxLoading) {
@@ -138,10 +151,54 @@ export default function LibraryScreen() {
     }
   }, [inboxHasNextPage, inboxFetchingNextPage, inboxFetchNextPage]);
 
+  // --- Selection handlers ---
+  const handleToggleSelection = useCallback((id: string) => {
+    haptics.selection();
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleLongPress = useCallback((id: string) => {
+    haptics.medium();
+    setSelectedIds(new Set([id]));
+  }, []);
+
+  const handleCancelSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  const handleLaunchQuiz = useCallback(() => {
+    if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    setSelectedIds(new Set());
+    if (ids.length === 1) {
+      router.push({ pathname: '/quiz/[id]' as any, params: { id: ids[0] } });
+    } else {
+      router.push({ pathname: '/quiz/[id]' as any, params: { id: 'multi', ids: ids.join(',') } });
+    }
+  }, [selectedIds, router]);
+
   // --- Browse mode handlers ---
   const handleContentPress = useCallback((id: string) => {
-    router.push(`/content/${id}`);
-  }, [router]);
+    if (selectionMode) {
+      handleToggleSelection(id);
+    } else {
+      router.push(`/content/${id}`);
+    }
+  }, [selectionMode, handleToggleSelection, router]);
+
+  const handleContentLongPress = useCallback((id: string) => {
+    if (!selectionMode) {
+      handleLongPress(id);
+    }
+  }, [selectionMode, handleLongPress]);
 
   const handleLibraryLoadMore = useCallback(() => {
     if (libraryHasNextPage && !libraryFetchingNextPage) {
@@ -151,6 +208,7 @@ export default function LibraryScreen() {
 
   // --- Mode switching ---
   const handleOpenTriage = useCallback(() => {
+    setSelectedIds(new Set());
     setViewMode('triage');
   }, [setViewMode]);
 
@@ -170,10 +228,13 @@ export default function LibraryScreen() {
         channelName={item.channelName}
         duration={item.duration}
         status={item.status}
+        isSelected={selectedIds.has(item.id)}
+        selectionMode={selectionMode}
         onPress={() => handleContentPress(item.id)}
+        onLongPress={() => handleContentLongPress(item.id)}
       />
     </View>
-  ), [handleContentPress]);
+  ), [handleContentPress, handleContentLongPress, selectedIds, selectionMode]);
 
   // =====================================================
   // BROWSE MODE
@@ -226,7 +287,10 @@ export default function LibraryScreen() {
           keyExtractor={(item) => item.id}
           numColumns={2}
           columnWrapperStyle={styles.columnWrapper}
-          contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.lg }]}
+          contentContainerStyle={[
+            styles.content,
+            { paddingBottom: tabBarHeight + spacing.lg + (selectionMode ? 80 : 0) },
+          ]}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
           }
@@ -247,74 +311,83 @@ export default function LibraryScreen() {
   // =====================================================
   // TRIAGE MODE
   // =====================================================
-  const renderTriageMode = () => {
-    // Source pills for filtering triage too
-    const triageContent = (
-      <>
-        <SourcePills
-          selectedSource={sourceFilter}
-          onSourceChange={setSourceFilter}
-        />
+  const renderTriageMode = () => (
+    <>
+      <SourcePills
+        selectedSource={sourceFilter}
+        onSourceChange={setSourceFilter}
+      />
 
-        {inboxLoading ? (
-          <LoadingScreen />
-        ) : !filteredInboxItems.length ? (
-          <ScrollView
-            contentContainerStyle={[styles.swipeEmptyContainer, { paddingBottom: tabBarHeight + spacing.lg }]}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
-            }
-          >
-            {sourceFilter !== 'all' ? (
-              <EmptyState
-                message={`Aucun contenu ${sourceFilter === 'youtube' ? 'YouTube' : sourceFilter === 'spotify' ? 'Spotify' : sourceFilter === 'tiktok' ? 'TikTok' : 'Instagram'} a trier`}
-                icon={Search}
-                hasHeader
-              />
-            ) : (
-              <EmptyState
-                message="Tout est trie !"
-                icon={PartyPopper}
-                hasHeader
-              />
-            )}
-          </ScrollView>
-        ) : (
-          <ScrollView
-            contentContainerStyle={styles.swipeScrollWrapper}
-            bounces={true}
-            scrollEnabled={false}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
-            }
-          >
-            <SwipeCardStack
-              key={sourceFilter}
-              items={filteredInboxItems}
-              onSwipeRight={handleSwipeRight}
-              onSwipeLeft={handleSwipeLeft}
-              onEmpty={handleSwipeEmpty}
-              onNearEnd={handleNearEnd}
+      {inboxLoading ? (
+        <LoadingScreen />
+      ) : !filteredInboxItems.length ? (
+        <ScrollView
+          contentContainerStyle={[styles.swipeEmptyContainer, { paddingBottom: tabBarHeight + spacing.lg }]}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
+          }
+        >
+          {sourceFilter !== 'all' ? (
+            <EmptyState
+              message={`Aucun contenu ${sourceFilter === 'youtube' ? 'YouTube' : sourceFilter === 'spotify' ? 'Spotify' : sourceFilter === 'tiktok' ? 'TikTok' : 'Instagram'} a trier`}
+              icon={Search}
+              hasHeader
             />
-          </ScrollView>
-        )}
-      </>
-    );
-
-    return triageContent;
-  };
+          ) : (
+            <EmptyState
+              message="Tout est trie !"
+              icon={PartyPopper}
+              hasHeader
+            />
+          )}
+        </ScrollView>
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.swipeScrollWrapper}
+          bounces={true}
+          scrollEnabled={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
+          }
+        >
+          <SwipeCardStack
+            key={sourceFilter}
+            items={filteredInboxItems}
+            onSwipeRight={handleSwipeRight}
+            onSwipeLeft={handleSwipeLeft}
+            onEmpty={handleSwipeEmpty}
+            onNearEnd={handleNearEnd}
+          />
+        </ScrollView>
+      )}
+    </>
+  );
 
   return (
     <Animated.View entering={FadeIn.duration(200)} style={styles.container}>
       {/* Header */}
       <View style={styles.topTabBar}>
         {viewMode === 'browse' ? (
-          <>
-            <Text variant="body" weight="medium" style={styles.topTabTextActive}>
-              Bibliotheque
-            </Text>
-            <TriageModeToggle inboxCount={inboxCount ?? 0} onPress={handleOpenTriage} />
-          </>
+          selectionMode ? (
+            <>
+              <View style={styles.selectionHeader}>
+                <Pressable onPress={handleCancelSelection} hitSlop={8}>
+                  <X size={20} color={colors.text} strokeWidth={2} />
+                </Pressable>
+                <Text variant="body" weight="medium" style={styles.topTabTextActive}>
+                  {selectedIds.size} selectionne{selectedIds.size > 1 ? 's' : ''}
+                </Text>
+              </View>
+              <View />
+            </>
+          ) : (
+            <>
+              <Text variant="body" weight="medium" style={styles.topTabTextActive}>
+                Bibliotheque
+              </Text>
+              <TriageModeToggle inboxCount={inboxCount ?? 0} onPress={handleOpenTriage} />
+            </>
+          )
         ) : (
           <>
             <Text variant="body" weight="medium" style={styles.topTabTextActive}>
@@ -333,6 +406,27 @@ export default function LibraryScreen() {
 
       {/* Mode content */}
       {viewMode === 'browse' ? renderBrowseMode() : renderTriageMode()}
+
+      {/* Selection action bar */}
+      {selectionMode && viewMode === 'browse' && (
+        <View style={[styles.selectionBar, { paddingBottom: tabBarHeight + spacing.sm }]}>
+          <Button
+            variant="primary"
+            onPress={handleLaunchQuiz}
+            disabled={selectedReadyCount === 0}
+            fullWidth
+          >
+            <View style={styles.quizButtonContent}>
+              <Play size={16} color={colors.background} fill={colors.background} />
+              <Text weight="medium" style={styles.quizButtonText}>
+                {selectedReadyCount > 0
+                  ? `Lancer le quiz (${selectedReadyCount})`
+                  : 'Aucun quiz disponible'}
+              </Text>
+            </View>
+          </Button>
+        </View>
+      )}
 
       <ToastComponent />
     </Animated.View>
@@ -358,6 +452,11 @@ const styles = StyleSheet.create({
   },
   topTabTextActive: {
     color: colors.text,
+  },
+  selectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
   },
   closeButton: {
     width: 36,
@@ -410,5 +509,28 @@ const styles = StyleSheet.create({
   loadingMore: {
     paddingVertical: spacing.lg,
     alignItems: 'center',
+  },
+
+  // --- Selection bar ---
+  selectionBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    backgroundColor: colors.background,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+  },
+  quizButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  quizButtonText: {
+    color: colors.background,
+    fontSize: 15,
   },
 });
