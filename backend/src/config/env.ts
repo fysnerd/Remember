@@ -76,6 +76,11 @@ const envSchema = z.object({
 
   // yt-dlp proxy (e.g. socks5://127.0.0.1:40000 for Cloudflare WARP)
   YTDLP_PROXY: z.string().optional(),
+
+  // Instagram residential proxy (optional — reduces detection risk)
+  INSTAGRAM_PROXY_URL: z.string().optional(),
+  INSTAGRAM_PROXY_USER: z.string().optional(),
+  INSTAGRAM_PROXY_PASS: z.string().optional(),
 });
 
 // Parse and validate
@@ -174,5 +179,11 @@ export const config = {
 
   ytdlp: {
     proxy: env.YTDLP_PROXY || '',
+  },
+
+  instagramProxy: {
+    url: env.INSTAGRAM_PROXY_URL || '',
+    user: env.INSTAGRAM_PROXY_USER || '',
+    pass: env.INSTAGRAM_PROXY_PASS || '',
   },
 } as const;
