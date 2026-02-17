@@ -764,6 +764,19 @@ export async function regenerateQuiz(contentId: string): Promise<boolean> {
 export async function runQuizGenerationWorker(): Promise<void> {
   log.info('Quiz generation worker starting');
 
+  // Recovery: unstick items stuck in GENERATING for >10 minutes (e.g. after PM2 restart)
+  const stuckCutoff = new Date(Date.now() - 10 * 60 * 1000);
+  const stuckItems = await prisma.content.updateMany({
+    where: {
+      status: ContentStatus.GENERATING,
+      updatedAt: { lt: stuckCutoff },
+    },
+    data: { status: ContentStatus.SELECTED },
+  });
+  if (stuckItems.count > 0) {
+    log.warn({ count: stuckItems.count }, 'Reset stuck GENERATING items back to SELECTED');
+  }
+
   // Get content items with transcripts that need quiz generation (SELECTED only)
   // INBOX content is pre-transcribed but must wait for user triage before quiz gen
   const pendingContent = await prisma.content.findMany({

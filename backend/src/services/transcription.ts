@@ -449,12 +449,6 @@ export async function processContentTranscript(contentId: string): Promise<boole
     return false;
   }
 
-  // Update status to transcribing
-  await prisma.content.update({
-    where: { id: contentId },
-    data: { status: ContentStatus.TRANSCRIBING },
-  });
-
   const workerId = generateWorkerId();
 
   try {
@@ -528,12 +522,14 @@ export async function processContentTranscript(contentId: string): Promise<boole
 
   } catch (error) {
     log.error({ err: error, contentId }, 'Transcription failed');
-    await prisma.content.update({
-      where: { id: contentId },
-      data: {
-        status: ContentStatus.FAILED,
-      },
-    });
+    // Only mark FAILED if user chose to learn this content (SELECTED).
+    // INBOX items are pre-transcribed in background — don't change their status.
+    if (content.status === ContentStatus.SELECTED) {
+      await prisma.content.update({
+        where: { id: contentId },
+        data: { status: ContentStatus.FAILED },
+      });
+    }
     return false;
   }
 }
@@ -579,6 +575,19 @@ export async function runTranscriptionWorker(): Promise<void> {
 
   // Clean up any expired locks from crashed workers
   await cleanupExpiredLocks();
+
+  // Recovery: unstick items stuck in TRANSCRIBING for >10 minutes (e.g. after PM2 restart)
+  const stuckCutoff = new Date(Date.now() - 10 * 60 * 1000);
+  const stuckItems = await prisma.content.updateMany({
+    where: {
+      status: ContentStatus.TRANSCRIBING,
+      updatedAt: { lt: stuckCutoff },
+    },
+    data: { status: ContentStatus.INBOX },
+  });
+  if (stuckItems.count > 0) {
+    log.warn({ count: stuckItems.count }, 'Reset stuck TRANSCRIBING items back to INBOX');
+  }
 
   // Get content items that need transcription:
   // 1. SELECTED status (user clicked "Learn") - priority
