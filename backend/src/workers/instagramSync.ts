@@ -7,6 +7,7 @@ import { logger } from '../config/logger.js';
 import { prisma } from '../config/database.js';
 import { Platform, ContentStatus } from '@prisma/client';
 import { instagramLimiter } from '../utils/rateLimiter.js';
+import { shouldFilterContent } from '../services/contentFilter.js';
 
 const log = logger.child({ job: 'instagram-sync' });
 
@@ -210,6 +211,13 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       if (!externalId) continue;
 
       if (existingIds.has(externalId)) {
+        continue;
+      }
+
+      // Skip entertainment content (memes, music clips, too short)
+      const filterReason = shouldFilterContent(item.caption?.text || null, item.video_duration || null);
+      if (filterReason) {
+        log.debug({ externalId, filterReason }, 'Skipping filtered Instagram reel');
         continue;
       }
 

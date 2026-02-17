@@ -6,6 +6,7 @@ import { logger } from '../config/logger.js';
 import { prisma } from '../config/database.js';
 import { Platform, ContentStatus } from '@prisma/client';
 import { tiktokLimiter } from '../utils/rateLimiter.js';
+import { shouldFilterContent } from '../services/contentFilter.js';
 
 const log = logger.child({ job: 'tiktok-sync' });
 
@@ -390,6 +391,13 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
           break;
         }
 
+        // Skip entertainment content (memes, music clips, too short)
+        const filterReason = shouldFilterContent(video.desc || null, video.video?.duration || null);
+        if (filterReason) {
+          log.debug({ videoId: video.id, filterReason }, 'Skipping filtered TikTok');
+          continue;
+        }
+
         const authorUsername = video.author.uniqueId;
         await prisma.content.create({
           data: {
@@ -571,6 +579,13 @@ async function syncUserTikTokScroll(page: any, userId: string, connectionId: str
     });
 
     if (existing) break;
+
+    // Skip entertainment content (memes, music clips, too short)
+    const filterReason = shouldFilterContent(video.desc || null, video.video?.duration || null);
+    if (filterReason) {
+      log.debug({ videoId: video.id, filterReason }, 'Skipping filtered TikTok');
+      continue;
+    }
 
     const authorUsername = video.author.uniqueId;
     await prisma.content.create({
