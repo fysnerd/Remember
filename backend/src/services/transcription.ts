@@ -1,5 +1,6 @@
 // Transcription Service - Fetches transcripts for YouTube videos
 // Uses yt-dlp (primary) for robust subtitle extraction including auto-generated captions
+// Falls back to innertube Android API via WARP proxy when yt-dlp is blocked
 // Uses global TranscriptCache to avoid redundant calls across users
 import { logger } from '../config/logger.js';
 import { config } from '../config/env.js';
@@ -10,6 +11,8 @@ import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import https from 'https';
+import { SocksProxyAgent } from 'socks-proxy-agent';
 import pLimit from 'p-limit';
 
 const log = logger.child({ service: 'youtube-transcription' });
@@ -170,7 +173,214 @@ export async function fetchYouTubeTranscriptWithYtDlp(
 }
 
 /**
- * Fetch YouTube transcript - tries yt-dlp first, no fallback
+ * Parse YouTube timedtext XML into plain text
+ * Handles both <p><s>...</s></p> (format 3) and <p>text</p> (simple) formats
+ */
+function parseTimedtextXml(xml: string): { text: string; segments: TranscriptSegment[] } {
+  const segments: TranscriptSegment[] = [];
+  const pRegex = /<p\s+t="(\d+)"\s+d="(\d+)"[^>]*>(.*?)<\/p>/gs;
+  let m;
+
+  while ((m = pRegex.exec(xml)) !== null) {
+    const startMs = parseInt(m[1], 10);
+    const durationMs = parseInt(m[2], 10);
+    const content = m[3];
+
+    let lineText = '';
+    if (content.includes('<s')) {
+      // Format 3: text inside <s> segments
+      const sRegex = />([^<]*)/g;
+      let s;
+      while ((s = sRegex.exec(content)) !== null) {
+        lineText += s[1];
+      }
+    } else {
+      lineText = content.replace(/<[^>]*>/g, '');
+    }
+
+    // Decode HTML entities
+    lineText = lineText
+      .replace(/&#39;/g, "'")
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n)))
+      .trim();
+
+    if (lineText && !/^\[.*\]$/.test(lineText)) {
+      segments.push({
+        start: startMs / 1000,
+        duration: durationMs / 1000,
+        text: lineText,
+      });
+    }
+  }
+
+  const text = segments.map(s => s.text).join(' ').replace(/\s+/g, ' ').trim();
+  return { text, segments };
+}
+
+/**
+ * Make an HTTPS request through the WARP SOCKS5 proxy
+ */
+function innertubeRequest(
+  url: string,
+  options: { method?: string; headers?: Record<string, string>; body?: string; proxyAgent: SocksProxyAgent }
+): Promise<{ status: number; text: string }> {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const req = https.request(
+      {
+        hostname: u.hostname,
+        path: u.pathname + u.search,
+        method: options.method || 'GET',
+        agent: options.proxyAgent,
+        headers: {
+          'User-Agent': 'com.google.android.youtube/19.02.39 (Linux; U; Android 14) gzip',
+          ...options.headers,
+        },
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk: string) => (data += chunk));
+        res.on('end', () => resolve({ status: res.statusCode || 0, text: data }));
+      }
+    );
+    req.on('error', reject);
+    req.setTimeout(20000, () => {
+      req.destroy();
+      reject(new Error('Innertube request timeout'));
+    });
+    if (options.body) req.write(options.body);
+    req.end();
+  });
+}
+
+/**
+ * Fetch YouTube subtitles via innertube Android API + WARP proxy
+ * Bypasses YouTube's datacenter IP blocking by using the Android app client
+ */
+async function fetchYouTubeTranscriptViaInnertube(
+  videoId: string,
+  preferredLang?: string
+): Promise<{ text: string; segments: TranscriptSegment[]; language: string } | null> {
+  const proxyUrl = config.ytdlp.proxy;
+  if (!proxyUrl) {
+    log.debug('No WARP proxy configured, skipping innertube fallback');
+    return null;
+  }
+
+  const proxyAgent = new SocksProxyAgent(proxyUrl);
+  const lang = preferredLang || 'fr';
+
+  log.debug({ videoId, lang }, 'Trying innertube Android client fallback');
+
+  // Step 1: Call innertube /player API as Android client
+  const playerBody = JSON.stringify({
+    videoId,
+    context: {
+      client: {
+        hl: lang,
+        gl: lang === 'fr' ? 'FR' : 'US',
+        clientName: 'ANDROID',
+        clientVersion: '19.02.39',
+        androidSdkVersion: 34,
+        userAgent: 'com.google.android.youtube/19.02.39 (Linux; U; Android 14) gzip',
+      },
+    },
+  });
+
+  const playerResp = await innertubeRequest(
+    'https://www.youtube.com/youtubei/v1/player?prettyPrint=false',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-YouTube-Client-Name': '3',
+        'X-YouTube-Client-Version': '19.02.39',
+      },
+      body: playerBody,
+      proxyAgent,
+    }
+  );
+
+  if (playerResp.status !== 200) {
+    log.warn({ videoId, status: playerResp.status }, 'Innertube /player API failed');
+    return null;
+  }
+
+  const data = JSON.parse(playerResp.text);
+
+  if (data.playabilityStatus?.status !== 'OK') {
+    log.warn({ videoId, status: data.playabilityStatus?.status, reason: data.playabilityStatus?.reason }, 'Video not playable via innertube');
+    return null;
+  }
+
+  const tracks = data.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+  if (!tracks || tracks.length === 0) {
+    log.warn({ videoId }, 'No caption tracks from innertube');
+    return null;
+  }
+
+  // Step 2: Find preferred track (preferred lang > en > first)
+  const languages = preferredLang
+    ? [preferredLang, ...PREFERRED_LANGUAGES.filter(l => l !== preferredLang)]
+    : PREFERRED_LANGUAGES;
+
+  let track = null;
+  for (const l of languages) {
+    track = tracks.find((t: any) => t.languageCode === l);
+    if (track) break;
+  }
+  if (!track) track = tracks[0];
+
+  const baseUrl = track.baseUrl.replace(/\\u0026/g, '&');
+
+  // Step 3: Fetch timedtext (Android client returns XML format)
+  const subsResp = await innertubeRequest(baseUrl + '&fmt=json3', { proxyAgent });
+
+  if (subsResp.text.length === 0) {
+    log.warn({ videoId }, 'Empty timedtext response from innertube');
+    return null;
+  }
+
+  // Parse response (may be JSON3 or XML depending on endpoint)
+  if (subsResp.text.trimStart().startsWith('{')) {
+    // JSON3 format
+    const d = JSON.parse(subsResp.text);
+    const events: YtDlpEvent[] = (d.events || []).filter((e: YtDlpEvent) => e.segs);
+    const segments: TranscriptSegment[] = events.map((event) => ({
+      start: event.tStartMs / 1000,
+      duration: (event.dDurationMs || 0) / 1000,
+      text: event.segs!.map((s) => s.utf8).join('').trim(),
+    })).filter((s) => s.text.length > 0);
+
+    const text = segments.map(s => s.text).join(' ')
+      .replace(/\s+/g, ' ').replace(/\[.*?\]/g, '').trim();
+
+    log.info({ videoId, method: 'innertube-json3', segments: segments.length, chars: text.length, language: track.languageCode }, 'Innertube subtitle extraction completed');
+    return { text, segments, language: track.languageCode };
+
+  } else if (subsResp.text.includes('<timedtext')) {
+    // XML format (common with Android client)
+    const { text, segments } = parseTimedtextXml(subsResp.text);
+
+    if (text.length === 0) {
+      log.warn({ videoId }, 'Parsed XML timedtext was empty');
+      return null;
+    }
+
+    log.info({ videoId, method: 'innertube-xml', segments: segments.length, chars: text.length, language: track.languageCode }, 'Innertube subtitle extraction completed');
+    return { text, segments, language: track.languageCode };
+  }
+
+  log.warn({ videoId, preview: subsResp.text.slice(0, 100) }, 'Unknown timedtext format from innertube');
+  return null;
+}
+
+/**
+ * Fetch YouTube transcript - tries yt-dlp first, falls back to innertube Android API
  */
 export async function fetchYouTubeTranscript(
   videoIdOrUrl: string,
@@ -178,16 +388,23 @@ export async function fetchYouTubeTranscript(
 ): Promise<{ text: string; segments: TranscriptSegment[]; language: string } | null> {
   const videoId = extractVideoId(videoIdOrUrl) || videoIdOrUrl;
 
-  // Check if yt-dlp is available
+  // Try yt-dlp first (fastest when it works)
   const ytDlpAvailable = await isYtDlpAvailable();
-
-  if (!ytDlpAvailable) {
-    log.error('yt-dlp is not installed');
-    return null;
+  if (ytDlpAvailable) {
+    const result = await fetchYouTubeTranscriptWithYtDlp(videoId, preferredLang);
+    if (result) return result;
+    log.debug({ videoId }, 'yt-dlp failed, trying innertube fallback');
+  } else {
+    log.warn('yt-dlp not installed, using innertube only');
   }
 
-  // Use yt-dlp (most reliable for auto-generated captions)
-  return fetchYouTubeTranscriptWithYtDlp(videoId, preferredLang);
+  // Fallback: innertube Android API via WARP proxy
+  try {
+    return await fetchYouTubeTranscriptViaInnertube(videoId, preferredLang);
+  } catch (error) {
+    log.error({ err: error, videoId }, 'Innertube fallback also failed');
+    return null;
+  }
 }
 
 /**
