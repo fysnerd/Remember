@@ -147,6 +147,12 @@ export default function LibraryScreen() {
     // Skip: just advance the card, no backend action
   }, []);
 
+  const handleUndo = useCallback((item: Content) => {
+    // Reset content back to INBOX on the backend
+    api.patch(`/content/${item.id}/triage`, { action: 'undo' }).catch(() => {});
+    showToast('Annule', 'success');
+  }, [showToast]);
+
   const handleSwipeEmpty = useCallback(() => {}, []);
 
   const handleNearEnd = useCallback(() => {
@@ -360,6 +366,7 @@ export default function LibraryScreen() {
             onSwipeRight={handleSwipeRight}
             onSwipeLeft={handleSwipeLeft}
             onSkip={handleSkip}
+            onUndo={handleUndo}
             onEmpty={handleSwipeEmpty}
             onNearEnd={handleNearEnd}
           />

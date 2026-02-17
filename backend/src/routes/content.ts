@@ -1528,8 +1528,8 @@ contentRouter.patch('/:id/triage', async (req: Request, res: Response, next: Nex
     const id = asString(req.params.id);
     const { action } = req.body;
 
-    if (!['learn', 'archive'].includes(action)) {
-      return res.status(400).json({ error: 'Invalid action. Use "learn" or "archive".' });
+    if (!['learn', 'archive', 'undo'].includes(action)) {
+      return res.status(400).json({ error: 'Invalid action. Use "learn", "archive", or "undo".' });
     }
 
     // Verify ownership and get transcript status
@@ -1543,6 +1543,19 @@ contentRouter.patch('/:id/triage', async (req: Request, res: Response, next: Nex
 
     if (!content) {
       return res.status(404).json({ error: 'Content not found' });
+    }
+
+    // Undo: reset back to INBOX (no pipeline trigger)
+    if (action === 'undo') {
+      const updated = await prisma.content.update({
+        where: { id },
+        data: { status: ContentStatus.INBOX },
+      });
+      return res.json({
+        success: true,
+        newStatus: updated.status,
+        message: 'Content reset to inbox',
+      });
     }
 
     const newStatus = action === 'learn' ? ContentStatus.SELECTED : ContentStatus.ARCHIVED;

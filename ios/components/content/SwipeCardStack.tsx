@@ -11,7 +11,7 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { View, StyleSheet, Image, Dimensions, Pressable } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { User, Clock, X, SkipForward, Heart } from 'lucide-react-native';
+import { User, Clock, X, SkipForward, Heart, Undo2 } from 'lucide-react-native';
 import { SwipeCard, SwipeCardRef } from './SwipeCard';
 import { PlatformIcon } from '../icons';
 import { Text } from '../ui';
@@ -28,9 +28,15 @@ interface SwipeCardStackProps {
   onSwipeRight: (item: Content) => void;
   onSwipeLeft: (item: Content) => void;
   onSkip?: (item: Content) => void;
+  onUndo?: (item: Content) => void;
   onEmpty: () => void;
   onNearEnd?: () => void;
 }
+
+type LastAction = {
+  item: Content;
+  action: 'learn' | 'archive' | 'skip';
+} | null;
 
 function formatDuration(seconds?: number): string | null {
   if (!seconds) return null;
@@ -48,12 +54,14 @@ export function SwipeCardStack({
   onSwipeRight,
   onSwipeLeft,
   onSkip,
+  onUndo,
   onEmpty,
   onNearEnd,
 }: SwipeCardStackProps) {
   const currentIndexRef = useRef(0);
   const [currentIndex, setCurrentIndex] = useState(0);
   const topCardRef = useRef<SwipeCardRef>(null);
+  const [lastAction, setLastAction] = useState<LastAction>(null);
 
   // Stable snapshot: prevents query refetch from removing swiped items mid-stack.
   // Only append truly new items (from pagination); never shrink.
@@ -99,6 +107,7 @@ export function SwipeCardStack({
   const handleSwipeRight = useCallback(
     (item: Content) => {
       onSwipeRight(item);
+      setLastAction({ item, action: 'learn' });
       advanceCard();
     },
     [onSwipeRight, advanceCard]
@@ -107,44 +116,45 @@ export function SwipeCardStack({
   const handleSwipeLeft = useCallback(
     (item: Content) => {
       onSwipeLeft(item);
+      setLastAction({ item, action: 'archive' });
       advanceCard();
     },
     [onSwipeLeft, advanceCard]
   );
 
-  // Button handlers
+  // Button handlers — imperative swipe triggers handleSwipeLeft/Right which already calls advanceCard
   const handleButtonArchive = useCallback(() => {
     if (visibleItems.length === 0) return;
-    const item = visibleItems[0];
     if (topCardRef.current) {
       topCardRef.current.swipeLeft();
-      // advanceCard is called after animation delay
-      advanceCard();
-    } else {
-      onSwipeLeft(item);
-      advanceCardInstant();
     }
-  }, [visibleItems, onSwipeLeft, advanceCard, advanceCardInstant]);
+  }, [visibleItems]);
 
   const handleButtonLearn = useCallback(() => {
     if (visibleItems.length === 0) return;
-    const item = visibleItems[0];
     if (topCardRef.current) {
       topCardRef.current.swipeRight();
-      advanceCard();
-    } else {
-      onSwipeRight(item);
-      advanceCardInstant();
     }
-  }, [visibleItems, onSwipeRight, advanceCard, advanceCardInstant]);
+  }, [visibleItems]);
 
   const handleButtonSkip = useCallback(() => {
     if (visibleItems.length === 0) return;
     const item = visibleItems[0];
     haptics.light();
     onSkip?.(item);
+    setLastAction({ item, action: 'skip' });
     advanceCardInstant();
   }, [visibleItems, onSkip, advanceCardInstant]);
+
+  // Undo: go back one card and notify parent
+  const handleUndo = useCallback(() => {
+    if (!lastAction || currentIndex === 0) return;
+    haptics.medium();
+    currentIndexRef.current -= 1;
+    setCurrentIndex(currentIndexRef.current);
+    onUndo?.(lastAction.item);
+    setLastAction(null);
+  }, [lastAction, currentIndex, onUndo]);
 
   if (visibleItems.length === 0) {
     return null;
@@ -199,6 +209,21 @@ export function SwipeCardStack({
 
       {/* Action buttons */}
       <View style={styles.actionsRow}>
+        {/* Undo button — only visible when there's a previous action */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.actionBtn,
+            styles.undoBtn,
+            !lastAction && styles.actionBtnHidden,
+            pressed && lastAction && styles.actionBtnPressed,
+          ]}
+          onPress={handleUndo}
+          hitSlop={4}
+          disabled={!lastAction}
+        >
+          <Undo2 size={16} color={colors.textTertiary} strokeWidth={2.5} />
+        </Pressable>
+
         <Pressable
           style={({ pressed }) => [styles.actionBtn, styles.archiveBtn, pressed && styles.actionBtnPressed]}
           onPress={handleButtonArchive}
@@ -581,5 +606,17 @@ const styles = StyleSheet.create({
     borderRadius: ACTION_BTN_SIZE / 2,
     backgroundColor: 'rgba(34, 197, 94, 0.10)',
     borderColor: 'rgba(34, 197, 94, 0.30)',
+  },
+  undoBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(148, 163, 184, 0.06)',
+    borderColor: 'rgba(148, 163, 184, 0.15)',
+    position: 'absolute',
+    left: 24,
+  },
+  actionBtnHidden: {
+    opacity: 0,
   },
 });
