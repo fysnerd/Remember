@@ -1,7 +1,7 @@
 /**
  * QuizRecommendationCard - Glass card for recommended quiz on Home screen
  *
- * Shows thumbnail (content) or emoji (theme), title, subtitle, due badge, and CTA.
+ * Shows thumbnail (content) or emoji (theme), title, creator name, and date.
  */
 
 import { View, Image, StyleSheet } from 'react-native';
@@ -15,8 +15,21 @@ interface QuizRecommendationCardProps {
   onPress: () => void;
 }
 
+function formatDate(isoString: string): string {
+  const date = new Date(isoString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return "Aujourd'hui";
+  if (diffDays === 1) return 'Hier';
+  if (diffDays < 7) return `Il y a ${diffDays}j`;
+
+  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+}
+
 export function QuizRecommendationCard({ recommendation, onPress }: QuizRecommendationCardProps) {
-  const { type, title, subtitle, thumbnailUrl, emoji, questionCount } = recommendation;
+  const { type, title, subtitle, thumbnailUrl, emoji, channelName, capturedAt, questionCount } = recommendation;
 
   return (
     <GlassCard padding="lg" onPress={onPress} style={styles.card}>
@@ -29,17 +42,29 @@ export function QuizRecommendationCard({ recommendation, onPress }: QuizRecommen
         )}
       </View>
 
-      {/* Bottom: Title + subtitle + question count */}
+      {/* Bottom: Title + creator + date */}
       <View style={styles.bottom}>
         <Text style={styles.title} numberOfLines={2}>
           {title}
         </Text>
         <View style={styles.meta}>
-          <Text style={styles.subtitle} numberOfLines={1}>
-            {subtitle}
-          </Text>
-          <View style={styles.dot} />
-          <Text style={styles.subtitle}>{questionCount} question{questionCount !== 1 ? 's' : ''}</Text>
+          {type === 'content' && channelName ? (
+            <Text style={styles.creator} numberOfLines={1}>{channelName}</Text>
+          ) : (
+            <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text>
+          )}
+          {type === 'content' && capturedAt && (
+            <>
+              <View style={styles.dot} />
+              <Text style={styles.date}>{formatDate(capturedAt)}</Text>
+            </>
+          )}
+          {type === 'theme' && (
+            <>
+              <View style={styles.dot} />
+              <Text style={styles.date}>{questionCount} question{questionCount !== 1 ? 's' : ''}</Text>
+            </>
+          )}
         </View>
       </View>
     </GlassCard>
@@ -81,8 +106,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexWrap: 'wrap',
   },
+  creator: {
+    color: colors.text,
+    fontFamily: fonts.medium,
+    fontSize: 14,
+    flexShrink: 1,
+  },
   subtitle: {
     color: colors.textSecondary,
+    fontFamily: fonts.regular,
+    fontSize: 14,
+  },
+  date: {
+    color: colors.textTertiary,
     fontFamily: fonts.regular,
     fontSize: 14,
   },

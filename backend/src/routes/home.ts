@@ -140,6 +140,8 @@ homeRouter.get('/recommendations', async (req: Request, res: Response, next: Nex
       questionCount: number;
       dueCount: number;
       platform: string | null;
+      channelName: string | null;
+      capturedAt: string | null;
       reason: string;
     };
 
@@ -174,6 +176,8 @@ homeRouter.get('/recommendations', async (req: Request, res: Response, next: Nex
         questionCount: Number(bestTheme.questionCount),
         dueCount: Number(bestTheme.dueCount),
         platform: null,
+        channelName: null,
+        capturedAt: null,
         reason,
       });
       usedThemeIds.add(bestTheme.id);
@@ -190,6 +194,8 @@ homeRouter.get('/recommendations', async (req: Request, res: Response, next: Nex
         questionCount: Number(c.questionCount),
         dueCount: Number(c.dueCount),
         platform: c.platform,
+        channelName: c.channelName,
+        capturedAt: c.capturedAt.toISOString(),
         reason,
       });
       usedContentIds.add(c.id);
@@ -221,6 +227,8 @@ homeRouter.get('/recommendations', async (req: Request, res: Response, next: Nex
         questionCount: Number(c.questionCount),
         dueCount: Number(c.dueCount),
         platform: c.platform,
+        channelName: c.channelName,
+        capturedAt: c.capturedAt.toISOString(),
         reason,
       });
       usedContentIds.add(c.id);
@@ -242,6 +250,8 @@ homeRouter.get('/recommendations', async (req: Request, res: Response, next: Nex
         questionCount: Number(t.questionCount),
         dueCount: Number(t.dueCount),
         platform: null,
+        channelName: null,
+        capturedAt: null,
         reason,
       });
       usedThemeIds.add(t.id);
@@ -257,11 +267,13 @@ homeRouter.get('/recommendations', async (req: Request, res: Response, next: Nex
         channelName: string | null;
         questionCount: bigint;
         dueCount: bigint;
+        capturedAt: Date;
       }[]>`
         SELECT
           co.id, co.title, co."thumbnailUrl", co.platform::text, co."channelName",
           COUNT(DISTINCT q.id) AS "questionCount",
-          COUNT(DISTINCT card.id) FILTER (WHERE card."nextReviewAt" <= NOW()) AS "dueCount"
+          COUNT(DISTINCT card.id) FILTER (WHERE card."nextReviewAt" <= NOW()) AS "dueCount",
+          co."capturedAt"
         FROM "Content" co
         JOIN "Quiz" q ON q."contentId" = co.id AND q."isSynthesis" = false
         LEFT JOIN "Card" card ON card."quizId" = q.id AND card."userId" = ${userId}
@@ -283,6 +295,8 @@ homeRouter.get('/recommendations', async (req: Request, res: Response, next: Nex
           questionCount: Number(c.questionCount),
           dueCount: Number(c.dueCount),
           platform: c.platform,
+          channelName: c.channelName,
+          capturedAt: c.capturedAt.toISOString(),
           reason: 'Contenu recent',
         });
       }

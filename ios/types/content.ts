@@ -161,6 +161,8 @@ export interface QuizRecommendation {
   questionCount: number;
   dueCount: number;
   platform: string | null;
+  channelName: string | null;
+  capturedAt: string | null;
   reason: string;
 }
 
