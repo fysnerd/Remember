@@ -1,24 +1,27 @@
 /**
- * Explorer Tab - Bibliotheque (inbox triage)
+ * Library Tab - Browse all content + Triage mode via button
  *
- * Supports two triage modes:
- * - Swipe mode (default): SwipeCardStack for one-at-a-time triage
- * - Bulk mode: FlatList grid with multi-select and batch actions
+ * Default: Browse mode showing all non-archived content (INBOX with "Nouveau" badge,
+ * processing with pipeline badge, READY normal). Filterable by platform + theme.
+ *
+ * Triage: Activated via "Trier" button, uses SwipeCardStack for inbox items.
  */
 
-import { useState, useCallback, useMemo } from 'react';
-import { View, ScrollView, FlatList, StyleSheet, RefreshControl, Dimensions, ActivityIndicator } from 'react-native';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { View, FlatList, ScrollView, StyleSheet, RefreshControl, Dimensions, ActivityIndicator, Pressable } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { Text, Badge } from '../../components/ui';
+import { useRouter } from 'expo-router';
+import { Text } from '../../components/ui';
 import { useToast } from '../../components/ui/Toast';
-import { ContentCard, SourcePills, SelectionBar, SwipeCardStack, TriageModeToggle } from '../../components/content';
+import { ContentCard, SourcePills, SwipeCardStack, TriageModeToggle } from '../../components/content';
+import { ThemePills } from '../../components/reviews/ThemePills';
 import { SearchInput } from '../../components/explorer/SearchInput';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
-import { Search, Sparkles, PartyPopper } from 'lucide-react-native';
-import { useInbox, useInboxCount, useTriageMutation, useDebouncedValue, useSwipeTriage } from '../../hooks';
+import { Search, PartyPopper, X, BookOpen } from 'lucide-react-native';
+import { useLibraryContent, useInbox, useInboxCount, useSwipeTriage, useDebouncedValue, useThemes } from '../../hooks';
 import { useContentStore } from '../../stores/contentStore';
 import type { Content } from '../../types/content';
 import { colors, spacing } from '../../theme';
@@ -30,11 +33,11 @@ const GRID_PADDING = spacing.lg;
 const COLUMN_WIDTH = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP) / 2;
 
 export default function LibraryScreen() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const tabBarHeight = useBottomTabBarHeight();
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [batchAction, setBatchAction] = useState<'learn' | 'ignore' | null>(null);
+  const autoSwitchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Store state
   const {
@@ -42,50 +45,82 @@ export default function LibraryScreen() {
     setSearchQuery,
     sourceFilter,
     setSourceFilter,
-    triageMode,
-    setTriageMode,
+    themeFilter,
+    setThemeFilter,
+    viewMode,
+    setViewMode,
   } = useContentStore();
 
-  // Debounce search for filtering (bulk mode only)
   const debouncedSearch = useDebouncedValue(searchQuery, 300);
 
   // Data fetching
   const { data: inboxCount } = useInboxCount();
-  const { data: inboxItems, isLoading: inboxLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInbox(sourceFilter);
-  const triageMutation = useTriageMutation();
+  const { data: themes } = useThemes();
+  const {
+    data: libraryItems,
+    isLoading: libraryLoading,
+    fetchNextPage: libraryFetchNextPage,
+    hasNextPage: libraryHasNextPage,
+    isFetchingNextPage: libraryFetchingNextPage,
+  } = useLibraryContent({
+    source: sourceFilter,
+    themeId: themeFilter ?? undefined,
+    search: debouncedSearch || undefined,
+    excludeArchived: true,
+  });
+
+  // Triage data (only when in triage mode)
+  const {
+    data: inboxItems,
+    isLoading: inboxLoading,
+    fetchNextPage: inboxFetchNextPage,
+    hasNextPage: inboxHasNextPage,
+    isFetchingNextPage: inboxFetchingNextPage,
+  } = useInbox(sourceFilter);
+
   const swipeTriage = useSwipeTriage();
-
   const { show: showToast, ToastComponent } = useToast();
-  const selectionMode = selectedIds.size > 0;
 
-  // Filter inbox items by search (source filtering is done server-side)
+  // Theme pills data
+  const themeOptions = useMemo(() => {
+    if (!themes) return [];
+    return themes.map((t) => ({
+      id: t.id,
+      name: t.name,
+      emoji: t.emoji || '📚',
+    }));
+  }, [themes]);
+
+  // Filter inbox items for triage mode
   const filteredInboxItems = useMemo(() => {
-    let items = inboxItems;
-    if (!items) return items;
-    // Only apply text search in bulk mode
-    if (triageMode === 'bulk' && debouncedSearch) {
-      const searchLower = debouncedSearch.toLowerCase();
-      items = items.filter((item) =>
-        item.title.toLowerCase().includes(searchLower) ||
-        (item.channelName && item.channelName.toLowerCase().includes(searchLower))
-      );
-    }
-    return items;
-  }, [inboxItems, debouncedSearch, triageMode]);
+    return inboxItems ?? [];
+  }, [inboxItems]);
 
+  // Auto-switch back to browse when triage completes
+  useEffect(() => {
+    if (viewMode === 'triage' && filteredInboxItems.length === 0 && !inboxLoading) {
+      autoSwitchTimer.current = setTimeout(() => {
+        showToast('Tout est trie !', 'success');
+        setViewMode('browse');
+      }, 1500);
+    }
+    return () => {
+      if (autoSwitchTimer.current) clearTimeout(autoSwitchTimer.current);
+    };
+  }, [viewMode, filteredInboxItems.length, inboxLoading]);
+
+  // Pull-to-refresh
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    // Trigger platform sync in background (fire-and-forget)
-    const syncEndpoint = sourceFilter === 'all'
-      ? '/admin/sync/all'
-      : `/admin/sync/${sourceFilter}`;
-    api.post(syncEndpoint).catch(() => {});
-    // Refresh local data immediately
-    await queryClient.invalidateQueries({ queryKey: ['inbox'] });
+    api.post('/content/refresh').catch(() => {});
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['content'] }),
+      queryClient.invalidateQueries({ queryKey: ['inbox'] }),
+    ]);
     setRefreshing(false);
-  }, [queryClient, sourceFilter]);
+  }, [queryClient]);
 
-  // --- Swipe mode handlers ---
+  // --- Swipe handlers ---
   const handleSwipeRight = useCallback((item: Content) => {
     swipeTriage.mutate({ contentId: item.id, action: 'learn' });
     showToast('Contenu sauvegarde', 'success');
@@ -95,86 +130,37 @@ export default function LibraryScreen() {
     swipeTriage.mutate({ contentId: item.id, action: 'archive' });
   }, [swipeTriage]);
 
-  const handleSwipeEmpty = useCallback(() => {
-    // No-op: empty state is handled by checking filteredInboxItems length
-  }, []);
+  const handleSwipeEmpty = useCallback(() => {}, []);
 
   const handleNearEnd = useCallback(() => {
-    if (hasNextPage && !isFetchingNextPage) {
-      fetchNextPage();
+    if (inboxHasNextPage && !inboxFetchingNextPage) {
+      inboxFetchNextPage();
     }
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [inboxHasNextPage, inboxFetchingNextPage, inboxFetchNextPage]);
 
-  // --- Mode toggle ---
-  const handleToggleMode = useCallback(() => {
-    const newMode = triageMode === 'swipe' ? 'bulk' : 'swipe';
-    setTriageMode(newMode);
-    // Reset selection when switching to swipe mode
-    if (newMode === 'swipe') {
-      setSelectedIds(new Set());
+  // --- Browse mode handlers ---
+  const handleContentPress = useCallback((id: string) => {
+    router.push(`/content/${id}`);
+  }, [router]);
+
+  const handleLibraryLoadMore = useCallback(() => {
+    if (libraryHasNextPage && !libraryFetchingNextPage) {
+      libraryFetchNextPage();
     }
-  }, [triageMode, setTriageMode]);
+  }, [libraryHasNextPage, libraryFetchingNextPage, libraryFetchNextPage]);
 
-  // Toggle selection on tap (bulk mode)
-  const handleToggleSelection = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
+  // --- Mode switching ---
+  const handleOpenTriage = useCallback(() => {
+    setViewMode('triage');
+  }, [setViewMode]);
 
-  const handleCancelSelection = () => {
-    setSelectedIds(new Set());
-  };
+  const handleCloseTriage = useCallback(() => {
+    setViewMode('browse');
+    queryClient.invalidateQueries({ queryKey: ['content', 'library'] });
+  }, [setViewMode, queryClient]);
 
-  // Batch triage (bulk mode)
-  const handleBatchLearn = () => {
-    if (selectedIds.size === 0) return;
-    const ids = Array.from(selectedIds);
-    const count = ids.length;
-    setBatchAction('learn');
-    triageMutation.mutate(
-      { contentIds: ids, action: 'learn' },
-      {
-        onSuccess: () => {
-          const msg = count === 1
-            ? 'Contenu sauvegardé'
-            : `${count} contenus sauvegardés`;
-          showToast(msg, 'success');
-        },
-        onSettled: () => {
-          setBatchAction(null);
-          setSelectedIds(new Set());
-        },
-      }
-    );
-  };
-
-  const handleBatchIgnore = () => {
-    if (selectedIds.size === 0) return;
-    setBatchAction('ignore');
-    triageMutation.mutate(
-      { contentIds: Array.from(selectedIds), action: 'archive' },
-      {
-        onSettled: () => {
-          setBatchAction(null);
-          setSelectedIds(new Set());
-        },
-      }
-    );
-  };
-
-  const handleInboxItemPress = (id: string) => {
-    handleToggleSelection(id);
-  };
-
-  // Render a single inbox card (for FlatList in bulk mode)
-  const renderInboxItem = useCallback(({ item }: { item: Content }) => (
+  // --- Render content card ---
+  const renderContentItem = useCallback(({ item }: { item: Content }) => (
     <View style={styles.gridItem}>
       <ContentCard
         id={item.id}
@@ -183,85 +169,18 @@ export default function LibraryScreen() {
         thumbnailUrl={item.thumbnailUrl}
         channelName={item.channelName}
         duration={item.duration}
-        onPress={() => handleInboxItemPress(item.id)}
-        isSelected={selectedIds.has(item.id)}
-        selectionMode={true}
+        status={item.status}
+        onPress={() => handleContentPress(item.id)}
       />
     </View>
-  ), [selectedIds]);
+  ), [handleContentPress]);
 
-  const handleLoadMore = useCallback(() => {
-    if (hasNextPage && !isFetchingNextPage) {
-      fetchNextPage();
-    }
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
-
-  // --- Render: Swipe mode ---
-  const renderSwipeMode = () => {
-    if (inboxLoading) {
-      return <LoadingScreen />;
-    }
-
-    if (!filteredInboxItems?.length) {
-      // Empty state with pull-to-refresh
-      const isFiltered = sourceFilter !== 'all';
-      const platformName = sourceFilter === 'youtube' ? 'YouTube'
-        : sourceFilter === 'spotify' ? 'Spotify'
-        : sourceFilter === 'tiktok' ? 'TikTok'
-        : sourceFilter === 'instagram' ? 'Instagram'
-        : '';
-
-      return (
-        <ScrollView
-          contentContainerStyle={[styles.swipeEmptyContainer, { paddingBottom: tabBarHeight + spacing.lg }]}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
-          }
-        >
-          {isFiltered ? (
-            <EmptyState
-              message={`Aucun contenu ${platformName} a trier`}
-              icon={Search}
-              hasHeader
-            />
-          ) : (
-            <EmptyState
-              message="Tout est trie !"
-              icon={PartyPopper}
-              hasHeader
-            />
-          )}
-        </ScrollView>
-      );
-    }
-
-    // Swipe card stack with pull-to-refresh wrapper
-    // ScrollView with flex: 1 contentContainer is non-scrollable but RefreshControl still works
-    return (
-      <ScrollView
-        contentContainerStyle={styles.swipeScrollWrapper}
-        bounces={true}
-        scrollEnabled={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
-        }
-      >
-        <SwipeCardStack
-          key={sourceFilter}
-          items={filteredInboxItems}
-          onSwipeRight={handleSwipeRight}
-          onSwipeLeft={handleSwipeLeft}
-          onEmpty={handleSwipeEmpty}
-          onNearEnd={handleNearEnd}
-        />
-      </ScrollView>
-    );
-  };
-
-  // --- Render: Bulk mode ---
-  const renderBulkMode = () => (
+  // =====================================================
+  // BROWSE MODE
+  // =====================================================
+  const renderBrowseMode = () => (
     <>
-      {/* Search bar (bulk mode only) */}
+      {/* Search bar */}
       <View style={styles.searchContainer}>
         <SearchInput
           value={searchQuery}
@@ -269,47 +188,52 @@ export default function LibraryScreen() {
         />
       </View>
 
-      {inboxLoading ? (
+      {/* Source filter pills */}
+      <SourcePills
+        selectedSource={sourceFilter}
+        onSourceChange={setSourceFilter}
+      />
+
+      {/* Theme filter pills */}
+      {themeOptions.length > 0 && (
+        <ThemePills
+          themes={themeOptions}
+          selectedThemeId={themeFilter}
+          onThemeChange={setThemeFilter}
+        />
+      )}
+
+      {/* Content grid */}
+      {libraryLoading ? (
         <LoadingScreen />
-      ) : !filteredInboxItems?.length ? (
+      ) : !libraryItems?.length ? (
         <ScrollView
-          contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.lg }]}
+          contentContainerStyle={[styles.emptyContainer, { paddingBottom: tabBarHeight + spacing.lg }]}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
           }
         >
-          {sourceFilter !== 'all' ? (
-            <EmptyState message={`Aucun contenu ${sourceFilter === 'youtube' ? 'YouTube' : sourceFilter === 'spotify' ? 'Spotify' : sourceFilter === 'tiktok' ? 'TikTok' : 'Instagram'} a trier`} icon={Search} hasHeader />
-          ) : debouncedSearch && inboxItems?.length ? (
-            <EmptyState message="Aucun resultat pour cette recherche" icon={Search} hasHeader />
+          {debouncedSearch ? (
+            <EmptyState message="Aucun resultat" icon={Search} hasHeader />
           ) : (
-            <EmptyState message="Rien a trier pour le moment" icon={Sparkles} hasHeader />
+            <EmptyState message="Aucun contenu pour le moment" icon={BookOpen} hasHeader />
           )}
         </ScrollView>
       ) : (
         <FlatList
-          data={filteredInboxItems}
-          renderItem={renderInboxItem}
+          data={libraryItems}
+          renderItem={renderContentItem}
           keyExtractor={(item) => item.id}
           numColumns={2}
           columnWrapperStyle={styles.columnWrapper}
-          contentContainerStyle={[
-            styles.content,
-            { paddingBottom: tabBarHeight + spacing.lg },
-            selectionMode && styles.gridWithBar,
-          ]}
+          contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.lg }]}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
           }
-          onEndReached={handleLoadMore}
+          onEndReached={handleLibraryLoadMore}
           onEndReachedThreshold={0.5}
-          ListHeaderComponent={
-            <Text variant="caption" style={styles.instruction}>
-              Selectionnez le contenu a garder
-            </Text>
-          }
           ListFooterComponent={
-            isFetchingNextPage ? (
+            libraryFetchingNextPage ? (
               <View style={styles.loadingMore}>
                 <ActivityIndicator color={colors.textSecondary} />
               </View>
@@ -320,47 +244,96 @@ export default function LibraryScreen() {
     </>
   );
 
-  // --- Render: Bibliotheque tab content (swipe or bulk) ---
-  const renderLibraryTab = () => (
-    <>
-      {/* Source filter pills (both modes) */}
-      <SourcePills
-        selectedSource={sourceFilter}
-        onSourceChange={setSourceFilter}
-      />
+  // =====================================================
+  // TRIAGE MODE
+  // =====================================================
+  const renderTriageMode = () => {
+    // Source pills for filtering triage too
+    const triageContent = (
+      <>
+        <SourcePills
+          selectedSource={sourceFilter}
+          onSourceChange={setSourceFilter}
+        />
 
-      {/* Mode-specific content */}
-      {triageMode === 'swipe' ? renderSwipeMode() : renderBulkMode()}
-    </>
-  );
+        {inboxLoading ? (
+          <LoadingScreen />
+        ) : !filteredInboxItems.length ? (
+          <ScrollView
+            contentContainerStyle={[styles.swipeEmptyContainer, { paddingBottom: tabBarHeight + spacing.lg }]}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
+            }
+          >
+            {sourceFilter !== 'all' ? (
+              <EmptyState
+                message={`Aucun contenu ${sourceFilter === 'youtube' ? 'YouTube' : sourceFilter === 'spotify' ? 'Spotify' : sourceFilter === 'tiktok' ? 'TikTok' : 'Instagram'} a trier`}
+                icon={Search}
+                hasHeader
+              />
+            ) : (
+              <EmptyState
+                message="Tout est trie !"
+                icon={PartyPopper}
+                hasHeader
+              />
+            )}
+          </ScrollView>
+        ) : (
+          <ScrollView
+            contentContainerStyle={styles.swipeScrollWrapper}
+            bounces={true}
+            scrollEnabled={false}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
+            }
+          >
+            <SwipeCardStack
+              key={sourceFilter}
+              items={filteredInboxItems}
+              onSwipeRight={handleSwipeRight}
+              onSwipeLeft={handleSwipeLeft}
+              onEmpty={handleSwipeEmpty}
+              onNearEnd={handleNearEnd}
+            />
+          </ScrollView>
+        )}
+      </>
+    );
+
+    return triageContent;
+  };
 
   return (
     <Animated.View entering={FadeIn.duration(200)} style={styles.container}>
-      {/* Header: title + mode toggle */}
+      {/* Header */}
       <View style={styles.topTabBar}>
-        <View style={styles.topTabWithBadge}>
-          <Text variant="body" weight="medium" style={styles.topTabTextActive}>
-            Bibliotheque
-          </Text>
-          {(inboxCount ?? 0) > 0 && <Badge count={inboxCount ?? 0} size="sm" />}
-        </View>
-        <TriageModeToggle mode={triageMode} onToggle={handleToggleMode} />
+        {viewMode === 'browse' ? (
+          <>
+            <Text variant="body" weight="medium" style={styles.topTabTextActive}>
+              Bibliotheque
+            </Text>
+            <TriageModeToggle inboxCount={inboxCount ?? 0} onPress={handleOpenTriage} />
+          </>
+        ) : (
+          <>
+            <Text variant="body" weight="medium" style={styles.topTabTextActive}>
+              Trier
+            </Text>
+            <Pressable
+              style={({ pressed }) => [styles.closeButton, pressed && styles.closeButtonPressed]}
+              onPress={handleCloseTriage}
+              hitSlop={8}
+            >
+              <X size={20} color={colors.textSecondary} strokeWidth={2} />
+            </Pressable>
+          </>
+        )}
       </View>
 
-      {/* Library content */}
-      {renderLibraryTab()}
+      {/* Mode content */}
+      {viewMode === 'browse' ? renderBrowseMode() : renderTriageMode()}
 
-      {/* Selection bar - appears when items selected in bulk triage mode */}
-      {selectionMode && triageMode === 'bulk' && (
-        <SelectionBar
-          selectedCount={selectedIds.size}
-          onLearn={handleBatchLearn}
-          onIgnore={handleBatchIgnore}
-          onCancel={handleCancelSelection}
-          loadingLearn={batchAction === 'learn'}
-          loadingIgnore={batchAction === 'ignore'}
-        />
-      )}
       <ToastComponent />
     </Animated.View>
   );
@@ -386,13 +359,22 @@ const styles = StyleSheet.create({
   topTabTextActive: {
     color: colors.text,
   },
-  topTabWithBadge: {
-    flexDirection: 'row',
+  closeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
     alignItems: 'center',
-    gap: spacing.xs,
+    justifyContent: 'center',
+  },
+  closeButtonPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.95 }],
   },
 
-  // --- Search (bulk mode only) ---
+  // --- Search ---
   searchContainer: {
     marginHorizontal: spacing.lg,
     marginVertical: spacing.sm,
@@ -413,18 +395,14 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     flexGrow: 1,
   },
-  instruction: {
-    color: colors.textSecondary,
-    marginBottom: spacing.md,
-    textAlign: 'center',
+  emptyContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
 
-  // --- Grid (bulk mode) ---
+  // --- Grid ---
   columnWrapper: {
     gap: GRID_GAP,
-  },
-  gridWithBar: {
-    paddingBottom: 100,
   },
   gridItem: {
     width: COLUMN_WIDTH,

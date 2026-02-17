@@ -239,6 +239,14 @@ contentRouter.get('/', async (req: Request, res: Response, next: NextFunction) =
       }
     }
 
+    // Theme filter (themeId from ContentTheme join table)
+    const { themeId } = req.query;
+    if (themeId && typeof themeId === 'string') {
+      where.contentThemes = {
+        some: { themeId },
+      };
+    }
+
     // Channel filter (creator/author name)
     const { channel } = req.query;
     if (channel && typeof channel === 'string' && channel.trim()) {

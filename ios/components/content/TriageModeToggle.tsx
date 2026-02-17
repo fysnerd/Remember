@@ -1,46 +1,70 @@
 /**
- * TriageModeToggle - Toggle button between swipe card stack and bulk select grid
+ * TriageModeToggle - "Trier" button with inbox count badge
  *
- * When mode='swipe', shows Layers icon (tapping switches to bulk mode)
- * When mode='bulk', shows CreditCard icon (tapping switches to swipe mode)
+ * Opens the swipe triage mode when pressed.
+ * Hidden when inboxCount is 0.
  */
 
-import { Pressable, StyleSheet } from 'react-native';
-import { Layers, CreditCard } from 'lucide-react-native';
-import { colors, borderRadius } from '../../theme';
+import { Pressable, View, StyleSheet } from 'react-native';
+import { ArrowLeftRight } from 'lucide-react-native';
+import { Text } from '../ui';
+import { colors, borderRadius, spacing } from '../../theme';
 
 interface TriageModeToggleProps {
-  mode: 'swipe' | 'bulk';
-  onToggle: () => void;
+  inboxCount: number;
+  onPress: () => void;
 }
 
-export function TriageModeToggle({ mode, onToggle }: TriageModeToggleProps) {
-  const Icon = mode === 'swipe' ? Layers : CreditCard;
+export function TriageModeToggle({ inboxCount, onPress }: TriageModeToggleProps) {
+  if (inboxCount === 0) return null;
 
   return (
     <Pressable
       style={({ pressed }) => [styles.button, pressed && styles.pressed]}
-      onPress={onToggle}
+      onPress={onPress}
       hitSlop={8}
     >
-      <Icon size={20} color={colors.textSecondary} strokeWidth={1.75} />
+      <ArrowLeftRight size={16} color={colors.accent} strokeWidth={2} />
+      <Text variant="caption" weight="medium" style={styles.label}>Trier</Text>
+      <View style={styles.badge}>
+        <Text style={styles.badgeText}>{inboxCount > 99 ? '99+' : inboxCount}</Text>
+      </View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   button: {
-    width: 40,
-    height: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     borderRadius: borderRadius.full,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.borderLight,
+    gap: 6,
+  },
+  label: {
+    color: colors.accent,
+    fontSize: 13,
+  },
+  badge: {
+    backgroundColor: colors.accent,
+    borderRadius: borderRadius.full,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.background,
+  },
   pressed: {
     opacity: 0.7,
-    transform: [{ scale: 0.95 }],
+    transform: [{ scale: 0.97 }],
   },
 });

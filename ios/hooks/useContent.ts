@@ -2,7 +2,7 @@
  * Content hooks - list, detail, triage
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 import type { Content, ContentListResponse } from '../types/content';
 
@@ -12,6 +12,8 @@ interface ContentFilters {
   channel?: string;
   status?: string;
   search?: string;
+  themeId?: string;
+  excludeArchived?: boolean;
 }
 
 // Backend content structure (from Prisma)
@@ -84,6 +86,38 @@ export function useContentList(filters?: ContentFilters) {
       };
     },
   });
+}
+
+// Library content (all non-archived) with infinite scroll
+export function useLibraryContent(filters?: ContentFilters) {
+  const query = useInfiniteQuery({
+    queryKey: ['content', 'library', filters],
+    queryFn: async ({ pageParam = 1 }) => {
+      const params = new URLSearchParams({ page: String(pageParam), limit: '20' });
+      if (filters?.source && filters.source !== 'all') {
+        params.set('platform', filters.source.toUpperCase());
+      }
+      if (filters?.themeId) params.set('themeId', filters.themeId);
+      if (filters?.search) params.set('search', filters.search);
+      if (filters?.excludeArchived) params.set('excludeArchived', 'true');
+      const { data } = await api.get<BackendContentResponse>(`/content?${params}`);
+      return data;
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => {
+      const { page, totalPages } = lastPage.pagination;
+      return page < totalPages ? page + 1 : undefined;
+    },
+  });
+
+  const data = query.data?.pages.flatMap((p) => p.contents.map(mapContent));
+  const total = query.data?.pages[0]?.pagination.total ?? 0;
+
+  return {
+    ...query,
+    data,
+    total,
+  };
 }
 
 // Single content detail

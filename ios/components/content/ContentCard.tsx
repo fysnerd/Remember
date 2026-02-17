@@ -86,6 +86,14 @@ export function ContentCard({
             </View>
           </View>
         )}
+        {/* "Nouveau" badge - top right (only in browse mode, not selection mode) */}
+        {!selectionMode && status === 'INBOX' && (
+          <View style={styles.nouveauOverlay}>
+            <View style={styles.nouveauBadge}>
+              <Text style={styles.nouveauText}>Nouveau</Text>
+            </View>
+          </View>
+        )}
         {/* Pipeline status badge - bottom left */}
         {status && <PipelineStatusBadge status={status} />}
       </View>
@@ -179,6 +187,24 @@ const styles = StyleSheet.create({
   checkboxSelected: {
     backgroundColor: colors.text,
     borderColor: colors.text,
+  },
+  nouveauOverlay: {
+    position: 'absolute',
+    top: spacing.xs,
+    right: spacing.xs,
+  },
+  nouveauBadge: {
+    backgroundColor: colors.accent,
+    borderRadius: borderRadius.xs,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  nouveauText: {
+    fontSize: 9,
+    color: colors.background,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   durationOverlay: {
     position: 'absolute',
