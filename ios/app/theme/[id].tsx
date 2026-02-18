@@ -14,7 +14,7 @@ import { SwipeableContentCard } from '../../components/content';
 import { ContentCard } from '../../components/content';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
-import { useThemeDetail, useRemoveContentFromTheme, usePipelineStatus } from '../../hooks';
+import { useThemeDetail, useRemoveContentFromTheme, usePipelineStatus, useThemeMemo } from '../../hooks';
 import { haptics } from '../../lib/haptics';
 import api from '../../lib/api';
 import { colors, spacing, borderRadius } from '../../theme';
@@ -32,9 +32,11 @@ export default function ThemeDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
+  const [memoExpanded, setMemoExpanded] = useState(false);
   const { data, isLoading } = useThemeDetail(id);
   const removeContent = useRemoveContentFromTheme();
   const { processingMap } = usePipelineStatus();
+  const { data: memoData, isLoading: memoLoading } = useThemeMemo(id!);
 
   const selectionMode = selectedIds.size > 0;
 
@@ -124,15 +126,6 @@ export default function ThemeDetailScreen() {
     });
   };
 
-  const handleViewMemo = () => {
-    if (id) {
-      router.push({
-        pathname: '/memo/theme/[id]' as any,
-        params: { id },
-      });
-    }
-  };
-
   if (isLoading) {
     return <LoadingScreen />;
   }
@@ -148,6 +141,7 @@ export default function ThemeDetailScreen() {
         options={{
           title: theme?.name ?? '',
           headerBackTitle: 'Home',
+          headerTintColor: colors.text,
         }}
       />
       <ScrollView
@@ -157,9 +151,13 @@ export default function ThemeDetailScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
         }
       >
+        {/* Illustration placeholder */}
+        <View style={styles.illustration}>
+          <Text style={styles.illustrationEmoji}>{theme?.emoji}</Text>
+        </View>
+
         {/* Theme Header */}
         <View style={styles.header}>
-          <Text style={styles.headerEmoji}>{theme?.emoji}</Text>
           <Text variant="h2" style={styles.headerName}>
             {theme?.name}
           </Text>
@@ -168,7 +166,30 @@ export default function ThemeDetailScreen() {
           </Text>
         </View>
 
-        {/* Action buttons - Quiz & Memo */}
+        {/* Synopsis (theme memo) */}
+        {memoLoading ? (
+          <View style={styles.memoSection}>
+            <ActivityIndicator size="small" color={colors.textSecondary} />
+          </View>
+        ) : memoData?.content ? (
+          <View style={styles.memoSection}>
+            <Text
+              variant="body"
+              color="secondary"
+              numberOfLines={memoExpanded ? undefined : 6}
+              style={styles.memoText}
+            >
+              {memoData.content}
+            </Text>
+            <Pressable onPress={() => setMemoExpanded((v) => !v)} hitSlop={8}>
+              <Text variant="caption" style={styles.memoToggle}>
+                {memoExpanded ? 'Voir moins' : 'Voir plus'}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {/* Action button - Quiz */}
         <View style={styles.actionButtons}>
           <Button
             variant="primary"
@@ -177,13 +198,6 @@ export default function ThemeDetailScreen() {
             style={styles.actionBtn}
           >
             {canQuiz ? 'Quiz' : `Quiz (${quizReadyCount}/3)`}
-          </Button>
-          <Button
-            variant="secondary"
-            onPress={handleViewMemo}
-            style={styles.actionBtn}
-          >
-            Memo
           </Button>
         </View>
         {!canQuiz && (
@@ -287,16 +301,34 @@ const styles = StyleSheet.create({
     padding: GRID_PADDING,
     paddingBottom: spacing.xl,
   },
+  illustration: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  illustrationEmoji: {
+    fontSize: 80,
+  },
   header: {
     alignItems: 'center',
     marginBottom: spacing.lg,
   },
-  headerEmoji: {
-    fontSize: 48,
-    marginBottom: spacing.sm,
-  },
   headerName: {
     marginBottom: spacing.xs,
+  },
+  memoSection: {
+    marginBottom: spacing.lg,
+  },
+  memoText: {
+    lineHeight: 22,
+  },
+  memoToggle: {
+    color: colors.accent,
+    marginTop: spacing.xs,
   },
 
   // Action buttons row
