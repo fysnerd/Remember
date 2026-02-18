@@ -15,6 +15,8 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  withTiming,
+  Easing,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
@@ -46,9 +48,14 @@ function TabItem({
   onLongPress: () => void;
 }) {
   const scale = useSharedValue(1);
+  const pressed = useSharedValue(0);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
+  }));
+
+  const highlightStyle = useAnimatedStyle(() => ({
+    opacity: pressed.value,
   }));
 
   const color = isFocused ? colors.accent : colors.textTertiary;
@@ -61,10 +68,21 @@ function TabItem({
       }}
       onLongPress={onLongPress}
       onPressIn={() => {
-        scale.value = withSpring(0.82, { damping: 15, stiffness: 400 });
+        // Fast snap down — like native iOS button press
+        scale.value = withTiming(0.92, {
+          duration: 120,
+          easing: Easing.out(Easing.cubic),
+        });
+        pressed.value = withTiming(1, { duration: 120 });
       }}
       onPressOut={() => {
-        scale.value = withSpring(1, { damping: 12, stiffness: 200 });
+        // Bouncy spring back — slight overshoot for juicy feel
+        scale.value = withSpring(1, {
+          damping: 10,
+          stiffness: 250,
+          mass: 0.6,
+        });
+        pressed.value = withTiming(0, { duration: 250 });
       }}
       style={styles.tabItem}
       accessibilityRole="button"
@@ -72,6 +90,8 @@ function TabItem({
       accessibilityLabel={label}
     >
       <Animated.View style={[styles.tabItemInner, animatedStyle]}>
+        {/* Press highlight — subtle white glow behind the icon */}
+        <Animated.View style={[styles.pressHighlight, highlightStyle]} />
         <Icon
           size={22}
           color={color}
@@ -254,6 +274,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  pressHighlight: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 16,
   },
   tabLabel: {
     fontSize: 10,
