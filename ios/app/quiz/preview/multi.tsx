@@ -142,6 +142,18 @@ export default function MultiQuizPreviewScreen() {
           <Text variant="body" color="secondary" style={styles.subtitle}>
             {questionCount} question{questionCount !== 1 ? 's' : ''}
           </Text>
+
+          {/* Content list card */}
+          {contents.length > 0 && (
+            <View style={styles.contentsCard}>
+              <Text variant="caption" color="secondary" style={styles.contentsLabel}>
+                Sujets abordes
+              </Text>
+              <Text variant="body" color="secondary">
+                {contents.map((c) => c!.title).join(' · ')}
+              </Text>
+            </View>
+          )}
         </ScrollView>
 
         {/* Sticky bottom button */}
@@ -178,6 +190,16 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     marginBottom: spacing.lg,
+  },
+  contentsCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  contentsLabel: {
+    marginBottom: spacing.sm,
   },
   bottomBar: {
     paddingHorizontal: spacing.lg,
