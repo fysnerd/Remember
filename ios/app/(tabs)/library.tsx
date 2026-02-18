@@ -12,7 +12,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { View, FlatList, ScrollView, StyleSheet, RefreshControl, Dimensions, ActivityIndicator, Pressable, Modal } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useQueryClient } from '@tanstack/react-query';
-import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
+import { useTabBarHeight } from '../../hooks/useTabBarHeight';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Text, Button } from '../../components/ui';
@@ -39,7 +39,7 @@ const COLUMN_WIDTH = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP) / 2;
 export default function LibraryScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const tabBarHeight = useBottomTabBarHeight();
+  const tabBarHeight = useTabBarHeight();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());

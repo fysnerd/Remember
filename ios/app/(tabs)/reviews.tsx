@@ -6,7 +6,7 @@ import { useCallback, useState, useMemo } from 'react';
 import { View, ScrollView, RefreshControl, StyleSheet } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
-import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
+import { useTabBarHeight } from '../../hooks/useTabBarHeight';
 import { useQueryClient } from '@tanstack/react-query';
 import { FileText, Search } from 'lucide-react-native';
 import { SessionCard } from '../../components/reviews/SessionCard';
@@ -21,7 +21,7 @@ import { STAGGER_DELAY, STAGGER_CAP } from '../../lib/animations';
 
 export default function ReviewsScreen() {
   const router = useRouter();
-  const tabBarHeight = useBottomTabBarHeight();
+  const tabBarHeight = useTabBarHeight();
   const queryClient = useQueryClient();
   const { data: sessions, isLoading } = useCompletedSessions();
   const [refreshing, setRefreshing] = useState(false);

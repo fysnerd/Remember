@@ -8,7 +8,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useQueryClient } from '@tanstack/react-query';
-import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
+import { useTabBarHeight } from '../../hooks/useTabBarHeight';
 import { ChevronRight, Wrench } from 'lucide-react-native';
 import { Text } from '../../components/ui';
 import { GlassCard } from '../../components/glass/GlassCard';
@@ -28,7 +28,7 @@ const platformConfig = [
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const tabBarHeight = useBottomTabBarHeight();
+  const tabBarHeight = useTabBarHeight();
   const { user, logout } = useAuthStore();
   const { data: oauthStatus, isLoading } = useOAuthStatus();
   const queryClient = useQueryClient();

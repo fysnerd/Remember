@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
+import { useTabBarHeight } from '../../hooks/useTabBarHeight';
 import { Link2 } from 'lucide-react-native';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
@@ -23,7 +23,7 @@ import { colors, spacing } from '../../theme';
 export default function HomeScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const tabBarHeight = useBottomTabBarHeight();
+  const tabBarHeight = useTabBarHeight();
   const [refreshing, setRefreshing] = useState(false);
 
   const { user } = useAuthStore();
