@@ -84,30 +84,36 @@ export default function RootLayout() {
   useEffect(() => {
     if (__DEV__) return;
     (async () => {
-      // Dump all expo-updates properties for debugging
-      const keys = Object.keys(Updates).sort().join(', ');
-      const info = [
-        `channel: ${(Updates as any).channel}`,
-        `runtimeVersion: ${(Updates as any).runtimeVersion}`,
-        `updateId: ${(Updates as any).updateId}`,
-        `isEmbeddedLaunch: ${(Updates as any).isEmbeddedLaunch}`,
-        `isEmergencyLaunch: ${(Updates as any).isEmergencyLaunch}`,
-        `currentlyRunning: ${typeof Updates.currentlyRunning}`,
-        `isEnabled: ${(Updates as any).isEnabled}`,
-      ].join('\n');
-
       try {
+        // Read native expo-updates logs for deep diagnostics
+        const logs = await Updates.readLogEntriesAsync(300);
+        const recentLogs = logs
+          .slice(-10)
+          .map((l: any) => `[${l.level}] ${l.message}`)
+          .join('\n');
+
+        const info = [
+          `channel: ${(Updates as any).channel}`,
+          `runtime: ${(Updates as any).runtimeVersion}`,
+          `updateId: ${(Updates as any).updateId}`,
+          `embedded: ${(Updates as any).isEmbeddedLaunch}`,
+          `enabled: ${(Updates as any).isEnabled}`,
+        ].join('\n');
+
         const check = await Updates.checkForUpdateAsync();
-        Alert.alert(
-          'OTA Check OK',
-          `isAvailable: ${check.isAvailable}\n\n${info}\n\nKeys: ${keys}`
-        );
         if (check.isAvailable) {
           await Updates.fetchUpdateAsync();
           await Updates.reloadAsync();
+        } else {
+          // Show native logs to understand WHY no update is available
+          const reason = (check as any).reason ?? 'N/A';
+          Alert.alert(
+            'OTA v2 - No Update',
+            `reason: ${reason}\n\n${info}\n\nNative logs:\n${recentLogs || 'none'}`
+          );
         }
       } catch (e: any) {
-        Alert.alert('OTA Error', `${e.message}\n\n${info}\n\nKeys: ${keys}`);
+        Alert.alert('OTA Error', e.message || String(e));
       }
     })();
   }, []);
