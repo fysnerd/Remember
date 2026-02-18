@@ -50,7 +50,6 @@
       "expo-dev-client",
       "expo-web-browser",
       "expo-apple-authentication",
-      "expo-crypto",
       [
         "expo-notifications",
         {
