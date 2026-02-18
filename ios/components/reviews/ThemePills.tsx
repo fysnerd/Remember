@@ -1,15 +1,10 @@
 /**
- * ThemePills - Horizontal scrollable theme filter pills for revisions screen
- *
- * Uses GlassContainer for Liquid Glass morphing on iOS 26+.
+ * ThemePills - Horizontal scrollable theme filter pills
  */
 
 import { View, ScrollView, StyleSheet, Pressable } from 'react-native';
-import { GlassContainer, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 import { Text } from '../ui';
 import { colors, spacing, borderRadius } from '../../theme';
-
-const useNativeGlass = isGlassEffectAPIAvailable();
 
 interface ThemeOption {
   id: string;
@@ -69,13 +64,7 @@ export function ThemePills({ themes, selectedThemeId, onThemeChange }: ThemePill
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.row}
       >
-        {useNativeGlass ? (
-          <GlassContainer spacing={spacing.sm}>
-            {pills}
-          </GlassContainer>
-        ) : (
-          pills
-        )}
+        {pills}
       </ScrollView>
     </View>
   );
