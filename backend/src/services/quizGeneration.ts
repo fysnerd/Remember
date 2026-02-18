@@ -24,6 +24,39 @@ interface QuizGenerationResult {
 // Maximum tokens to send to LLM (roughly 4 chars per token)
 const MAX_TRANSCRIPT_CHARS = 12000;
 
+/**
+ * Compute target number of quiz questions based on transcript length.
+ * Longer content → more questions to cover breadth of material.
+ */
+function computeTargetQuestionCount(transcriptLength: number): number {
+  if (transcriptLength <= 2_000) return 3;   // Reel Instagram, TikTok court
+  if (transcriptLength <= 8_000) return 5;   // Video YouTube standard (5-10 min)
+  if (transcriptLength <= 30_000) return 7;  // Video moyenne (10-30 min)
+  if (transcriptLength <= 80_000) return 10; // Podcast/video longue (30-60 min)
+  return 15;                                  // Podcast 1h+
+}
+
+/**
+ * Distribute a target question count across N chunks.
+ * Max 5 questions per chunk (LLM quality degrades beyond that).
+ * Returns an array where index i = number of questions for chunk i.
+ */
+function distributeQuestionsAcrossChunks(target: number, chunkCount: number): number[] {
+  const MAX_PER_CHUNK = 5;
+  const usableChunks = Math.min(chunkCount, Math.ceil(target / MAX_PER_CHUNK));
+  const distribution: number[] = [];
+  let remaining = target;
+
+  for (let i = 0; i < usableChunks; i++) {
+    const chunksLeft = usableChunks - i;
+    const perChunk = Math.min(MAX_PER_CHUNK, Math.ceil(remaining / chunksLeft));
+    distribution.push(perChunk);
+    remaining -= perChunk;
+  }
+
+  return distribution;
+}
+
 /** Map platform enum to content type and display label */
 function getContentTypeAndLabel(platform: string): { type: 'video' | 'podcast' | 'tiktok' | 'reel'; label: string } {
   switch (platform) {
@@ -118,7 +151,8 @@ export async function generateQuizFromTranscript(
     platformLabel: string;
     capturedAt?: Date | null;
   },
-  existingQuestions: string[] = []
+  existingQuestions: string[] = [],
+  targetQuestionCount?: number
 ): Promise<QuizGenerationResult> {
   const llm = getLLMClient();
 
@@ -193,10 +227,18 @@ Réponds en JSON uniquement:
   // Generate questions from the transcript
   const allQuestions: GeneratedQuestion[] = [];
 
-  // Process each chunk (max 2 chunks to keep costs reasonable)
-  for (let i = 0; i < Math.min(chunks.length, 2); i++) {
+  // Adaptive distribution: compute how many questions per chunk
+  const target = targetQuestionCount ?? 5; // fallback to legacy default
+  const distribution = distributeQuestionsAcrossChunks(target, chunks.length);
+
+  log.info(
+    { target, chunkCount: chunks.length, distribution, transcriptLength: transcript.length },
+    'Adaptive question distribution computed'
+  );
+
+  for (let i = 0; i < distribution.length; i++) {
     const chunk = chunks[i];
-    const questionsNeeded = i === 0 ? 3 : 2; // 3 from first chunk, 2 from second
+    const questionsNeeded = distribution[i];
 
     const questionPrompt = `Genere ${questionsNeeded} questions de quiz a choix multiples basees sur ce contenu.
 
@@ -516,7 +558,8 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
     const { type: contentType, label: platformLabel } = getContentTypeAndLabel(content.platform);
     const creatorName = getCreatorName(content);
 
-    log.info({ contentId, title: content.title, platform: content.platform, creator: creatorName }, 'Generating quiz');
+    const targetQuestions = computeTargetQuestionCount(content.transcript.text.length);
+    log.info({ contentId, title: content.title, platform: content.platform, creator: creatorName, targetQuestions, transcriptLength: content.transcript.text.length }, 'Generating quiz');
     const result = await generateQuizFromTranscript(
       content.transcript.text,
       content.title,
@@ -525,7 +568,9 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
         creatorName,
         platformLabel,
         capturedAt: content.capturedAt,
-      }
+      },
+      [],
+      targetQuestions
     );
 
     if (!result.isEducational) {
@@ -692,6 +737,7 @@ export async function regenerateQuiz(contentId: string): Promise<boolean> {
   try {
     const { type: contentType, label: platformLabel } = getContentTypeAndLabel(content.platform);
     const creatorName = getCreatorName(content);
+    const targetQuestions = computeTargetQuestionCount(content.transcript.text.length);
     const result = await generateQuizFromTranscript(
       content.transcript.text,
       content.title,
@@ -701,7 +747,8 @@ export async function regenerateQuiz(contentId: string): Promise<boolean> {
         platformLabel,
         capturedAt: content.capturedAt,
       },
-      previousQuestions
+      previousQuestions,
+      targetQuestions
     );
 
     if (!result.isEducational || result.questions.length === 0) {

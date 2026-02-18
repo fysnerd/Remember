@@ -684,7 +684,7 @@ reviewRouter.post('/practice', async (req: Request, res: Response, next: NextFun
     }
 
     // Get ALL cards for these contents (not just due ones)
-    const cards = await prisma.card.findMany({
+    const allCards = await prisma.card.findMany({
       where: {
         userId,
         quiz: {
@@ -707,6 +707,25 @@ reviewRouter.post('/practice', async (req: Request, res: Response, next: NextFun
         },
       },
     });
+
+    // Multi-content: cap at 5 questions per content to keep sessions reasonable
+    let cards = allCards;
+    if (withQuizzes.length > 1) {
+      const byContent = new Map<string, typeof allCards>();
+      for (const card of allCards) {
+        const cId = card.quiz.content?.id ?? 'unknown';
+        if (!byContent.has(cId)) byContent.set(cId, []);
+        byContent.get(cId)!.push(card);
+      }
+      const capped: typeof allCards = [];
+      for (const group of byContent.values()) {
+        // Shuffle each group then take max 5
+        const shuffled = group.sort(() => Math.random() - 0.5);
+        capped.push(...shuffled.slice(0, 5));
+      }
+      // Final shuffle
+      cards = capped.sort(() => Math.random() - 0.5);
+    }
 
     return res.json({
       cards,
