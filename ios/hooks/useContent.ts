@@ -165,6 +165,22 @@ export function useSelectionSummary(contentIds: string[]) {
   });
 }
 
+// Available sources (platforms that have at least 1 content)
+export function useAvailableSources() {
+  return useQuery({
+    queryKey: ['content', 'available-sources'],
+    queryFn: async () => {
+      const { data } = await api.get<{
+        byPlatform: { platform: string; count: number }[];
+      }>('/content/stats');
+      return data.byPlatform
+        .filter((p) => p.count > 0)
+        .map((p) => p.platform.toLowerCase());
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 // Triage mutation (learn/archive)
 export function useTriageMutation() {
   const queryClient = useQueryClient();

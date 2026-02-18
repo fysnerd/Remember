@@ -14,6 +14,8 @@ type Source = 'all' | 'youtube' | 'spotify' | 'tiktok' | 'instagram';
 interface SourcePillsProps {
   selectedSource: Source;
   onSourceChange: (source: Source) => void;
+  /** If provided, only show sources present in this list (+ "all") */
+  availableSources?: string[];
 }
 
 const sources: { key: Source; label: string }[] = [
@@ -24,7 +26,14 @@ const sources: { key: Source; label: string }[] = [
   { key: 'instagram', label: 'Instagram' },
 ];
 
-export function SourcePills({ selectedSource, onSourceChange }: SourcePillsProps) {
+export function SourcePills({ selectedSource, onSourceChange, availableSources }: SourcePillsProps) {
+  const filteredSources = availableSources
+    ? sources.filter((s) => s.key === 'all' || availableSources.includes(s.key))
+    : sources;
+
+  // Don't show pills if only "all" would be visible (0 or 1 platform)
+  if (filteredSources.length <= 2) return null;
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -32,7 +41,7 @@ export function SourcePills({ selectedSource, onSourceChange }: SourcePillsProps
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.sourcesRow}
       >
-        {sources.map((source) => {
+        {filteredSources.map((source) => {
           const isActive = selectedSource === source.key;
           return (
             <Pressable

@@ -22,7 +22,7 @@ import { SearchInput } from '../../components/explorer/SearchInput';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
 import { Search, PartyPopper, X, BookOpen, Play } from 'lucide-react-native';
-import { useLibraryContent, useInbox, useInboxCount, useSwipeTriage, useDebouncedValue, useThemes } from '../../hooks';
+import { useLibraryContent, useInbox, useInboxCount, useSwipeTriage, useDebouncedValue, useThemes, useAvailableSources } from '../../hooks';
 import { useContentStore } from '../../stores/contentStore';
 import { haptics } from '../../lib/haptics';
 import type { Content } from '../../types/content';
@@ -61,6 +61,7 @@ export default function LibraryScreen() {
   // Data fetching
   const { data: inboxCount } = useInboxCount();
   const { data: themes } = useThemes();
+  const { data: availableSources } = useAvailableSources();
   const {
     data: libraryItems,
     isLoading: libraryLoading,
@@ -108,6 +109,13 @@ export default function LibraryScreen() {
       (item) => selectedIds.has(item.id) && item.status === 'READY' && (item.quizCount ?? 0) > 0
     ).length;
   }, [libraryItems, selectedIds]);
+
+  // Reset source filter if current selection has no content
+  useEffect(() => {
+    if (availableSources && sourceFilter !== 'all' && !availableSources.includes(sourceFilter)) {
+      setSourceFilter('all');
+    }
+  }, [availableSources, sourceFilter, setSourceFilter]);
 
   // Auto-switch back to browse when triage completes
   useEffect(() => {
@@ -267,6 +275,7 @@ export default function LibraryScreen() {
       <SourcePills
         selectedSource={sourceFilter}
         onSourceChange={setSourceFilter}
+        availableSources={availableSources}
       />
 
       {/* Theme filter pills */}
@@ -330,6 +339,7 @@ export default function LibraryScreen() {
       <SourcePills
         selectedSource={sourceFilter}
         onSourceChange={setSourceFilter}
+        availableSources={availableSources}
       />
 
       {inboxLoading ? (
@@ -398,9 +408,7 @@ export default function LibraryScreen() {
             </>
           ) : (
             <>
-              <Text variant="body" weight="medium" style={styles.topTabTextActive}>
-                Bibliotheque
-              </Text>
+              <View />
               <TriageModeToggle inboxCount={inboxCount ?? 0} onPress={handleOpenTriage} />
             </>
           )
