@@ -2,15 +2,15 @@
  * Theme Quiz Screen - Mixed questions from all contents of a theme
  */
 
-import { useState, useEffect } from 'react';
-import { View, StyleSheet, Pressable } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
+import { View, StyleSheet, Pressable, Animated } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text, Button } from '../../../components/ui';
 import { QuestionCard, AnswerFeedback, QuizSummary } from '../../../components/quiz';
 import { LoadingScreen } from '../../../components/LoadingScreen';
 import { ErrorState } from '../../../components/ErrorState';
 import { useThemeQuiz, useSubmitAnswer, useCreateSession, useCompleteSession } from '../../../hooks';
-import { colors, spacing } from '../../../theme';
+import { colors, spacing, borderRadius } from '../../../theme';
 
 type QuizState = 'question' | 'feedback' | 'summary';
 
@@ -28,6 +28,7 @@ export default function ThemeQuizScreen() {
   const [score, setScore] = useState(0);
   const [startTime, setStartTime] = useState(Date.now());
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const progressAnim = useRef(new Animated.Value(0)).current;
 
   // Create session when quiz loads
   useEffect(() => {
@@ -39,6 +40,18 @@ export default function ThemeQuizScreen() {
       });
     }
   }, [quiz]);
+
+  const answeredCount = state === 'feedback' ? currentIndex + 1 : currentIndex;
+
+  useEffect(() => {
+    if (!quiz) return;
+    const target = answeredCount / quiz.questions.length;
+    Animated.timing(progressAnim, {
+      toValue: target,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  }, [answeredCount, quiz?.questions.length]);
 
   if (isLoading) {
     return <LoadingScreen />;
@@ -116,6 +129,15 @@ export default function ThemeQuizScreen() {
         </Pressable>
       </View>
 
+      <View style={styles.progressTrack}>
+        <Animated.View
+          style={[
+            styles.progressFill,
+            { width: progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) },
+          ]}
+        />
+      </View>
+
       <View style={styles.content}>
         {state === 'question' ? (
           <>
@@ -167,6 +189,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
+  },
+  progressTrack: {
+    height: 4,
+    backgroundColor: colors.surfaceElevated,
+    marginHorizontal: spacing.lg,
+    borderRadius: borderRadius.full,
+    overflow: 'hidden' as const,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.accent,
+    borderRadius: borderRadius.full,
   },
   content: { flex: 1, padding: spacing.lg },
   buttonContainer: { paddingTop: spacing.lg },
