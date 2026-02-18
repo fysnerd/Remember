@@ -3,6 +3,7 @@
  */
 
 import { useEffect, useRef } from 'react';
+import { Alert } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -84,12 +85,28 @@ export default function RootLayout() {
     if (__DEV__) return;
     (async () => {
       try {
-        const update = await Updates.checkForUpdateAsync();
-        if (update.isAvailable) {
+        // Show diagnostic info about current update state
+        const current = Updates.currentlyRunning;
+        const info = [
+          `Channel: ${current.channel ?? 'N/A'}`,
+          `Runtime: ${current.runtimeVersion ?? 'N/A'}`,
+          `UpdateID: ${current.updateId ?? 'embedded'}`,
+          `Embedded: ${current.isEmbeddedLaunch}`,
+          `Emergency: ${current.isEmergencyLaunch}`,
+        ].join('\n');
+
+        const check = await Updates.checkForUpdateAsync();
+        if (check.isAvailable) {
           await Updates.fetchUpdateAsync();
           await Updates.reloadAsync();
+        } else {
+          // Temporarily show diagnostic — remove after debugging
+          Alert.alert('OTA Debug', `No update available.\n\n${info}`);
         }
-      } catch (_) {}
+      } catch (e: any) {
+        // Show error so we can debug
+        Alert.alert('OTA Error', e.message || String(e));
+      }
     })();
   }, []);
 
