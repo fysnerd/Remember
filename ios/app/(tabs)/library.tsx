@@ -437,7 +437,7 @@ export default function LibraryScreen() {
   return (
     <Animated.View entering={FadeIn.duration(200)} style={styles.container}>
       {/* Header */}
-      <View style={[styles.topTabBar, { paddingTop: insets.top + spacing.sm }]}>
+      <View style={[styles.topTabBar, { paddingTop: insets.top + spacing.lg }]}>
         {viewMode === 'browse' ? (
           selectionMode ? (
             <>
