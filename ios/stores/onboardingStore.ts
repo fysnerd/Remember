@@ -10,6 +10,7 @@ interface OnboardingState {
   connectedSource: string | null;
   attributionSources: string[];
   isSubmitting: boolean;
+  isReturningUser: boolean;
 
   setFirstName: (name: string) => void;
   setCurrentStep: (step: number) => void;
@@ -18,6 +19,7 @@ interface OnboardingState {
   setReviewPace: (pace: string) => void;
   setConnectedSource: (source: string | null) => void;
   setAttributionSources: (sources: string[]) => void;
+  setIsReturningUser: (value: boolean) => void;
 
   saveStep: (step: number, data?: Record<string, unknown>) => Promise<void>;
   completeOnboarding: () => Promise<void>;
@@ -33,6 +35,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
   connectedSource: null,
   attributionSources: [],
   isSubmitting: false,
+  isReturningUser: false,
 
   setFirstName: (name) => set({ firstName: name }),
   setCurrentStep: (step) => set({ currentStep: step }),
@@ -41,6 +44,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
   setReviewPace: (pace) => set({ reviewPace: pace }),
   setConnectedSource: (source) => set({ connectedSource: source }),
   setAttributionSources: (sources) => set({ attributionSources: sources }),
+  setIsReturningUser: (value) => set({ isReturningUser: value }),
 
   saveStep: async (step, data) => {
     set({ isSubmitting: true });
@@ -71,5 +75,6 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
       connectedSource: null,
       attributionSources: [],
       isSubmitting: false,
+      isReturningUser: false,
     }),
 }));

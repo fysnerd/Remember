@@ -34,7 +34,7 @@ export default function OnboardingSplash() {
 
     // Navigate after 2.5 seconds
     const timer = setTimeout(() => {
-      router.replace('/onboarding/name' as any);
+      router.replace('/onboarding/get-started' as any);
     }, 2500);
 
     return () => clearTimeout(timer);

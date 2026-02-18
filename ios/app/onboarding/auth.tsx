@@ -25,7 +25,7 @@ const GOOGLE_IOS_CLIENT_ID = 'GOOGLE_IOS_CLIENT_ID';
 
 export default function OnboardingAuth() {
   const router = useRouter();
-  const { firstName } = useOnboardingStore();
+  const { firstName, isReturningUser } = useOnboardingStore();
   const { loginWithTokens } = useAuthStore();
   const [isLoading, setIsLoading] = useState<string | null>(null);
 
@@ -145,8 +145,8 @@ export default function OnboardingAuth() {
   return (
     <OnboardingScreen
       progress={0.25}
-      title="Cree ton compte"
-      subtitle="Choisis ta methode de connexion"
+      title={isReturningUser ? 'Content de te revoir' : 'Crée ton compte'}
+      subtitle="Choisis ta méthode de connexion"
       showBack
       onBack={() => router.back()}
     >

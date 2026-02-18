@@ -30,7 +30,7 @@ const PUBLIC_ROUTES = ['login', 'signup', 'onboarding', 'magic-link'];
 
 // Map onboarding step to route for resume
 const ONBOARDING_STEP_ROUTES: Record<number, string> = {
-  0: '/onboarding/splash',
+  0: '/onboarding/get-started',
   1: '/onboarding/name',
   2: '/onboarding/auth',
   3: '/onboarding/interests',
