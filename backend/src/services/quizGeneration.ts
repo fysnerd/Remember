@@ -219,11 +219,6 @@ Réponds en JSON uniquement:
     };
   }
 
-  // Build anti-repetition block
-  const antiRepetitionBlock = existingQuestions.length > 0
-    ? `\nQUESTIONS DEJA POSEES (NE PAS repeter ni reformuler ces questions) :\n${existingQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}\n`
-    : '';
-
   // Generate questions from the transcript
   const allQuestions: GeneratedQuestion[] = [];
 
@@ -236,11 +231,19 @@ Réponds en JSON uniquement:
     'Adaptive question distribution computed'
   );
 
+  // Accumulate all question texts (existing + newly generated) for inter-chunk anti-repetition
+  const allGeneratedQuestionTexts: string[] = [...existingQuestions];
+
   for (let i = 0; i < distribution.length; i++) {
     const chunk = chunks[i];
     const questionsNeeded = distribution[i];
 
-    const questionPrompt = `Genere ${questionsNeeded} questions de quiz a choix multiples basees sur ce contenu.
+    // Build anti-repetition block dynamically (includes questions from previous chunks)
+    const dynamicAntiRepetitionBlock = allGeneratedQuestionTexts.length > 0
+      ? `\nQUESTIONS DEJA POSEES (NE PAS repeter ni reformuler ces questions) :\n${allGeneratedQuestionTexts.map((q, idx) => `${idx + 1}. ${q}`).join('\n')}\n`
+      : '';
+
+    const questionPrompt = `Genere EXACTEMENT ${questionsNeeded} questions de quiz a choix multiples basees sur ce contenu.
 
 Titre: "${contentTitle}"
 Sujets principaux: ${assessment.mainTopics?.join(', ') || 'Culture generale'}
@@ -250,7 +253,7 @@ Contenu source:
 """
 ${chunk}
 """
-${antiRepetitionBlock}
+${dynamicAntiRepetitionBlock}
 OBJECTIF PEDAGOGIQUE:
 Les questions doivent tester les CONNAISSANCES ACQUISES par l'utilisateur (concepts, faits, mecanismes, applications).
 L'utilisateur doit pouvoir repondre grace a ce qu'il a APPRIS, pas en se souvenant des mots exacts du contenu.
@@ -331,15 +334,40 @@ Genere des questions en FRANCAIS qui testent la comprehension profonde et l'acqu
       const result = JSON.parse(questionResponse.content || '{"questions": []}');
 
       if (result.questions && Array.isArray(result.questions)) {
-        allQuestions.push(...result.questions);
+        // Cap to requested count per chunk (LLM may overshoot)
+        const cappedQuestions = result.questions.slice(0, questionsNeeded);
+        allQuestions.push(...cappedQuestions);
+        // Accumulate for inter-chunk anti-repetition
+        for (const q of cappedQuestions) {
+          allGeneratedQuestionTexts.push(q.question);
+        }
       }
     } catch (error) {
       log.error({ err: error, chunkIndex: i }, 'Error generating questions from chunk');
     }
   }
 
+  // Final deduplication: remove exact duplicate questions
+  const seen = new Set<string>();
+  const dedupedQuestions = allQuestions.filter(q => {
+    const normalized = q.question.toLowerCase().trim();
+    if (seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
+
+  // Cap to target total
+  const finalQuestions = dedupedQuestions.slice(0, target);
+
+  if (finalQuestions.length < allQuestions.length) {
+    log.info(
+      { original: allQuestions.length, deduped: dedupedQuestions.length, final: finalQuestions.length, target },
+      'Questions trimmed after dedup and cap'
+    );
+  }
+
   return {
-    questions: allQuestions,
+    questions: finalQuestions,
     isEducational: true,
   };
 }
