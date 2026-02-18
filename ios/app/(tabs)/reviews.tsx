@@ -6,7 +6,7 @@ import { useCallback, useState, useMemo } from 'react';
 import { View, ScrollView, RefreshControl, StyleSheet } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
 import { useQueryClient } from '@tanstack/react-query';
 import { FileText, Search } from 'lucide-react-native';
 import { SessionCard } from '../../components/reviews/SessionCard';

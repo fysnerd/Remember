@@ -5,7 +5,7 @@
 
 import { View, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
 import { Text } from '../ui';
 import { colors, spacing, borderRadius } from '../../theme';
 

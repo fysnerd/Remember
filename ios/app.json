@@ -54,7 +54,8 @@
         {
           "sounds": []
         }
-      ]
+      ],
+      "react-native-bottom-tabs"
     ],
     "experiments": {
       "typedRoutes": true

@@ -8,7 +8,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useQueryClient } from '@tanstack/react-query';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
 import { ChevronRight, Wrench } from 'lucide-react-native';
 import { Text } from '../../components/ui';
 import { GlassCard } from '../../components/glass/GlassCard';
