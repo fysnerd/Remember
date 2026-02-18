@@ -35,24 +35,8 @@ export function QuizRecommendationCard({ recommendation, onPress }: QuizRecommen
 
   return (
     <GlassCard padding="lg" onPress={onPress} style={[styles.card, completed && styles.cardCompleted]}>
-      {/* Completed checkmark */}
-      {completed && (
-        <View style={styles.checkmark}>
-          <CheckCircle size={24} color={colors.success} />
-        </View>
-      )}
-
-      {/* Top: Thumbnail/Emoji */}
-      <View style={styles.header}>
-        {type === 'content' && thumbnailUrl ? (
-          <Image source={{ uri: thumbnailUrl }} style={styles.thumbnail} />
-        ) : (
-          <Text style={styles.emoji}>{emoji || '📚'}</Text>
-        )}
-      </View>
-
-      {/* Bottom: Title + creator + date */}
-      <View style={styles.bottom}>
+      {/* Top: Title + creator + date */}
+      <View>
         <Text style={styles.title} numberOfLines={2}>
           {title}
         </Text>
@@ -76,6 +60,18 @@ export function QuizRecommendationCard({ recommendation, onPress }: QuizRecommen
           )}
         </View>
       </View>
+
+      {/* Bottom: Thumbnail/Emoji + Checkmark */}
+      <View style={styles.footer}>
+        {type === 'content' && thumbnailUrl ? (
+          <Image source={{ uri: thumbnailUrl }} style={styles.thumbnail} />
+        ) : (
+          <Text style={styles.emoji}>{emoji || '📚'}</Text>
+        )}
+        {completed && (
+          <CheckCircle size={24} color={colors.success} />
+        )}
+      </View>
     </GlassCard>
   );
 }
@@ -84,33 +80,10 @@ const styles = StyleSheet.create({
   card: {
     minHeight: 170,
     justifyContent: 'space-between',
+    gap: 24,
   },
   cardCompleted: {
     opacity: 0.7,
-  },
-  checkmark: {
-    position: 'absolute',
-    top: spacing.md,
-    right: spacing.md,
-    zIndex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  thumbnail: {
-    width: 48,
-    height: 48,
-    borderRadius: 8,
-    backgroundColor: colors.surface,
-  },
-  emoji: {
-    fontSize: 48,
-    lineHeight: 56,
-  },
-  bottom: {
-    marginTop: spacing.md,
   },
   title: {
     color: colors.text,
@@ -146,5 +119,20 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: colors.textTertiary,
     marginHorizontal: spacing.sm,
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  thumbnail: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
+  },
+  emoji: {
+    fontSize: 48,
+    lineHeight: 56,
   },
 });
