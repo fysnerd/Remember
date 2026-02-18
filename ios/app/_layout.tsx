@@ -84,28 +84,30 @@ export default function RootLayout() {
   useEffect(() => {
     if (__DEV__) return;
     (async () => {
-      try {
-        // Show diagnostic info about current update state
-        const current = Updates.currentlyRunning;
-        const info = [
-          `Channel: ${current.channel ?? 'N/A'}`,
-          `Runtime: ${current.runtimeVersion ?? 'N/A'}`,
-          `UpdateID: ${current.updateId ?? 'embedded'}`,
-          `Embedded: ${current.isEmbeddedLaunch}`,
-          `Emergency: ${current.isEmergencyLaunch}`,
-        ].join('\n');
+      // Dump all expo-updates properties for debugging
+      const keys = Object.keys(Updates).sort().join(', ');
+      const info = [
+        `channel: ${(Updates as any).channel}`,
+        `runtimeVersion: ${(Updates as any).runtimeVersion}`,
+        `updateId: ${(Updates as any).updateId}`,
+        `isEmbeddedLaunch: ${(Updates as any).isEmbeddedLaunch}`,
+        `isEmergencyLaunch: ${(Updates as any).isEmergencyLaunch}`,
+        `currentlyRunning: ${typeof Updates.currentlyRunning}`,
+        `isEnabled: ${(Updates as any).isEnabled}`,
+      ].join('\n');
 
+      try {
         const check = await Updates.checkForUpdateAsync();
+        Alert.alert(
+          'OTA Check OK',
+          `isAvailable: ${check.isAvailable}\n\n${info}\n\nKeys: ${keys}`
+        );
         if (check.isAvailable) {
           await Updates.fetchUpdateAsync();
           await Updates.reloadAsync();
-        } else {
-          // Temporarily show diagnostic — remove after debugging
-          Alert.alert('OTA Debug', `No update available.\n\n${info}`);
         }
       } catch (e: any) {
-        // Show error so we can debug
-        Alert.alert('OTA Error', e.message || String(e));
+        Alert.alert('OTA Error', `${e.message}\n\n${info}\n\nKeys: ${keys}`);
       }
     })();
   }, []);
