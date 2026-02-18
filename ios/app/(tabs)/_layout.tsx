@@ -1,19 +1,18 @@
 /**
  * Tab Navigator Layout
  *
- * Glass blur tab bar with Lucide icons.
- * Tab bar is position: absolute so content scrolls behind the blur.
- * Uses native Liquid Glass on iOS 26+, BlurView fallback otherwise.
+ * Floating pill tab bar with Liquid Glass on iOS 26+, BlurView fallback.
+ * Tab bar floats above content with rounded corners and margins.
  */
 
 import { Tabs } from 'expo-router';
-import { StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 import { House, Compass, Brain, User } from 'lucide-react-native';
 import { TabIcon } from '../../components/icons';
 import { haptics } from '../../lib/haptics';
-import { colors, fonts, glass } from '../../theme';
+import { colors, fonts, glass, borderRadius } from '../../theme';
 
 const useNativeGlass = isGlassEffectAPIAvailable();
 
@@ -22,34 +21,18 @@ function TabBarBackground() {
     return (
       <GlassView
         glassEffectStyle={glass.liquidGlass.effect}
-        style={StyleSheet.absoluteFill}
+        style={styles.tabBarBg}
       />
     );
   }
   return (
-    <BlurView
-      intensity={glass.tabBarIntensity}
-      tint={glass.tabBarTint}
-      style={StyleSheet.absoluteFill}
-    />
-  );
-}
-
-function HeaderBackground() {
-  if (useNativeGlass) {
-    return (
-      <GlassView
-        glassEffectStyle={glass.liquidGlass.effect}
+    <View style={styles.tabBarBg}>
+      <BlurView
+        intensity={glass.tabBarIntensity}
+        tint={glass.tabBarTint}
         style={StyleSheet.absoluteFill}
       />
-    );
-  }
-  return (
-    <BlurView
-      intensity={glass.tabBarIntensity}
-      tint={glass.tabBarTint}
-      style={StyleSheet.absoluteFill}
-    />
+    </View>
   );
 }
 
@@ -67,16 +50,26 @@ export default function TabLayout() {
         tabBarBackground: () => <TabBarBackground />,
         tabBarStyle: {
           position: 'absolute',
+          bottom: 20,
+          left: 20,
+          right: 20,
+          height: 64,
           borderTopWidth: 0,
           elevation: 0,
           backgroundColor: 'transparent',
+          borderRadius: borderRadius.xl,
+          overflow: 'hidden',
+          ...glass.shadow,
+        },
+        tabBarItemStyle: {
+          paddingVertical: 6,
         },
         tabBarLabelStyle: {
           fontFamily: fonts.medium,
+          fontSize: 10,
         },
-        headerBackground: () => <HeaderBackground />,
         headerStyle: {
-          backgroundColor: 'transparent',
+          backgroundColor: colors.background,
         },
         headerTintColor: colors.text,
         headerTitleStyle: {
@@ -117,3 +110,11 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBarBg: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+  },
+});
