@@ -511,7 +511,7 @@ authRouter.post('/magic-link/send', async (req: Request, res: Response, next: Ne
     // Send email
     const resend = getResend();
     if (resend) {
-      const magicLink = `ankora://magic-link?token=${token}&email=${encodeURIComponent(data.email)}`;
+      const magicLink = `https://api.ankora.study/api/auth/magic-link/redirect?token=${token}&email=${encodeURIComponent(data.email)}`;
       await resend.emails.send({
         from: 'Ankora <noreply@ankora.study>',
         to: data.email,
@@ -544,6 +544,43 @@ authRouter.post('/magic-link/send', async (req: Request, res: Response, next: Ne
     }
     return next(error);
   }
+});
+
+// ============================================================================
+// Magic Link - Redirect (HTTPS → deep link, used from email)
+// ============================================================================
+
+authRouter.get('/magic-link/redirect', (req: Request, res: Response) => {
+  const { token, email } = req.query;
+
+  if (!token || !email) {
+    return res.status(400).send('Lien invalide');
+  }
+
+  const deepLink = `ankora://magic-link?token=${encodeURIComponent(String(token))}&email=${encodeURIComponent(String(email))}`;
+
+  // Serve an HTML page that opens the app via deep link
+  return res.send(`<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ankora - Connexion</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0A0F1A; color: #F8FAFC; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; text-align: center; padding: 20px; }
+  .card { max-width: 400px; }
+  h1 { font-size: 28px; margin-bottom: 8px; }
+  p { color: #94A3B8; font-size: 16px; line-height: 1.6; }
+  a.btn { display: inline-block; background: #6366F1; color: white; padding: 14px 32px; border-radius: 12px; text-decoration: none; font-weight: 600; font-size: 16px; margin-top: 24px; }
+</style>
+</head><body>
+<div class="card">
+  <h1>Ankora</h1>
+  <p>Ouverture de l'app en cours...</p>
+  <p><a class="btn" href="${deepLink}">Ouvrir Ankora</a></p>
+  <p style="font-size: 13px; color: #64748B; margin-top: 32px;">Si l'app ne s'ouvre pas, assure-toi qu'Ankora est installée sur ton iPhone.</p>
+</div>
+<script>window.location.href = "${deepLink}";</script>
+</body></html>`);
 });
 
 // ============================================================================

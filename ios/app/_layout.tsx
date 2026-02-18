@@ -103,7 +103,7 @@ export default function RootLayout() {
     } else if (isAuthenticated && user && !user.onboardingCompleted) {
       // Logged in but onboarding not done → resume at saved step
       // Don't redirect if already on an onboarding screen
-      if (firstSegment !== 'onboarding') {
+      if (firstSegment !== 'onboarding' && firstSegment !== 'oauth') {
         const step = user.onboardingStep ?? 0;
         // If step <= 2, user is post-auth so go to interests (step 3)
         const resumeStep = step <= 2 ? 3 : step;
