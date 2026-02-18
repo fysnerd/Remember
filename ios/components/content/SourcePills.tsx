@@ -6,12 +6,9 @@
  */
 
 import { View, ScrollView, StyleSheet, Pressable } from 'react-native';
-import { GlassContainer, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 import { Text } from '../ui';
 import { PlatformIcon } from '../icons';
 import { colors, spacing, borderRadius } from '../../theme';
-
-const useNativeGlass = isGlassEffectAPIAvailable();
 
 type Source = 'all' | 'youtube' | 'spotify' | 'tiktok' | 'instagram';
 
@@ -71,13 +68,7 @@ export function SourcePills({ selectedSource, onSourceChange, availableSources }
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.sourcesRow}
       >
-        {useNativeGlass ? (
-          <GlassContainer spacing={spacing.sm}>
-            {pills}
-          </GlassContainer>
-        ) : (
-          pills
-        )}
+        {pills}
       </ScrollView>
     </View>
   );
