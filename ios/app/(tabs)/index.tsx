@@ -82,7 +82,7 @@ export default function HomeScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
       }
     >
-      <GreetingHeader userName={userName} dailyProgress={dailyProgress} />
+      <GreetingHeader userName={userName} dailyProgress={dailyProgress} streak={reviewStats?.currentStreak ?? 0} />
 
       {dailyProgress?.allDone ? (
         <DailyVictoryScreen streak={reviewStats?.currentStreak ?? 0} />
