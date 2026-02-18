@@ -4,7 +4,7 @@
 
 export { useContentList, useLibraryContent, useContent, useContentsByIds, useSelectionSummary, useTriageMutation } from './useContent';
 export { useInbox, useInboxCount } from './useInbox';
-export { useQuiz, useMultiQuiz, useTopicQuiz, useThemeQuiz, useSubmitAnswer, useCreateSession, useCompleteSession } from './useQuiz';
+export { useQuiz, useMultiQuiz, useTopicQuiz, useThemeQuiz, useSubmitAnswer, useCreateSession, useCompleteSession, useLinkDailySession } from './useQuiz';
 export { useReviews, useCompletedItems, useReviewStats, useCompletedSessions, useSessionDetail, useGenerateSessionMemo } from './useReviews';
 export type { QuizSessionItem, QuizSessionContent, QuizSessionTheme } from './useReviews';
 export { useMemo, useTopicMemo, useThemeMemo, useRefreshThemeMemo } from './useMemo';

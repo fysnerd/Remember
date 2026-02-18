@@ -9,18 +9,20 @@ import { Text, Button } from '../../../components/ui';
 import { QuestionCard, AnswerFeedback, QuizSummary } from '../../../components/quiz';
 import { LoadingScreen } from '../../../components/LoadingScreen';
 import { ErrorState } from '../../../components/ErrorState';
-import { useThemeQuiz, useSubmitAnswer, useCreateSession, useCompleteSession } from '../../../hooks';
+import { useThemeQuiz, useSubmitAnswer, useCreateSession, useCompleteSession, useLinkDailySession } from '../../../hooks';
+import { haptics } from '../../../lib/haptics';
 import { colors, spacing, borderRadius } from '../../../theme';
 
 type QuizState = 'question' | 'feedback' | 'summary';
 
 export default function ThemeQuizScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, dailyRecId } = useLocalSearchParams<{ id: string; dailyRecId?: string }>();
   const router = useRouter();
   const { data: quiz, isLoading, error, refetch } = useThemeQuiz(id || '');
   const submitMutation = useSubmitAnswer();
   const createSessionMutation = useCreateSession();
   const completeSessionMutation = useCompleteSession();
+  const linkDailyMutation = useLinkDailySession();
 
   const [state, setState] = useState<QuizState>('question');
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -36,6 +38,9 @@ export default function ThemeQuizScreen() {
       createSessionMutation.mutate({}, {
         onSuccess: (session) => {
           setSessionId(session.id);
+          if (dailyRecId) {
+            linkDailyMutation.mutate({ dailyRecId, sessionId: session.id });
+          }
         },
       });
     }
@@ -88,7 +93,13 @@ export default function ThemeQuizScreen() {
       setState('question');
     } else {
       if (sessionId) {
-        completeSessionMutation.mutate(sessionId);
+        completeSessionMutation.mutate(sessionId, {
+          onSuccess: (data) => {
+            if (data.dailyProgress?.allDone) {
+              haptics.success();
+            }
+          },
+        });
       }
       setState('summary');
     }

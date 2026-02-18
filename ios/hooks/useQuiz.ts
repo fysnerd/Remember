@@ -229,6 +229,11 @@ interface CompleteSessionResponse {
     correctCount: number;
     accuracy: number;
   };
+  dailyProgress?: {
+    completed: number;
+    total: number;
+    allDone: boolean;
+  };
 }
 
 // Complete a quiz session
@@ -250,6 +255,16 @@ export function useCompleteSession() {
       queryClient.invalidateQueries({ queryKey: ['themes', 'daily'] });
       // Refresh home recommendations after quiz completion
       queryClient.invalidateQueries({ queryKey: ['home', 'recommendations'] });
+    },
+  });
+}
+
+// Link a quiz session to a daily recommendation
+export function useLinkDailySession() {
+  return useMutation({
+    mutationFn: async ({ dailyRecId, sessionId }: { dailyRecId: string; sessionId: string }) => {
+      const { data } = await api.post(`/home/daily/${dailyRecId}/link-session`, { sessionId });
+      return data;
     },
   });
 }

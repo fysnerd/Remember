@@ -1,5 +1,5 @@
 /**
- * Home Tab - Daily learning experience with greeting, stats, and 3 quiz recommendation cards
+ * Home Tab - Daily learning experience with greeting, stats, and 3 fixed daily quiz cards
  */
 
 import { useCallback, useState } from 'react';
@@ -10,13 +10,13 @@ import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Link2 } from 'lucide-react-native';
-import { GlassLockOverlay } from '../../components/glass';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
 import { GreetingHeader } from '../../components/home/GreetingHeader';
 import { QuizRecommendationCard } from '../../components/home/QuizRecommendationCard';
+import { DailyVictoryScreen } from '../../components/home/DailyVictoryScreen';
 import { STAGGER_DELAY, STAGGER_CAP } from '../../lib/animations';
-import { useQuizRecommendations, usePipelineStatus } from '../../hooks';
+import { useQuizRecommendations, usePipelineStatus, useReviewStats } from '../../hooks';
 import { useAuthStore } from '../../stores/authStore';
 import { colors, spacing } from '../../theme';
 
@@ -27,12 +27,15 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const { user } = useAuthStore();
-  const { data: recommendations, isLoading } = useQuizRecommendations();
+  const { data, isLoading } = useQuizRecommendations();
+  const { data: reviewStats } = useReviewStats();
   // Pipeline polling — runs on home screen, fires haptic when content becomes ready
   usePipelineStatus();
-  const isFree = user?.plan !== 'PRO' && user?.plan !== 'LIFETIME';
 
   const userName = user?.name || user?.email?.split('@')[0] || 'there';
+
+  const recommendations = data?.recommendations ?? [];
+  const dailyProgress = data?.dailyProgress;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -48,13 +51,16 @@ export default function HomeScreen() {
     }
   }, [queryClient]);
 
-  const handleRecommendationPress = (rec: { id: string; type: 'content' | 'theme' }) => {
+  const handleRecommendationPress = (rec: { id: string; type: 'content' | 'theme'; dailyRecId?: string }) => {
     if (rec.type === 'content') {
-      router.push({ pathname: '/content/[id]' as any, params: { id: rec.id } });
+      router.push({
+        pathname: '/content/[id]' as any,
+        params: { id: rec.id, dailyRecId: rec.dailyRecId || '' },
+      });
     } else {
       router.push({
         pathname: '/quiz/preview/[id]' as any,
-        params: { id: rec.id, type: rec.type },
+        params: { id: rec.id, type: rec.type, dailyRecId: rec.dailyRecId || '' },
       });
     }
   };
@@ -63,9 +69,7 @@ export default function HomeScreen() {
     return <LoadingScreen />;
   }
 
-  const items = recommendations ?? [];
-
-  if (items.length === 0) {
+  if (recommendations.length === 0) {
     return <EmptyState message="Connectez vos plateformes pour commencer" icon={Link2} hasHeader />;
   }
 
@@ -78,23 +82,25 @@ export default function HomeScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
       }
     >
-      <GreetingHeader userName={userName} />
+      <GreetingHeader userName={userName} dailyProgress={dailyProgress} />
 
-      <View style={styles.cardsList}>
-        {items.map((rec, index) => (
-          <Animated.View
-            key={rec.id}
-            entering={FadeInDown.delay(Math.min(index, STAGGER_CAP) * STAGGER_DELAY).duration(250)}
-          >
-            <GlassLockOverlay locked={isFree && index >= 2}>
+      {dailyProgress?.allDone ? (
+        <DailyVictoryScreen streak={reviewStats?.currentStreak ?? 0} />
+      ) : (
+        <View style={styles.cardsList}>
+          {recommendations.map((rec, index) => (
+            <Animated.View
+              key={rec.id}
+              entering={FadeInDown.delay(Math.min(index, STAGGER_CAP) * STAGGER_DELAY).duration(250)}
+            >
               <QuizRecommendationCard
                 recommendation={rec}
                 onPress={() => handleRecommendationPress(rec)}
               />
-            </GlassLockOverlay>
-          </Animated.View>
-        ))}
-      </View>
+            </Animated.View>
+          ))}
+        </View>
+      )}
     </ScrollView>
     </SafeAreaView>
   );

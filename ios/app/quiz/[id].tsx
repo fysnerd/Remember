@@ -14,13 +14,13 @@ import { QuestionCard, AnswerFeedback, QuizSummary } from '../../components/quiz
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { ErrorState } from '../../components/ErrorState';
 import { haptics } from '../../lib/haptics';
-import { useQuiz, useMultiQuiz, useSubmitAnswer, useCreateSession, useCompleteSession } from '../../hooks';
+import { useQuiz, useMultiQuiz, useSubmitAnswer, useCreateSession, useCompleteSession, useLinkDailySession } from '../../hooks';
 import { colors, spacing, borderRadius } from '../../theme';
 
 type QuizState = 'question' | 'feedback' | 'summary';
 
 export default function QuizScreen() {
-  const { id, ids } = useLocalSearchParams<{ id: string; ids?: string }>();
+  const { id, ids, dailyRecId } = useLocalSearchParams<{ id: string; ids?: string; dailyRecId?: string }>();
   const router = useRouter();
 
   // Parse multi-content IDs if provided
@@ -40,6 +40,7 @@ export default function QuizScreen() {
   const submitMutation = useSubmitAnswer();
   const createSessionMutation = useCreateSession();
   const completeSessionMutation = useCompleteSession();
+  const linkDailyMutation = useLinkDailySession();
 
   const [state, setState] = useState<QuizState>('question');
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -58,6 +59,10 @@ export default function QuizScreen() {
       createSessionMutation.mutate(params, {
         onSuccess: (session) => {
           setSessionId(session.id);
+          // Link session to daily recommendation if applicable
+          if (dailyRecId) {
+            linkDailyMutation.mutate({ dailyRecId, sessionId: session.id });
+          }
         },
       });
     }
@@ -114,7 +119,13 @@ export default function QuizScreen() {
     } else {
       // Complete the session before showing summary
       if (sessionId) {
-        completeSessionMutation.mutate(sessionId);
+        completeSessionMutation.mutate(sessionId, {
+          onSuccess: (data) => {
+            if (data.dailyProgress?.allDone) {
+              haptics.success();
+            }
+          },
+        });
       }
       setState('summary');
     }

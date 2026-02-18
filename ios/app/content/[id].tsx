@@ -33,7 +33,7 @@ function formatDuration(seconds?: number): string | null {
 }
 
 export default function ContentDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, dailyRecId } = useLocalSearchParams<{ id: string; dailyRecId?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { data: content, isLoading, error, refetch } = useContent(id!);
@@ -60,11 +60,7 @@ export default function ContentDetailScreen() {
   }
 
   const handleStartQuiz = () => {
-    router.push({ pathname: '/quiz/[id]' as any, params: { id: id! } });
-  };
-
-  const handleViewMemo = () => {
-    router.push(`/memo/${id}`);
+    router.push({ pathname: '/quiz/[id]' as any, params: { id: id!, dailyRecId: dailyRecId || '' } });
   };
 
   const handleOpenSource = () => {
@@ -181,9 +177,6 @@ export default function ContentDetailScreen() {
                'En attente de traitement...'}
             </Button>
           )}
-          <Button variant="outline" fullWidth onPress={handleViewMemo}>
-            Voir le memo
-          </Button>
         </View>
       </View>
 

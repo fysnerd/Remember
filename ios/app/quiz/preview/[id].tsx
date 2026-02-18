@@ -1,61 +1,49 @@
 /**
- * Quiz Preview Screen - Synopsis before starting a quiz
+ * Quiz Preview Screen - Theme preview before starting a quiz
  */
 
-import { View, ScrollView, StyleSheet, Image, Pressable, Linking } from 'react-native';
+import { View, ScrollView, StyleSheet } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text, Button } from '../../../components/ui';
-import { PlatformIcon } from '../../../components/icons';
 import { LoadingScreen } from '../../../components/LoadingScreen';
 import { ErrorState } from '../../../components/ErrorState';
-import { useContent, useQuiz, useThemeDetail, useThemeQuiz } from '../../../hooks';
+import { useThemeDetail, useThemeQuiz } from '../../../hooks';
 import { colors, spacing, borderRadius } from '../../../theme';
 
-const sourceLabel: Record<string, string> = {
-  youtube: 'YouTube',
-  spotify: 'Spotify',
-  tiktok: 'TikTok',
-  instagram: 'Instagram',
-};
+/** Build a short description from the content titles in this theme */
+function buildTopicsSummary(contents: { title: string }[], max = 5): string {
+  if (!contents.length) return '';
+  const titles = contents.slice(0, max).map((c) => c.title);
+  const summary = titles.join(' · ');
+  if (contents.length > max) {
+    return `${summary} … et ${contents.length - max} autres`;
+  }
+  return summary;
+}
 
 export default function QuizPreviewScreen() {
-  const { id, type, contentIds } = useLocalSearchParams<{
+  const { id, type, contentIds, dailyRecId } = useLocalSearchParams<{
     id: string;
     type: 'content' | 'theme';
     contentIds?: string;
+    dailyRecId?: string;
   }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const isTheme = type === 'theme';
+  const { data: themeData, isLoading: themeLoading } = useThemeDetail(id);
+  const { data: themeQuiz, isLoading: themeQuizLoading } = useThemeQuiz(id ?? '');
 
-  // Content hooks (only enabled for content type)
-  const { data: content, isLoading: contentLoading } = useContent(isTheme ? '' : id!);
-  const { data: quiz, isLoading: quizLoading } = useQuiz(isTheme ? '' : id!);
-
-  // Theme hooks (only enabled for theme type)
-  const { data: themeData, isLoading: themeLoading } = useThemeDetail(isTheme ? id : undefined);
-  const { data: themeQuiz, isLoading: themeQuizLoading } = useThemeQuiz(isTheme ? id! : '');
-
-  const isLoading = isTheme
-    ? themeLoading || themeQuizLoading
-    : contentLoading || quizLoading;
+  const isLoading = themeLoading || themeQuizLoading;
 
   if (isLoading) {
     return <LoadingScreen />;
   }
 
-  // Extract display data
   const theme = themeData?.theme;
-  const questions = isTheme ? themeQuiz?.questions : quiz?.questions;
-  const questionCount = questions?.length ?? 0;
-  const firstQuestion = questions?.[0];
-
-  const title = isTheme ? theme?.name : content?.title;
-  const subtitle = isTheme
-    ? `${theme?.contentCount ?? 0} contenu${(theme?.contentCount ?? 0) !== 1 ? 's' : ''}`
-    : [sourceLabel[content?.source ?? ''], content?.channelName].filter(Boolean).join(' \u2022 ');
+  const contents = themeData?.contents ?? [];
+  const questionCount = themeQuiz?.questions?.length ?? 0;
 
   if (questionCount === 0) {
     return (
@@ -67,19 +55,16 @@ export default function QuizPreviewScreen() {
   }
 
   const handleStart = () => {
-    if (isTheme) {
-      router.replace({
-        pathname: '/quiz/theme/[id]' as any,
-        params: contentIds ? { id: id!, contentIds } : { id: id! },
-      });
-    } else {
-      router.replace({ pathname: '/quiz/[id]' as any, params: { id: id! } });
-    }
+    const params: any = { id: id! };
+    if (contentIds) params.contentIds = contentIds;
+    if (dailyRecId) params.dailyRecId = dailyRecId;
+    router.replace({
+      pathname: '/quiz/theme/[id]' as any,
+      params,
+    });
   };
 
-  const handleOpenSource = () => {
-    if (content?.url) Linking.openURL(content.url);
-  };
+  const topicsSummary = buildTopicsSummary(contents);
 
   return (
     <>
@@ -89,63 +74,30 @@ export default function QuizPreviewScreen() {
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
         >
-          {/* Visual */}
-          {isTheme ? (
-            <View style={styles.emojiContainer}>
-              <Text style={styles.emoji}>{theme?.emoji}</Text>
-            </View>
-          ) : content?.thumbnailUrl ? (
-            <Image
-              source={{ uri: content.thumbnailUrl }}
-              style={styles.thumbnail}
-              resizeMode="cover"
-            />
-          ) : (
-            <View style={[styles.thumbnail, styles.thumbnailPlaceholder]}>
-              <PlatformIcon platform={content?.source ?? ''} size={48} colored />
-            </View>
-          )}
-
-          {/* Title */}
-          <Text variant="h1" style={styles.title}>{title}</Text>
-
-          {/* Subtitle */}
-          {subtitle ? (
-            <View style={styles.subtitleRow}>
-              {!isTheme && content?.source && (
-                <PlatformIcon platform={content.source} size={14} colored />
-              )}
-              <Text variant="body" color="secondary">{subtitle}</Text>
-            </View>
-          ) : null}
-
-          {/* Source link (content only) */}
-          {!isTheme && content?.url && (
-            <Pressable onPress={handleOpenSource} style={styles.sourceLink}>
-              <Text variant="caption" style={styles.sourceLinkText}>
-                Voir l'original →
-              </Text>
-            </Pressable>
-          )}
-
-          {/* Composition badge */}
-          <View style={styles.compositionBadge}>
-            <Text variant="body" weight="medium">
-              {questionCount} question{questionCount !== 1 ? 's' : ''}
-            </Text>
+          {/* Emoji */}
+          <View style={styles.emojiContainer}>
+            <Text style={styles.emoji}>{theme?.emoji}</Text>
           </View>
 
-          {/* First question synopsis */}
-          {firstQuestion && (
-            <View style={styles.synopsisCard}>
-              <Text variant="caption" color="secondary" style={styles.synopsisLabel}>
-                Exemple
+          {/* Title */}
+          <Text variant="h1" style={styles.title}>{theme?.name}</Text>
+
+          {/* Subtitle */}
+          <Text variant="body" color="secondary" style={styles.subtitle}>
+            {theme?.contentCount ?? 0} contenu{(theme?.contentCount ?? 0) !== 1 ? 's' : ''} · {questionCount} question{questionCount !== 1 ? 's' : ''}
+          </Text>
+
+          {/* Topics description */}
+          {topicsSummary ? (
+            <View style={styles.topicsCard}>
+              <Text variant="caption" color="secondary" style={styles.topicsLabel}>
+                Sujets abordés
               </Text>
-              <Text variant="body" weight="medium">
-                {firstQuestion.question}
+              <Text variant="body" color="secondary">
+                {topicsSummary}
               </Text>
             </View>
-          )}
+          ) : null}
         </ScrollView>
 
         {/* Sticky bottom button */}
@@ -171,7 +123,6 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     paddingBottom: 100,
   },
-  // Theme emoji
   emojiContainer: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -181,51 +132,20 @@ const styles = StyleSheet.create({
   emoji: {
     fontSize: 80,
   },
-  // Content thumbnail
-  thumbnail: {
-    width: '100%',
-    aspectRatio: 16 / 9,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.lg,
-  },
-  thumbnailPlaceholder: {
-    backgroundColor: colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   title: {
     marginBottom: spacing.xs,
   },
-  subtitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: spacing.sm,
-  },
-  sourceLink: {
-    alignSelf: 'flex-start',
+  subtitle: {
     marginBottom: spacing.lg,
   },
-  sourceLinkText: {
-    color: colors.accent,
-    textDecorationLine: 'underline',
-  },
-  compositionBadge: {
-    backgroundColor: colors.surface,
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    marginBottom: spacing.lg,
-  },
-  synopsisCard: {
+  topicsCard: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
     padding: spacing.lg,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  synopsisLabel: {
+  topicsLabel: {
     marginBottom: spacing.sm,
   },
   bottomBar: {

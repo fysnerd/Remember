@@ -2,9 +2,11 @@
  * QuizRecommendationCard - Glass card for recommended quiz on Home screen
  *
  * Shows thumbnail (content) or emoji (theme), title, creator name, and date.
+ * Completed cards show a checkmark and reduced opacity.
  */
 
 import { View, Image, StyleSheet } from 'react-native';
+import { CheckCircle } from 'lucide-react-native';
 import { GlassCard } from '../glass/GlassCard';
 import { Text } from '../ui';
 import { colors, spacing, fonts } from '../../theme';
@@ -29,10 +31,17 @@ function formatDate(isoString: string): string {
 }
 
 export function QuizRecommendationCard({ recommendation, onPress }: QuizRecommendationCardProps) {
-  const { type, title, subtitle, thumbnailUrl, emoji, channelName, capturedAt, questionCount } = recommendation;
+  const { type, title, subtitle, thumbnailUrl, emoji, channelName, capturedAt, questionCount, completed } = recommendation;
 
   return (
-    <GlassCard padding="lg" onPress={onPress} style={styles.card}>
+    <GlassCard padding="lg" onPress={onPress} style={[styles.card, completed && styles.cardCompleted]}>
+      {/* Completed checkmark */}
+      {completed && (
+        <View style={styles.checkmark}>
+          <CheckCircle size={24} color={colors.success} />
+        </View>
+      )}
+
       {/* Top: Thumbnail/Emoji */}
       <View style={styles.header}>
         {type === 'content' && thumbnailUrl ? (
@@ -75,6 +84,15 @@ const styles = StyleSheet.create({
   card: {
     minHeight: 170,
     justifyContent: 'space-between',
+  },
+  cardCompleted: {
+    opacity: 0.7,
+  },
+  checkmark: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+    zIndex: 1,
   },
   header: {
     flexDirection: 'row',

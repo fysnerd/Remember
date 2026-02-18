@@ -164,6 +164,14 @@ export interface QuizRecommendation {
   channelName: string | null;
   capturedAt: string | null;
   reason: string;
+  completed?: boolean;
+  dailyRecId?: string;
+}
+
+export interface DailyProgress {
+  completed: number;
+  total: number;
+  allDone: boolean;
 }
 
 export interface ThemeRef {
