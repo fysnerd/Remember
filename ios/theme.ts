@@ -7,7 +7,7 @@
 
 export const colors = {
   // Core palette - Night Blue dark mode
-  background: '#0A0F1A',
+  background: '#784521',
   surface: '#111827',
   surfaceElevated: '#1E293B',
   text: '#F8FAFC',
