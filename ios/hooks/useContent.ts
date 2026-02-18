@@ -2,7 +2,7 @@
  * Content hooks - list, detail, triage
  */
 
-import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueries, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 import type { Content, ContentListResponse } from '../types/content';
 
@@ -130,6 +130,21 @@ export function useContent(id: string) {
       return mapContent(data);
     },
     enabled: !!id,
+  });
+}
+
+// Multiple content details (parallel fetch)
+export function useContentsByIds(ids: string[]) {
+  return useQueries({
+    queries: ids.map((id) => ({
+      queryKey: ['content', id],
+      queryFn: async () => {
+        const { data } = await api.get<BackendContent>(`/content/${id}`);
+        return mapContent(data);
+      },
+      enabled: !!id,
+      staleTime: 5 * 60 * 1000,
+    })),
   });
 }
 

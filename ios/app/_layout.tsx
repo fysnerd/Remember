@@ -106,6 +106,16 @@ export default function RootLayout() {
           }}
         />
         <Stack.Screen
+          name="quiz/preview/multi"
+          options={{
+            headerShown: true,
+            title: '',
+            presentation: 'card',
+            headerStyle: { backgroundColor: '#0A0F1A' },
+            headerTintColor: '#F8FAFC',
+          }}
+        />
+        <Stack.Screen
           name="quiz/[id]"
           options={{
             headerShown: false,

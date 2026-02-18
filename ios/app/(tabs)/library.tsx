@@ -191,7 +191,7 @@ export default function LibraryScreen() {
     if (ids.length === 1) {
       router.push({ pathname: '/quiz/[id]' as any, params: { id: ids[0] } });
     } else {
-      router.push({ pathname: '/quiz/[id]' as any, params: { id: 'multi', ids: ids.join(',') } });
+      router.push({ pathname: '/quiz/preview/multi' as any, params: { ids: ids.join(',') } });
     }
   }, [selectedIds, router]);
 
