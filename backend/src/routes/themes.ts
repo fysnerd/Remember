@@ -76,6 +76,7 @@ themeRouter.get('/daily', async (req: Request, res: Response, next: NextFunction
       slug: string;
       color: string;
       emoji: string;
+      description: string | null;
       memo: string | null;
       memoGeneratedAt: Date | null;
       discoveredAt: Date | null;
@@ -88,7 +89,7 @@ themeRouter.get('/daily', async (req: Request, res: Response, next: NextFunction
       newContentCount: bigint;
     }[]>`
       SELECT
-        t.id, t.name, t.slug, t.color, t.emoji, t.memo,
+        t.id, t.name, t.slug, t.color, t.emoji, t.description, t.memo,
         t."memoGeneratedAt", t."discoveredAt", t."createdAt", t."updatedAt",
         COALESCE(COUNT(DISTINCT ct.id), 0) AS "contentCount",
         COALESCE(COUNT(card.id), 0) AS "totalCards",

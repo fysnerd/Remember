@@ -14,7 +14,7 @@ import { SwipeableContentCard } from '../../components/content';
 import { ContentCard } from '../../components/content';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
-import { useThemeDetail, useRemoveContentFromTheme, usePipelineStatus, useThemeMemo } from '../../hooks';
+import { useThemeDetail, useRemoveContentFromTheme, usePipelineStatus } from '../../hooks';
 import { haptics } from '../../lib/haptics';
 import api from '../../lib/api';
 import { colors, spacing, borderRadius } from '../../theme';
@@ -32,11 +32,9 @@ export default function ThemeDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
-  const [memoExpanded, setMemoExpanded] = useState(false);
   const { data, isLoading } = useThemeDetail(id);
   const removeContent = useRemoveContentFromTheme();
   const { processingMap } = usePipelineStatus();
-  const { data: memoData, isLoading: memoLoading } = useThemeMemo(id!);
 
   const selectionMode = selectedIds.size > 0;
 
@@ -166,27 +164,11 @@ export default function ThemeDetailScreen() {
           </Text>
         </View>
 
-        {/* Synopsis (theme memo) */}
-        {memoLoading ? (
-          <View style={styles.memoSection}>
-            <ActivityIndicator size="small" color={colors.textSecondary} />
-          </View>
-        ) : memoData?.content ? (
-          <View style={styles.memoSection}>
-            <Text
-              variant="body"
-              color="secondary"
-              numberOfLines={memoExpanded ? undefined : 6}
-              style={styles.memoText}
-            >
-              {memoData.content}
-            </Text>
-            <Pressable onPress={() => setMemoExpanded((v) => !v)} hitSlop={8}>
-              <Text variant="caption" style={styles.memoToggle}>
-                {memoExpanded ? 'Voir moins' : 'Voir plus'}
-              </Text>
-            </Pressable>
-          </View>
+        {/* Description */}
+        {theme?.description ? (
+          <Text variant="body" color="secondary" style={styles.description}>
+            {theme.description}
+          </Text>
         ) : null}
 
         {/* Action button - Quiz */}
@@ -320,15 +302,9 @@ const styles = StyleSheet.create({
   headerName: {
     marginBottom: spacing.xs,
   },
-  memoSection: {
+  description: {
+    textAlign: 'center',
     marginBottom: spacing.lg,
-  },
-  memoText: {
-    lineHeight: 22,
-  },
-  memoToggle: {
-    color: colors.accent,
-    marginTop: spacing.xs,
   },
 
   // Action buttons row

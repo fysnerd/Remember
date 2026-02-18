@@ -396,6 +396,7 @@ model Theme {
   slug          String
   color         String         @default("#6366F1")
   emoji         String         @default("📚")
+  description   String?
   memo          String?
   memoGeneratedAt DateTime?
   isFavorite    Boolean        @default(false)

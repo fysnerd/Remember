@@ -31,6 +31,7 @@ const THEME_COLOR_PALETTE = [
 interface GeneratedTheme {
   name: string;
   emoji: string;
+  description: string;
   color: string;
   tags: string[];
 }
@@ -211,6 +212,7 @@ export async function generateThemesForUser(userId: string): Promise<void> {
           slug,
           color,
           emoji,
+          description: generated.description || null,
           discoveredAt: new Date(),
         },
       });
@@ -454,7 +456,8 @@ ${existingList}
 
 Regroupe ces tags en themes coherents. Pour chaque theme, indique:
 - name: nom du theme en francais
-- emoji: un emoji representatif
+- emoji: un seul emoji representatif
+- description: une courte description du theme (1 phrase, max 15 mots, en francais)
 - color: code hex (parmi: #EF4444, #F97316, #EAB308, #22C55E, #14B8A6, #3B82F6, #6366F1, #8B5CF6, #EC4899, #F43F5E, #06B6D4, #84CC16)
 - tags: liste des tags regroupes dans ce theme
 
@@ -464,6 +467,7 @@ Format:
     {
       "name": "Nom du theme",
       "emoji": "emoji",
+      "description": "Courte description du theme",
       "color": "#hex",
       "tags": ["tag1", "tag2", "tag3"]
     }
@@ -501,6 +505,7 @@ Format:
         .map((t: any) => ({
           name: String(t.name).trim(),
           emoji: extractFirstEmoji(typeof t.emoji === 'string' ? t.emoji : ''),
+          description: typeof t.description === 'string' ? String(t.description).trim() : '',
           color: typeof t.color === 'string' ? t.color : '#6366F1',
           tags: t.tags.filter((tag: any) => typeof tag === 'string'),
         }));
@@ -660,7 +665,7 @@ export async function evolveThemesForUser(userId: string): Promise<void> {
         const emoji = generated.emoji || '\u{1F4DA}';
 
         const theme = await tx.theme.create({
-          data: { userId, name: generated.name, slug, color, emoji, discoveredAt: new Date() },
+          data: { userId, name: generated.name, slug, color, emoji, description: generated.description || null, discoveredAt: new Date() },
         });
 
         if (generated.tags?.length > 0) {
