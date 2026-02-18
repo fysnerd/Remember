@@ -437,7 +437,7 @@ export default function LibraryScreen() {
   return (
     <Animated.View entering={FadeIn.duration(200)} style={styles.container}>
       {/* Header */}
-      <View style={styles.topTabBar}>
+      <View style={[styles.topTabBar, { paddingTop: insets.top + spacing.sm }]}>
         {viewMode === 'browse' ? (
           selectionMode ? (
             <>
@@ -582,7 +582,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
     paddingBottom: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
