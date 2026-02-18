@@ -52,13 +52,13 @@ function mapContent(item: BackendContent): Content {
 }
 
 // Inbox content (status: INBOX) with infinite scroll
-export function useInbox(platform?: string) {
+export function useInbox(platforms?: string[]) {
   const query = useInfiniteQuery({
-    queryKey: ['inbox', platform ?? 'all'],
+    queryKey: ['inbox', platforms && platforms.length > 0 ? platforms.sort().join(',') : 'all'],
     queryFn: async ({ pageParam = 1 }) => {
       const params = new URLSearchParams({ page: String(pageParam), limit: '20' });
-      if (platform && platform !== 'all') {
-        params.set('platform', platform.toUpperCase());
+      if (platforms && platforms.length > 0) {
+        params.set('platform', platforms.map(p => p.toUpperCase()).join(','));
       }
       const { data } = await api.get<BackendInboxResponse>(
         `/content/inbox?${params.toString()}`

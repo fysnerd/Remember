@@ -170,9 +170,14 @@ contentRouter.get('/', async (req: Request, res: Response, next: NextFunction) =
       userId: req.user!.id,
     };
 
-    // Platform filter
-    if (platform && typeof platform === 'string' && ['YOUTUBE', 'SPOTIFY', 'TIKTOK', 'INSTAGRAM'].includes(platform)) {
-      where.platform = platform as Platform;
+    // Platform filter (supports comma-separated: YOUTUBE,SPOTIFY)
+    if (platform && typeof platform === 'string') {
+      const platforms = platform.split(',').map(p => p.trim()).filter(p => ['YOUTUBE', 'SPOTIFY', 'TIKTOK', 'INSTAGRAM'].includes(p));
+      if (platforms.length === 1) {
+        where.platform = platforms[0] as Platform;
+      } else if (platforms.length > 1) {
+        where.platform = { in: platforms as Platform[] };
+      }
     }
 
     // Statuses that are always hidden from the user
@@ -606,8 +611,14 @@ contentRouter.get('/inbox', async (req: Request, res: Response, next: NextFuncti
         },
       ],
     };
-    if (platform && ['YOUTUBE', 'SPOTIFY', 'TIKTOK', 'INSTAGRAM'].includes(platform.toUpperCase())) {
-      where.platform = platform.toUpperCase();
+    // Platform filter (supports comma-separated: YOUTUBE,SPOTIFY)
+    if (platform) {
+      const platforms = platform.split(',').map(p => p.trim().toUpperCase()).filter(p => ['YOUTUBE', 'SPOTIFY', 'TIKTOK', 'INSTAGRAM'].includes(p));
+      if (platforms.length === 1) {
+        where.platform = platforms[0];
+      } else if (platforms.length > 1) {
+        where.platform = { in: platforms };
+      }
     }
 
     const [contents, total] = await Promise.all([

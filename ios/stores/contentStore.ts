@@ -5,26 +5,25 @@
 import { create } from 'zustand';
 
 type ExplorerTab = 'suggestions' | 'library';
-type SourceFilter = 'all' | 'youtube' | 'spotify' | 'tiktok' | 'instagram';
+export type SourceKey = 'youtube' | 'spotify' | 'tiktok' | 'instagram';
 type ViewMode = 'browse' | 'triage';
 
 interface ContentStoreState {
-  // Explorer top-level tab state
   activeExplorerTab: ExplorerTab;
   setActiveExplorerTab: (tab: ExplorerTab) => void;
 
-  // Search state
   searchQuery: string;
   setSearchQuery: (query: string) => void;
 
-  // View mode (browse library vs triage inbox)
   viewMode: ViewMode;
   setViewMode: (mode: ViewMode) => void;
 
-  // Filter state
-  sourceFilter: SourceFilter;
+  // Multi-select source filter (empty = all sources)
+  sourceFilters: SourceKey[];
+  setSourceFilters: (sources: SourceKey[]) => void;
+  toggleSourceFilter: (source: SourceKey) => void;
+
   themeFilter: string | null;
-  setSourceFilter: (source: SourceFilter) => void;
   setThemeFilter: (theme: string | null) => void;
   resetFilters: () => void;
 }
@@ -39,9 +38,17 @@ export const useContentStore = create<ContentStoreState>((set) => ({
   viewMode: 'browse',
   setViewMode: (mode) => set({ viewMode: mode }),
 
-  sourceFilter: 'all',
+  sourceFilters: [],
+  setSourceFilters: (sources) => set({ sourceFilters: sources }),
+  toggleSourceFilter: (source) => set((state) => {
+    const current = state.sourceFilters;
+    if (current.includes(source)) {
+      return { sourceFilters: current.filter((s) => s !== source) };
+    }
+    return { sourceFilters: [...current, source] };
+  }),
+
   themeFilter: null,
-  setSourceFilter: (source) => set({ sourceFilter: source }),
   setThemeFilter: (theme) => set({ themeFilter: theme }),
-  resetFilters: () => set({ sourceFilter: 'all', themeFilter: null }),
+  resetFilters: () => set({ sourceFilters: [], themeFilter: null }),
 }));

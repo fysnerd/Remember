@@ -8,6 +8,7 @@ import type { Content, ContentListResponse } from '../types/content';
 
 interface ContentFilters {
   source?: string;
+  sources?: string[];   // multi-select: ['youtube', 'spotify']
   topic?: string;
   channel?: string;
   status?: string;
@@ -95,7 +96,10 @@ export function useLibraryContent(filters?: ContentFilters) {
     queryKey: ['content', 'library', filters],
     queryFn: async ({ pageParam = 1 }) => {
       const params = new URLSearchParams({ page: String(pageParam), limit: '20' });
-      if (filters?.source && filters.source !== 'all') {
+      // Multi-source filter (comma-separated)
+      if (filters?.sources && filters.sources.length > 0) {
+        params.set('platform', filters.sources.map(s => s.toUpperCase()).join(','));
+      } else if (filters?.source && filters.source !== 'all') {
         params.set('platform', filters.source.toUpperCase());
       }
       if (filters?.themeId) params.set('themeId', filters.themeId);

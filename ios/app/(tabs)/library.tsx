@@ -25,7 +25,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { PlatformIcon } from '../../components/icons';
 import { Search, PartyPopper, X, BookOpen, Play, SlidersHorizontal, Check } from 'lucide-react-native';
 import { useLibraryContent, useInbox, useInboxCount, useSwipeTriage, useDebouncedValue, useThemes, useAvailableSources } from '../../hooks';
-import { useContentStore } from '../../stores/contentStore';
+import { useContentStore, type SourceKey } from '../../stores/contentStore';
 import { haptics } from '../../lib/haptics';
 import type { Content } from '../../types/content';
 import { colors, spacing, borderRadius } from '../../theme';
@@ -45,7 +45,7 @@ export default function LibraryScreen() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const autoSwitchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
-  const [pendingSource, setPendingSource] = useState<'all' | 'youtube' | 'spotify' | 'tiktok' | 'instagram'>('all');
+  const [pendingSources, setPendingSources] = useState<SourceKey[]>([]);
 
   const selectionMode = selectedIds.size > 0;
 
@@ -53,8 +53,8 @@ export default function LibraryScreen() {
   const {
     searchQuery,
     setSearchQuery,
-    sourceFilter,
-    setSourceFilter,
+    sourceFilters,
+    setSourceFilters,
     themeFilter,
     setThemeFilter,
     viewMode,
@@ -74,7 +74,7 @@ export default function LibraryScreen() {
     hasNextPage: libraryHasNextPage,
     isFetchingNextPage: libraryFetchingNextPage,
   } = useLibraryContent({
-    source: sourceFilter,
+    sources: sourceFilters.length > 0 ? sourceFilters : undefined,
     themeId: themeFilter ?? undefined,
     search: debouncedSearch || undefined,
     excludeArchived: true,
@@ -87,7 +87,7 @@ export default function LibraryScreen() {
     fetchNextPage: inboxFetchNextPage,
     hasNextPage: inboxHasNextPage,
     isFetchingNextPage: inboxFetchingNextPage,
-  } = useInbox(sourceFilter);
+  } = useInbox(sourceFilters.length > 0 ? sourceFilters : undefined);
 
   const swipeTriage = useSwipeTriage();
   const { show: showToast, ToastComponent } = useToast();
@@ -115,12 +115,15 @@ export default function LibraryScreen() {
     ).length;
   }, [libraryItems, selectedIds]);
 
-  // Reset source filter if current selection has no content
+  // Reset source filters if selected sources no longer have content
   useEffect(() => {
-    if (availableSources && sourceFilter !== 'all' && !availableSources.includes(sourceFilter)) {
-      setSourceFilter('all');
+    if (availableSources && sourceFilters.length > 0) {
+      const valid = sourceFilters.filter((s) => availableSources.includes(s));
+      if (valid.length !== sourceFilters.length) {
+        setSourceFilters(valid);
+      }
     }
-  }, [availableSources, sourceFilter, setSourceFilter]);
+  }, [availableSources, sourceFilters, setSourceFilters]);
 
   // Auto-switch back to browse when triage completes
   useEffect(() => {
@@ -246,17 +249,24 @@ export default function LibraryScreen() {
 
   // --- Filter drawer ---
   const handleOpenFilterDrawer = useCallback(() => {
-    setPendingSource(sourceFilter);
+    setPendingSources([...sourceFilters]);
     setShowFilterDrawer(true);
-  }, [sourceFilter]);
+  }, [sourceFilters]);
+
+  const handleTogglePendingSource = useCallback((source: SourceKey) => {
+    haptics.selection();
+    setPendingSources((prev) =>
+      prev.includes(source) ? prev.filter((s) => s !== source) : [...prev, source]
+    );
+  }, []);
 
   const handleApplyFilter = useCallback(() => {
-    setSourceFilter(pendingSource);
+    setSourceFilters(pendingSources);
     setShowFilterDrawer(false);
     haptics.selection();
-  }, [pendingSource, setSourceFilter]);
+  }, [pendingSources, setSourceFilters]);
 
-  const isFilterActive = sourceFilter !== 'all';
+  const isFilterActive = sourceFilters.length > 0;
 
   // --- Render content card ---
   const renderContentItem = useCallback(({ item }: { item: Content }) => (
@@ -363,11 +373,17 @@ export default function LibraryScreen() {
   // =====================================================
   // TRIAGE MODE
   // =====================================================
+  // Triage mode uses single-select SourcePills (adapter)
+  const triageSourceFilter = sourceFilters.length === 1 ? sourceFilters[0] : 'all';
+  const handleTriageSourceChange = useCallback((source: 'all' | 'youtube' | 'spotify' | 'tiktok' | 'instagram') => {
+    setSourceFilters(source === 'all' ? [] : [source as SourceKey]);
+  }, [setSourceFilters]);
+
   const renderTriageMode = () => (
     <>
       <SourcePills
-        selectedSource={sourceFilter}
-        onSourceChange={setSourceFilter}
+        selectedSource={triageSourceFilter}
+        onSourceChange={handleTriageSourceChange}
         availableSources={availableSources}
       />
 
@@ -380,9 +396,9 @@ export default function LibraryScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
           }
         >
-          {sourceFilter !== 'all' ? (
+          {sourceFilters.length > 0 ? (
             <EmptyState
-              message={`Aucun contenu ${sourceFilter === 'youtube' ? 'YouTube' : sourceFilter === 'spotify' ? 'Spotify' : sourceFilter === 'tiktok' ? 'TikTok' : 'Instagram'} a trier`}
+              message="Aucun contenu a trier pour ces sources"
               icon={Search}
               hasHeader
             />
@@ -404,7 +420,7 @@ export default function LibraryScreen() {
           }
         >
           <SwipeCardStack
-            key={sourceFilter}
+            key={sourceFilters.join(',')}
             items={filteredInboxItems}
             onSwipeRight={handleSwipeRight}
             onSwipeLeft={handleSwipeLeft}
@@ -497,17 +513,16 @@ export default function LibraryScreen() {
               Sources
             </Text>
 
-            {/* Source options */}
-            {[
-              { key: 'all' as const, label: 'Toutes les sources' },
-              { key: 'youtube' as const, label: 'YouTube' },
-              { key: 'spotify' as const, label: 'Spotify' },
-              { key: 'tiktok' as const, label: 'TikTok' },
-              { key: 'instagram' as const, label: 'Instagram' },
-            ]
-              .filter((s) => s.key === 'all' || !availableSources || availableSources.includes(s.key))
+            {/* Source checkboxes */}
+            {([
+              { key: 'youtube' as SourceKey, label: 'YouTube' },
+              { key: 'spotify' as SourceKey, label: 'Spotify' },
+              { key: 'tiktok' as SourceKey, label: 'TikTok' },
+              { key: 'instagram' as SourceKey, label: 'Instagram' },
+            ] as const)
+              .filter((s) => !availableSources || availableSources.includes(s.key))
               .map((source) => {
-                const isSelected = pendingSource === source.key;
+                const isChecked = pendingSources.includes(source.key);
                 return (
                   <Pressable
                     key={source.key}
@@ -515,26 +530,21 @@ export default function LibraryScreen() {
                       styles.drawerOption,
                       pressed && { opacity: 0.7 },
                     ]}
-                    onPress={() => {
-                      setPendingSource(source.key);
-                      haptics.selection();
-                    }}
+                    onPress={() => handleTogglePendingSource(source.key)}
                   >
                     <View style={styles.drawerOptionLeft}>
-                      {source.key !== 'all' && (
-                        <PlatformIcon platform={source.key} size={18} colored />
-                      )}
+                      <View style={[styles.checkbox, isChecked && styles.checkboxChecked]}>
+                        {isChecked && <Check size={14} color={colors.background} strokeWidth={3} />}
+                      </View>
+                      <PlatformIcon platform={source.key} size={18} colored />
                       <Text
                         variant="body"
-                        weight={isSelected ? 'medium' : 'regular'}
+                        weight={isChecked ? 'medium' : 'regular'}
                         style={{ color: colors.text }}
                       >
                         {source.label}
                       </Text>
                     </View>
-                    {isSelected && (
-                      <Check size={18} color={colors.accent} strokeWidth={2.5} />
-                    )}
                   </Pressable>
                 );
               })}
@@ -718,6 +728,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: borderRadius.xs,
+    borderWidth: 2,
+    borderColor: colors.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
   drawerApplyButton: {
     marginTop: spacing.lg,
