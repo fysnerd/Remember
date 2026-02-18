@@ -401,6 +401,12 @@ export async function runBackfillThemes(): Promise<void> {
 // Internal Helpers (not exported)
 // ============================================================================
 
+/** Extract only the first emoji from a string, fallback to books emoji. */
+function extractFirstEmoji(str: string): string {
+  const match = str.match(/\p{Extended_Pictographic}/u);
+  return match ? match[0] : '\u{1F4DA}';
+}
+
 /**
  * Call LLM to cluster user's tags into coherent themes.
  * Prompt in French, requests 5-15 themes with emoji and color from fixed palette.
@@ -435,7 +441,7 @@ Regles:
 - Fusionne les variantes (ex: "rap", "french rap", "hip hop" = un seul theme)
 - Ignore les tags utilises une seule fois sauf s'ils correspondent a un theme existant
 - Noms de themes en francais, clairs et concis (2-4 mots max)
-- Chaque theme doit avoir un emoji representatif et une couleur hex
+- Chaque theme doit avoir UN SEUL emoji representatif (pas de combinaisons, ex: "🎵" et non "🎵🎶") et une couleur hex
 - Un tag peut appartenir a plusieurs themes si pertinent
 
 Reponds UNIQUEMENT en JSON valide.`,
@@ -494,7 +500,7 @@ Format:
         )
         .map((t: any) => ({
           name: String(t.name).trim(),
-          emoji: typeof t.emoji === 'string' ? t.emoji : '\u{1F4DA}',
+          emoji: extractFirstEmoji(typeof t.emoji === 'string' ? t.emoji : ''),
           color: typeof t.color === 'string' ? t.color : '#6366F1',
           tags: t.tags.filter((tag: any) => typeof tag === 'string'),
         }));
