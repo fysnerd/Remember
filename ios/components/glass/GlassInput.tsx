@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import { View, TextInput, StyleSheet, KeyboardTypeOptions } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 import { Text } from '../ui/Text';
 import { colors, spacing, borderRadius, layout, fonts, glass } from '../../theme';
+
+const useNativeGlass = isGlassEffectAPIAvailable();
 
 interface GlassInputProps {
   label?: string;
@@ -27,6 +30,22 @@ export function GlassInput({
 }: GlassInputProps) {
   const [isFocused, setIsFocused] = useState(false);
 
+  const input = (
+    <TextInput
+      style={styles.input}
+      placeholder={placeholder}
+      placeholderTextColor={colors.textSecondary}
+      value={value}
+      onChangeText={onChangeText}
+      secureTextEntry={secureTextEntry}
+      autoCapitalize={autoCapitalize}
+      keyboardType={keyboardType}
+      keyboardAppearance="dark"
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+    />
+  );
+
   return (
     <View style={styles.container}>
       {label && (
@@ -34,30 +53,31 @@ export function GlassInput({
           {label}
         </Text>
       )}
-      <View style={[
-        styles.inputWrapper,
-        isFocused && styles.focused,
-        error && styles.error,
-      ]}>
-        <BlurView
-          intensity={glass.intensity}
-          tint={glass.tint}
-          style={StyleSheet.absoluteFill}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder={placeholder}
-          placeholderTextColor={colors.textSecondary}
-          value={value}
-          onChangeText={onChangeText}
-          secureTextEntry={secureTextEntry}
-          autoCapitalize={autoCapitalize}
-          keyboardType={keyboardType}
-          keyboardAppearance="dark"
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
-        />
-      </View>
+      {useNativeGlass ? (
+        <GlassView
+          glassEffectStyle={glass.liquidGlass.effect}
+          style={[
+            styles.inputWrapper,
+            isFocused && styles.focused,
+            error && styles.error,
+          ]}
+        >
+          {input}
+        </GlassView>
+      ) : (
+        <View style={[
+          styles.inputWrapper,
+          isFocused && styles.focused,
+          error && styles.error,
+        ]}>
+          <BlurView
+            intensity={glass.intensity}
+            tint={glass.tint}
+            style={StyleSheet.absoluteFill}
+          />
+          {input}
+        </View>
+      )}
       {error && (
         <Text variant="caption" style={styles.errorText}>
           {error}

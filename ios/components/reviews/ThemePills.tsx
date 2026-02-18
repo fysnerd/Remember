@@ -1,10 +1,15 @@
 /**
  * ThemePills - Horizontal scrollable theme filter pills for revisions screen
+ *
+ * Uses GlassContainer for Liquid Glass morphing on iOS 26+.
  */
 
 import { View, ScrollView, StyleSheet, Pressable } from 'react-native';
+import { GlassContainer, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 import { Text } from '../ui';
 import { colors, spacing, borderRadius } from '../../theme';
+
+const useNativeGlass = isGlassEffectAPIAvailable();
 
 interface ThemeOption {
   id: string;
@@ -21,6 +26,42 @@ interface ThemePillsProps {
 export function ThemePills({ themes, selectedThemeId, onThemeChange }: ThemePillsProps) {
   if (themes.length === 0) return null;
 
+  const pills = [
+    <Pressable
+      key="all"
+      style={[styles.pill, selectedThemeId === null && styles.pillActive]}
+      onPress={() => onThemeChange(null)}
+    >
+      <Text
+        variant="caption"
+        weight={selectedThemeId === null ? 'medium' : 'regular'}
+        style={[styles.label, selectedThemeId === null && styles.labelActive]}
+      >
+        Tout
+      </Text>
+    </Pressable>,
+    ...themes.map((theme) => {
+      const isActive = selectedThemeId === theme.id;
+      return (
+        <Pressable
+          key={theme.id}
+          style={[styles.pill, isActive && styles.pillActive]}
+          onPress={() => onThemeChange(theme.id)}
+        >
+          <Text variant="caption" style={styles.emoji}>{theme.emoji}</Text>
+          <Text
+            variant="caption"
+            weight={isActive ? 'medium' : 'regular'}
+            style={[styles.label, isActive && styles.labelActive]}
+            numberOfLines={1}
+          >
+            {theme.name}
+          </Text>
+        </Pressable>
+      );
+    }),
+  ];
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -28,40 +69,13 @@ export function ThemePills({ themes, selectedThemeId, onThemeChange }: ThemePill
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.row}
       >
-        {/* "Tout" pill */}
-        <Pressable
-          style={[styles.pill, selectedThemeId === null && styles.pillActive]}
-          onPress={() => onThemeChange(null)}
-        >
-          <Text
-            variant="caption"
-            weight={selectedThemeId === null ? 'medium' : 'regular'}
-            style={[styles.label, selectedThemeId === null && styles.labelActive]}
-          >
-            Tout
-          </Text>
-        </Pressable>
-
-        {themes.map((theme) => {
-          const isActive = selectedThemeId === theme.id;
-          return (
-            <Pressable
-              key={theme.id}
-              style={[styles.pill, isActive && styles.pillActive]}
-              onPress={() => onThemeChange(theme.id)}
-            >
-              <Text variant="caption" style={styles.emoji}>{theme.emoji}</Text>
-              <Text
-                variant="caption"
-                weight={isActive ? 'medium' : 'regular'}
-                style={[styles.label, isActive && styles.labelActive]}
-                numberOfLines={1}
-              >
-                {theme.name}
-              </Text>
-            </Pressable>
-          );
-        })}
+        {useNativeGlass ? (
+          <GlassContainer spacing={spacing.sm}>
+            {pills}
+          </GlassContainer>
+        ) : (
+          pills
+        )}
       </ScrollView>
     </View>
   );

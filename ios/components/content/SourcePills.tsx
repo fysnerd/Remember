@@ -1,13 +1,17 @@
 /**
  * SourcePills - Simple source filter pills for inbox/triage
  *
- * Lightweight version of FilterBar with just the source pills
+ * Lightweight version of FilterBar with just the source pills.
+ * Uses GlassContainer for Liquid Glass morphing on iOS 26+.
  */
 
 import { View, ScrollView, StyleSheet, Pressable } from 'react-native';
+import { GlassContainer, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 import { Text } from '../ui';
 import { PlatformIcon } from '../icons';
 import { colors, spacing, borderRadius } from '../../theme';
+
+const useNativeGlass = isGlassEffectAPIAvailable();
 
 type Source = 'all' | 'youtube' | 'spotify' | 'tiktok' | 'instagram';
 
@@ -34,6 +38,32 @@ export function SourcePills({ selectedSource, onSourceChange, availableSources }
   // Don't show pills if only "all" would be visible (0 or 1 platform)
   if (filteredSources.length <= 2) return null;
 
+  const pills = filteredSources.map((source) => {
+    const isActive = selectedSource === source.key;
+    return (
+      <Pressable
+        key={source.key}
+        style={[styles.sourcePill, isActive && styles.sourcePillActive]}
+        onPress={() => onSourceChange(source.key)}
+      >
+        {source.key !== 'all' && (
+          <PlatformIcon
+            platform={source.key}
+            size={10}
+            color={isActive ? colors.background : colors.textSecondary}
+          />
+        )}
+        <Text
+          variant="caption"
+          weight={isActive ? 'medium' : 'regular'}
+          style={[styles.sourceLabel, isActive && styles.sourceLabelActive]}
+        >
+          {source.label}
+        </Text>
+      </Pressable>
+    );
+  });
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -41,31 +71,13 @@ export function SourcePills({ selectedSource, onSourceChange, availableSources }
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.sourcesRow}
       >
-        {filteredSources.map((source) => {
-          const isActive = selectedSource === source.key;
-          return (
-            <Pressable
-              key={source.key}
-              style={[styles.sourcePill, isActive && styles.sourcePillActive]}
-              onPress={() => onSourceChange(source.key)}
-            >
-              {source.key !== 'all' && (
-                <PlatformIcon
-                  platform={source.key}
-                  size={10}
-                  color={isActive ? colors.background : colors.textSecondary}
-                />
-              )}
-              <Text
-                variant="caption"
-                weight={isActive ? 'medium' : 'regular'}
-                style={[styles.sourceLabel, isActive && styles.sourceLabelActive]}
-              >
-                {source.label}
-              </Text>
-            </Pressable>
-          );
-        })}
+        {useNativeGlass ? (
+          <GlassContainer spacing={spacing.sm}>
+            {pills}
+          </GlassContainer>
+        ) : (
+          pills
+        )}
       </ScrollView>
     </View>
   );

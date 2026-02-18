@@ -11,6 +11,7 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { View, StyleSheet, Image, Dimensions, Pressable } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 import { User, Clock, X, SkipForward, Heart, Undo2 } from 'lucide-react-native';
 import { SwipeCard, SwipeCardRef } from './SwipeCard';
 import { PlatformIcon } from '../icons';
@@ -19,6 +20,7 @@ import { colors, fonts, spacing, borderRadius, glass } from '../../theme';
 import { haptics } from '../../lib/haptics';
 import type { Content } from '../../types/content';
 
+const useNativeGlass = isGlassEffectAPIAvailable();
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const VISIBLE_COUNT = 3;
 const CARD_HEIGHT = SCREEN_HEIGHT * 0.55;
@@ -308,19 +310,33 @@ function CardDisplay({ item }: { item: Content }) {
 
         {/* Platform badge — frosted glass pill, top-left */}
         <View style={styles.platformBadgeWrap}>
-          <BlurView intensity={50} tint="dark" style={styles.platformBadge}>
-            <View style={[styles.platformDot, { backgroundColor: platformColor }]} />
-            <Text style={styles.platformLabel}>{platformLabel}</Text>
-          </BlurView>
+          {useNativeGlass ? (
+            <GlassView glassEffectStyle="clear" style={styles.platformBadge}>
+              <View style={[styles.platformDot, { backgroundColor: platformColor }]} />
+              <Text style={styles.platformLabel}>{platformLabel}</Text>
+            </GlassView>
+          ) : (
+            <BlurView intensity={50} tint="dark" style={styles.platformBadge}>
+              <View style={[styles.platformDot, { backgroundColor: platformColor }]} />
+              <Text style={styles.platformLabel}>{platformLabel}</Text>
+            </BlurView>
+          )}
         </View>
 
         {/* Duration badge — frosted glass pill, bottom-right */}
         {durationText && (
           <View style={styles.durationWrap}>
-            <BlurView intensity={50} tint="dark" style={styles.durationBadge}>
-              <Clock size={11} color="rgba(255,255,255,0.7)" strokeWidth={2} />
-              <Text style={styles.durationText}>{durationText}</Text>
-            </BlurView>
+            {useNativeGlass ? (
+              <GlassView glassEffectStyle="clear" style={styles.durationBadge}>
+                <Clock size={11} color="rgba(255,255,255,0.7)" strokeWidth={2} />
+                <Text style={styles.durationText}>{durationText}</Text>
+              </GlassView>
+            ) : (
+              <BlurView intensity={50} tint="dark" style={styles.durationBadge}>
+                <Clock size={11} color="rgba(255,255,255,0.7)" strokeWidth={2} />
+                <Text style={styles.durationText}>{durationText}</Text>
+              </BlurView>
+            )}
           </View>
         )}
       </View>

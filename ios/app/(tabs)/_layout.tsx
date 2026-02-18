@@ -3,15 +3,55 @@
  *
  * Glass blur tab bar with Lucide icons.
  * Tab bar is position: absolute so content scrolls behind the blur.
+ * Uses native Liquid Glass on iOS 26+, BlurView fallback otherwise.
  */
 
 import { Tabs } from 'expo-router';
 import { StyleSheet } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 import { House, Compass, Brain, User } from 'lucide-react-native';
 import { TabIcon } from '../../components/icons';
 import { haptics } from '../../lib/haptics';
 import { colors, fonts, glass } from '../../theme';
+
+const useNativeGlass = isGlassEffectAPIAvailable();
+
+function TabBarBackground() {
+  if (useNativeGlass) {
+    return (
+      <GlassView
+        glassEffectStyle={glass.liquidGlass.effect}
+        style={StyleSheet.absoluteFill}
+      />
+    );
+  }
+  return (
+    <BlurView
+      intensity={glass.tabBarIntensity}
+      tint={glass.tabBarTint}
+      style={StyleSheet.absoluteFill}
+    />
+  );
+}
+
+function HeaderBackground() {
+  if (useNativeGlass) {
+    return (
+      <GlassView
+        glassEffectStyle={glass.liquidGlass.effect}
+        style={StyleSheet.absoluteFill}
+      />
+    );
+  }
+  return (
+    <BlurView
+      intensity={glass.tabBarIntensity}
+      tint={glass.tabBarTint}
+      style={StyleSheet.absoluteFill}
+    />
+  );
+}
 
 export default function TabLayout() {
   return (
@@ -24,13 +64,7 @@ export default function TabLayout() {
       screenOptions={{
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textSecondary,
-        tabBarBackground: () => (
-          <BlurView
-            intensity={glass.tabBarIntensity}
-            tint={glass.tabBarTint}
-            style={StyleSheet.absoluteFill}
-          />
-        ),
+        tabBarBackground: () => <TabBarBackground />,
         tabBarStyle: {
           position: 'absolute',
           borderTopWidth: 0,
@@ -40,8 +74,9 @@ export default function TabLayout() {
         tabBarLabelStyle: {
           fontFamily: fonts.medium,
         },
+        headerBackground: () => <HeaderBackground />,
         headerStyle: {
-          backgroundColor: colors.background,
+          backgroundColor: 'transparent',
         },
         headerTintColor: colors.text,
         headerTitleStyle: {

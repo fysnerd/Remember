@@ -7,8 +7,11 @@
 
 import { View, StyleSheet } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 import { Lock } from 'lucide-react-native';
-import { colors, borderRadius } from '../../theme';
+import { colors, borderRadius, glass } from '../../theme';
+
+const useNativeGlass = isGlassEffectAPIAvailable();
 
 interface GlassLockOverlayProps {
   children: React.ReactNode;
@@ -22,7 +25,14 @@ export function GlassLockOverlay({ children, locked = false }: GlassLockOverlayP
       {children}
       {locked && (
         <View style={styles.overlay}>
-          <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+          {useNativeGlass ? (
+            <GlassView
+              glassEffectStyle={glass.liquidGlass.clearEffect}
+              style={StyleSheet.absoluteFill}
+            />
+          ) : (
+            <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+          )}
           <View style={styles.lockBadge}>
             <Lock size={22} color={colors.textSecondary} strokeWidth={1.75} />
           </View>

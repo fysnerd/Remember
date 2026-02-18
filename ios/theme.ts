@@ -98,4 +98,8 @@ export const glass = {
   tint: 'systemThinMaterialDark' as const,
   tabBarTint: 'systemChromeMaterialDark' as const,
   tabBarIntensity: 80,
+  liquidGlass: {
+    effect: 'regular' as const,
+    clearEffect: 'clear' as const,
+  },
 } as const;

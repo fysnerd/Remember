@@ -1,8 +1,11 @@
 import { Pressable, StyleSheet, ActivityIndicator, StyleProp, ViewStyle } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 import { Text } from '../ui/Text';
 import { haptics } from '../../lib/haptics';
 import { colors, spacing, borderRadius, layout, glass } from '../../theme';
+
+const useNativeGlass = isGlassEffectAPIAvailable();
 
 type GlassButtonVariant = 'glass' | 'accent';
 type GlassButtonSize = 'sm' | 'md' | 'lg';
@@ -39,6 +42,33 @@ export function GlassButton({
   const textColor = isAccent ? 'inverse' : 'primary';
   const spinnerColor = isAccent ? colors.background : colors.text;
 
+  const content = loading ? (
+    <ActivityIndicator size="small" color={spinnerColor} />
+  ) : (
+    <Text variant="body" weight="medium" color={textColor}>
+      {children}
+    </Text>
+  );
+
+  // Glass variant with native Liquid Glass
+  if (!isAccent && useNativeGlass) {
+    return (
+      <GlassView
+        glassEffectStyle={glass.liquidGlass.effect}
+        isInteractive
+        style={[
+          styles.container,
+          sizeStyles[size],
+          fullWidth && styles.fullWidth,
+          isDisabled && styles.disabled,
+          style,
+        ]}
+      >
+        {content}
+      </GlassView>
+    );
+  }
+
   return (
     <Pressable
       onPress={() => { haptics.light(); onPress(); }}
@@ -60,13 +90,7 @@ export function GlassButton({
           style={StyleSheet.absoluteFill}
         />
       )}
-      {loading ? (
-        <ActivityIndicator size="small" color={spinnerColor} />
-      ) : (
-        <Text variant="body" weight="medium" color={textColor}>
-          {children}
-        </Text>
-      )}
+      {content}
     </Pressable>
   );
 }

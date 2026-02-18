@@ -1,6 +1,9 @@
 import { BlurView } from 'expo-blur';
+import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 import { View, StyleSheet, ViewStyle, StyleProp } from 'react-native';
 import { borderRadius, glass } from '../../theme';
+
+const useNativeGlass = isGlassEffectAPIAvailable();
 
 interface GlassSurfaceProps {
   children: React.ReactNode;
@@ -15,11 +18,31 @@ export function GlassSurface({
   style,
   radius = 'lg',
 }: GlassSurfaceProps) {
+  const radiusValue = borderRadius[radius];
+
+  if (useNativeGlass) {
+    return (
+      <GlassView
+        glassEffectStyle={glass.liquidGlass.effect}
+        style={[
+          styles.container,
+          glass.shadow,
+          { borderRadius: radiusValue },
+          style,
+        ]}
+      >
+        <View style={styles.content}>
+          {children}
+        </View>
+      </GlassView>
+    );
+  }
+
   return (
     <View style={[
       styles.container,
       glass.shadow,
-      { borderRadius: borderRadius[radius] },
+      { borderRadius: radiusValue },
       style,
     ]}>
       <BlurView
