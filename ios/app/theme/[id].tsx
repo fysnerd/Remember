@@ -3,7 +3,7 @@
  */
 
 import { useState, useCallback, useRef } from 'react';
-import { View, ScrollView, StyleSheet, RefreshControl, Dimensions, Pressable, ActivityIndicator } from 'react-native';
+import { View, ScrollView, StyleSheet, RefreshControl, Dimensions, Pressable, ActivityIndicator, Text as RNText } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -151,7 +151,7 @@ export default function ThemeDetailScreen() {
       >
         {/* Illustration placeholder */}
         <View style={styles.illustration}>
-          <Text style={styles.illustrationEmoji}>{theme?.emoji}</Text>
+          <RNText style={styles.illustrationEmoji}>{theme?.emoji}</RNText>
         </View>
 
         {/* Theme Header */}
