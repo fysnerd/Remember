@@ -1,21 +1,27 @@
 /**
  * Multi-Content Quiz Preview Screen
- * AI-generated name + description, fan stack of thumbnails, question count.
+ * Same layout as theme detail: centered header, action button, content grid.
+ * Fan stack of thumbnails replaces the emoji.
  */
 
-import { View, ScrollView, StyleSheet, Image, ActivityIndicator } from 'react-native';
+import { View, ScrollView, StyleSheet, Image, Dimensions, ActivityIndicator } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text, Button } from '../../../components/ui';
+import { ContentCard } from '../../../components/content';
 import { LoadingScreen } from '../../../components/LoadingScreen';
 import { useContentsByIds, useSelectionSummary, useMultiQuiz } from '../../../hooks';
 import { colors, spacing, borderRadius } from '../../../theme';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const GRID_GAP = spacing.sm;
+const GRID_PADDING = spacing.lg;
+const COLUMN_WIDTH = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP) / 2;
 
 const THUMB_WIDTH = 200;
 const THUMB_HEIGHT = 112; // 16:9
 
 // ---------------------------------------------------------------------------
-// ThumbnailFanStack – renders up to 3 thumbnails in a fan arrangement
+// ThumbnailFanStack
 // ---------------------------------------------------------------------------
 
 function ThumbnailFanStack({ thumbnails }: { thumbnails: string[] }) {
@@ -25,11 +31,10 @@ function ThumbnailFanStack({ thumbnails }: { thumbnails: string[] }) {
   const getTransform = (index: number, total: number) => {
     if (total === 1) return [];
     if (total === 2) {
-      const rotation = (index - 0.5) * 8; // -4°, +4°
+      const rotation = (index - 0.5) * 8;
       const offsetX = (index - 0.5) * 16;
       return [{ rotate: `${rotation}deg` }, { translateX: offsetX }];
     }
-    // 3 items: -6°, 0°, +6°
     const rotation = (index - 1) * 6;
     const offsetX = (index - 1) * 12;
     return [{ rotate: `${rotation}deg` }, { translateX: offsetX }];
@@ -63,8 +68,7 @@ const fanStyles = StyleSheet.create({
     width: THUMB_WIDTH + 70,
     height: THUMB_HEIGHT + 50,
     alignSelf: 'center',
-    marginTop: spacing.xxl,
-    marginBottom: spacing.xl,
+    marginBottom: spacing.sm,
   },
   thumb: {
     width: THUMB_WIDTH,
@@ -87,17 +91,11 @@ const fanStyles = StyleSheet.create({
 export default function MultiQuizPreviewScreen() {
   const { ids } = useLocalSearchParams<{ ids: string }>();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
 
   const contentIds = ids?.split(',').filter(Boolean) ?? [];
 
-  // Fetch content details (for thumbnails)
   const contentQueries = useContentsByIds(contentIds);
-
-  // AI-generated name + description (non-blocking)
   const { data: summary, isLoading: summaryLoading } = useSelectionSummary(contentIds);
-
-  // Prefetch quiz + get question count
   const { data: quizData, isLoading: quizLoading } = useMultiQuiz(contentIds);
 
   const contentsLoading = contentQueries.some((q) => q.isLoading);
@@ -118,6 +116,10 @@ export default function MultiQuizPreviewScreen() {
     });
   };
 
+  const handleContentPress = (contentId: string) => {
+    router.push({ pathname: '/content/[id]', params: { id: contentId } });
+  };
+
   if (isLoading) {
     return (
       <>
@@ -129,45 +131,69 @@ export default function MultiQuizPreviewScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: '', headerBackTitle: 'Retour' }} />
-      <View style={styles.container}>
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-          {/* Thumbnail Fan Stack */}
+      <Stack.Screen
+        options={{
+          title: summary?.name ?? '',
+          headerBackTitle: 'Retour',
+        }}
+      />
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+      >
+        {/* Header - centered */}
+        <View style={styles.header}>
           <ThumbnailFanStack thumbnails={thumbnails} />
 
-          {/* AI-generated name or fallback */}
-          <Text variant="h1" style={styles.title}>
-            {summary?.name ?? `${contentIds.length} contenu${contentIds.length > 1 ? 's' : ''}`}
-          </Text>
+          {summaryLoading ? (
+            <ActivityIndicator color={colors.textSecondary} style={styles.nameLoader} />
+          ) : (
+            <Text variant="h2" style={styles.headerName}>
+              {summary?.name ?? `${contentIds.length} contenu${contentIds.length > 1 ? 's' : ''}`}
+            </Text>
+          )}
 
-          {/* Subtitle: content count + question count */}
-          <Text variant="body" color="secondary" style={styles.subtitle}>
+          <Text variant="caption" color="secondary">
             {contentIds.length} contenu{contentIds.length > 1 ? 's' : ''} · {questionCount} question{questionCount !== 1 ? 's' : ''}
           </Text>
 
-          {/* AI-generated description */}
-          {summaryLoading ? (
-            <ActivityIndicator color={colors.textSecondary} style={styles.descriptionLoader} />
-          ) : summary?.description ? (
-            <Text variant="body" color="secondary" style={styles.description}>
+          {summary?.description ? (
+            <Text variant="caption" color="secondary" style={styles.description}>
               {summary.description}
             </Text>
           ) : null}
-        </ScrollView>
+        </View>
 
-        {/* Sticky bottom button */}
-        <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.md }]}>
+        {/* Action button */}
+        <View style={styles.actionButtons}>
           <Button
             variant="primary"
-            fullWidth
-            size="lg"
             onPress={handleStart}
             disabled={questionCount === 0}
+            style={styles.actionBtn}
           >
             Commencer
           </Button>
         </View>
-      </View>
+
+        {/* Content Grid */}
+        <View style={styles.grid}>
+          {contents.map((item) => item && (
+            <View key={item.id} style={styles.gridItem}>
+              <ContentCard
+                id={item.id}
+                title={item.title}
+                source={item.source}
+                thumbnailUrl={item.thumbnailUrl}
+                channelName={item.channelName}
+                duration={item.duration}
+                status={item.status}
+                onPress={() => handleContentPress(item.id)}
+              />
+            </View>
+          ))}
+        </View>
+      </ScrollView>
     </>
   );
 }
@@ -177,31 +203,40 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  scroll: {
-    flex: 1,
+  content: {
+    padding: GRID_PADDING,
+    paddingBottom: spacing.xl,
   },
-  scrollContent: {
-    padding: spacing.lg,
-    paddingBottom: 100,
+  header: {
+    alignItems: 'center',
+    marginBottom: spacing.lg,
   },
-  title: {
+  headerName: {
     marginBottom: spacing.xs,
   },
-  subtitle: {
-    marginBottom: spacing.md,
+  nameLoader: {
+    marginBottom: spacing.sm,
   },
   description: {
-    lineHeight: 22,
+    marginTop: spacing.sm,
+    textAlign: 'center',
+    lineHeight: 20,
   },
-  descriptionLoader: {
-    alignSelf: 'flex-start',
-    marginTop: spacing.xs,
+  actionButtons: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
-  bottomBar: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.background,
+  actionBtn: {
+    flex: 1,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: GRID_GAP,
+    marginTop: spacing.md,
+  },
+  gridItem: {
+    width: COLUMN_WIDTH,
   },
 });
