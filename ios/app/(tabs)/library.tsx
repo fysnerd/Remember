@@ -9,10 +9,11 @@
  */
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { View, FlatList, ScrollView, StyleSheet, RefreshControl, Dimensions, ActivityIndicator, Pressable } from 'react-native';
+import { View, FlatList, ScrollView, StyleSheet, RefreshControl, Dimensions, ActivityIndicator, Pressable, Modal } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Text, Button } from '../../components/ui';
 import { useToast } from '../../components/ui/Toast';
@@ -21,7 +22,8 @@ import { ThemePills } from '../../components/reviews/ThemePills';
 import { SearchInput } from '../../components/explorer/SearchInput';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
-import { Search, PartyPopper, X, BookOpen, Play } from 'lucide-react-native';
+import { PlatformIcon } from '../../components/icons';
+import { Search, PartyPopper, X, BookOpen, Play, SlidersHorizontal, Check } from 'lucide-react-native';
 import { useLibraryContent, useInbox, useInboxCount, useSwipeTriage, useDebouncedValue, useThemes, useAvailableSources } from '../../hooks';
 import { useContentStore } from '../../stores/contentStore';
 import { haptics } from '../../lib/haptics';
@@ -38,9 +40,12 @@ export default function LibraryScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const tabBarHeight = useBottomTabBarHeight();
+  const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const autoSwitchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showFilterDrawer, setShowFilterDrawer] = useState(false);
+  const [pendingSource, setPendingSource] = useState<'all' | 'youtube' | 'spotify' | 'tiktok' | 'instagram'>('all');
 
   const selectionMode = selectedIds.size > 0;
 
@@ -239,6 +244,20 @@ export default function LibraryScreen() {
     queryClient.invalidateQueries({ queryKey: ['inbox'] });
   }, [setViewMode, queryClient]);
 
+  // --- Filter drawer ---
+  const handleOpenFilterDrawer = useCallback(() => {
+    setPendingSource(sourceFilter);
+    setShowFilterDrawer(true);
+  }, [sourceFilter]);
+
+  const handleApplyFilter = useCallback(() => {
+    setSourceFilter(pendingSource);
+    setShowFilterDrawer(false);
+    haptics.selection();
+  }, [pendingSource, setSourceFilter]);
+
+  const isFilterActive = sourceFilter !== 'all';
+
   // --- Render content card ---
   const renderContentItem = useCallback(({ item }: { item: Content }) => (
     <View style={styles.gridItem}>
@@ -263,20 +282,30 @@ export default function LibraryScreen() {
   // =====================================================
   const renderBrowseMode = () => (
     <>
-      {/* Search bar */}
-      <View style={styles.searchContainer}>
-        <SearchInput
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
+      {/* Search bar + filter icon */}
+      <View style={styles.searchRow}>
+        <View style={styles.searchContainer}>
+          <SearchInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+        <Pressable
+          style={({ pressed }) => [
+            styles.filterButton,
+            isFilterActive && styles.filterButtonActive,
+            pressed && { opacity: 0.7 },
+          ]}
+          onPress={handleOpenFilterDrawer}
+          hitSlop={4}
+        >
+          <SlidersHorizontal
+            size={18}
+            color={isFilterActive ? colors.background : colors.textSecondary}
+            strokeWidth={1.75}
+          />
+        </Pressable>
       </View>
-
-      {/* Source filter pills */}
-      <SourcePills
-        selectedSource={sourceFilter}
-        onSourceChange={setSourceFilter}
-        availableSources={availableSources}
-      />
 
       {/* Theme filter pills */}
       {themeOptions.length > 0 && (
@@ -452,6 +481,80 @@ export default function LibraryScreen() {
         </View>
       )}
 
+      {/* Source filter drawer */}
+      <Modal
+        visible={showFilterDrawer}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowFilterDrawer(false)}
+      >
+        <Pressable style={styles.drawerOverlay} onPress={() => setShowFilterDrawer(false)}>
+          <Pressable style={[styles.drawerSheet, { paddingBottom: insets.bottom + spacing.lg }]}>
+            {/* Handle bar */}
+            <View style={styles.drawerHandle} />
+
+            <Text variant="h3" weight="semibold" style={styles.drawerTitle}>
+              Sources
+            </Text>
+
+            {/* Source options */}
+            {[
+              { key: 'all' as const, label: 'Toutes les sources' },
+              { key: 'youtube' as const, label: 'YouTube' },
+              { key: 'spotify' as const, label: 'Spotify' },
+              { key: 'tiktok' as const, label: 'TikTok' },
+              { key: 'instagram' as const, label: 'Instagram' },
+            ]
+              .filter((s) => s.key === 'all' || !availableSources || availableSources.includes(s.key))
+              .map((source) => {
+                const isSelected = pendingSource === source.key;
+                return (
+                  <Pressable
+                    key={source.key}
+                    style={({ pressed }) => [
+                      styles.drawerOption,
+                      pressed && { opacity: 0.7 },
+                    ]}
+                    onPress={() => {
+                      setPendingSource(source.key);
+                      haptics.selection();
+                    }}
+                  >
+                    <View style={styles.drawerOptionLeft}>
+                      {source.key !== 'all' && (
+                        <PlatformIcon platform={source.key} size={18} colored />
+                      )}
+                      <Text
+                        variant="body"
+                        weight={isSelected ? 'medium' : 'regular'}
+                        style={{ color: colors.text }}
+                      >
+                        {source.label}
+                      </Text>
+                    </View>
+                    {isSelected && (
+                      <Check size={18} color={colors.accent} strokeWidth={2.5} />
+                    )}
+                  </Pressable>
+                );
+              })}
+
+            {/* Apply button */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.drawerApplyButton,
+                pressed && { opacity: 0.85 },
+              ]}
+              onPress={handleApplyFilter}
+            >
+              <Text variant="body" weight="medium" style={{ color: colors.background }}>
+                Appliquer
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <ToastComponent />
     </Animated.View>
   );
@@ -497,10 +600,30 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.95 }],
   },
 
-  // --- Search ---
+  // --- Search + filter ---
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+  },
   searchContainer: {
-    marginHorizontal: spacing.lg,
-    marginVertical: spacing.sm,
+    flex: 1,
+  },
+  filterButton: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterButtonActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
 
   // --- Swipe mode ---
@@ -556,5 +679,51 @@ const styles = StyleSheet.create({
   quizButtonText: {
     color: colors.background,
     fontSize: 15,
+  },
+
+  // --- Filter drawer ---
+  drawerOverlay: {
+    flex: 1,
+    backgroundColor: colors.overlay,
+    justifyContent: 'flex-end',
+  },
+  drawerSheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+  },
+  drawerHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.borderLight,
+    alignSelf: 'center',
+    marginBottom: spacing.lg,
+  },
+  drawerTitle: {
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
+  drawerOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  drawerOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  drawerApplyButton: {
+    marginTop: spacing.lg,
+    backgroundColor: colors.accent,
+    paddingVertical: 14,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
   },
 });
