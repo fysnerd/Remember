@@ -2,7 +2,7 @@
  * Hook exports
  */
 
-export { useContentList, useLibraryContent, useContent, useContentsByIds, useTriageMutation } from './useContent';
+export { useContentList, useLibraryContent, useContent, useContentsByIds, useSelectionSummary, useTriageMutation } from './useContent';
 export { useInbox, useInboxCount } from './useInbox';
 export { useQuiz, useMultiQuiz, useTopicQuiz, useThemeQuiz, useSubmitAnswer, useCreateSession, useCompleteSession } from './useQuiz';
 export { useReviews, useCompletedItems, useReviewStats, useCompletedSessions, useSessionDetail, useGenerateSessionMemo } from './useReviews';

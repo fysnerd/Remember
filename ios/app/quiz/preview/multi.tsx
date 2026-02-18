@@ -1,18 +1,18 @@
 /**
  * Multi-Content Quiz Preview Screen
- * Fan stack of thumbnails + content count + question count before starting.
+ * AI-generated name + description, fan stack of thumbnails, question count.
  */
 
-import { View, ScrollView, StyleSheet, Image } from 'react-native';
+import { View, ScrollView, StyleSheet, Image, ActivityIndicator } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text, Button } from '../../../components/ui';
 import { LoadingScreen } from '../../../components/LoadingScreen';
-import { useContentsByIds, useMultiQuiz } from '../../../hooks';
+import { useContentsByIds, useSelectionSummary, useMultiQuiz } from '../../../hooks';
 import { colors, spacing, borderRadius } from '../../../theme';
 
-const THUMB_WIDTH = 160;
-const THUMB_HEIGHT = 90; // 16:9
+const THUMB_WIDTH = 200;
+const THUMB_HEIGHT = 112; // 16:9
 
 // ---------------------------------------------------------------------------
 // ThumbnailFanStack – renders up to 3 thumbnails in a fan arrangement
@@ -26,12 +26,12 @@ function ThumbnailFanStack({ thumbnails }: { thumbnails: string[] }) {
     if (total === 1) return [];
     if (total === 2) {
       const rotation = (index - 0.5) * 8; // -4°, +4°
-      const offsetX = (index - 0.5) * 14;
+      const offsetX = (index - 0.5) * 16;
       return [{ rotate: `${rotation}deg` }, { translateX: offsetX }];
     }
     // 3 items: -6°, 0°, +6°
     const rotation = (index - 1) * 6;
-    const offsetX = (index - 1) * 10;
+    const offsetX = (index - 1) * 12;
     return [{ rotate: `${rotation}deg` }, { translateX: offsetX }];
   };
 
@@ -60,7 +60,7 @@ function ThumbnailFanStack({ thumbnails }: { thumbnails: string[] }) {
 
 const fanStyles = StyleSheet.create({
   container: {
-    width: THUMB_WIDTH + 60,
+    width: THUMB_WIDTH + 70,
     height: THUMB_HEIGHT + 50,
     alignSelf: 'center',
     marginTop: spacing.xxl,
@@ -73,7 +73,6 @@ const fanStyles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    // Shadow for depth
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -94,6 +93,9 @@ export default function MultiQuizPreviewScreen() {
 
   // Fetch content details (for thumbnails)
   const contentQueries = useContentsByIds(contentIds);
+
+  // AI-generated name + description (non-blocking)
+  const { data: summary, isLoading: summaryLoading } = useSelectionSummary(contentIds);
 
   // Prefetch quiz + get question count
   const { data: quizData, isLoading: quizLoading } = useMultiQuiz(contentIds);
@@ -133,27 +135,24 @@ export default function MultiQuizPreviewScreen() {
           {/* Thumbnail Fan Stack */}
           <ThumbnailFanStack thumbnails={thumbnails} />
 
-          {/* Title */}
+          {/* AI-generated name or fallback */}
           <Text variant="h1" style={styles.title}>
-            {contentIds.length} contenu{contentIds.length > 1 ? 's' : ''} selectionne{contentIds.length > 1 ? 's' : ''}
+            {summary?.name ?? `${contentIds.length} contenu${contentIds.length > 1 ? 's' : ''}`}
           </Text>
 
-          {/* Subtitle - question count */}
+          {/* Subtitle: content count + question count */}
           <Text variant="body" color="secondary" style={styles.subtitle}>
-            {questionCount} question{questionCount !== 1 ? 's' : ''}
+            {contentIds.length} contenu{contentIds.length > 1 ? 's' : ''} · {questionCount} question{questionCount !== 1 ? 's' : ''}
           </Text>
 
-          {/* Content list card */}
-          {contents.length > 0 && (
-            <View style={styles.contentsCard}>
-              <Text variant="caption" color="secondary" style={styles.contentsLabel}>
-                Sujets abordes
-              </Text>
-              <Text variant="body" color="secondary">
-                {contents.map((c) => c!.title).join(' · ')}
-              </Text>
-            </View>
-          )}
+          {/* AI-generated description */}
+          {summaryLoading ? (
+            <ActivityIndicator color={colors.textSecondary} style={styles.descriptionLoader} />
+          ) : summary?.description ? (
+            <Text variant="body" color="secondary" style={styles.description}>
+              {summary.description}
+            </Text>
+          ) : null}
         </ScrollView>
 
         {/* Sticky bottom button */}
@@ -189,17 +188,14 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   subtitle: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
-  contentsCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
+  description: {
+    lineHeight: 22,
   },
-  contentsLabel: {
-    marginBottom: spacing.sm,
+  descriptionLoader: {
+    alignSelf: 'flex-start',
+    marginTop: spacing.xs,
   },
   bottomBar: {
     paddingHorizontal: spacing.lg,

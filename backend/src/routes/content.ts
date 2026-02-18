@@ -768,6 +768,43 @@ contentRouter.post('/triage/bulk', async (req: Request, res: Response, next: Nex
   }
 });
 
+// POST /api/content/selection-summary - Generate name + description for a multi-content selection
+contentRouter.post('/selection-summary', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { contentIds } = req.body;
+
+    if (!Array.isArray(contentIds) || contentIds.length === 0) {
+      return res.status(400).json({ error: 'contentIds must be a non-empty array' });
+    }
+
+    const contents = await prisma.content.findMany({
+      where: { id: { in: contentIds } },
+      select: { title: true, synopsis: true },
+    });
+
+    if (contents.length === 0) {
+      return res.status(404).json({ error: 'No contents found' });
+    }
+
+    const titlesBlock = contents.map((c, i) => `${i + 1}. ${c.title}`).join('\n');
+
+    const result = await generateText(
+      `A partir de ces titres de contenus, genere:\n1. Un nom court (2-4 mots) qui capture le theme commun\n2. Une description courte (1 phrase, max 15 mots) qui resume ce que couvre ce quiz\n\nTitres:\n${titlesBlock}\n\nReponds en JSON:\n{"name": "...", "description": "..."}`,
+      {
+        system: 'Tu es un assistant concis. Reponds UNIQUEMENT en JSON valide. Le nom et la description doivent etre en francais.',
+        temperature: 0.4,
+        jsonMode: true,
+      }
+    );
+
+    const parsed = JSON.parse(result) as { name: string; description: string };
+    return res.json(parsed);
+  } catch (error) {
+    log.error({ err: error }, 'Failed to generate selection summary');
+    return next(error);
+  }
+});
+
 // POST /api/content/bulk-generate-quiz - Generate quiz for multiple contents
 contentRouter.post('/bulk-generate-quiz', async (req: Request, res: Response, next: NextFunction) => {
   try {

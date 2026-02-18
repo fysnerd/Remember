@@ -148,6 +148,23 @@ export function useContentsByIds(ids: string[]) {
   });
 }
 
+// Selection summary (AI-generated name + description for multi-content quiz)
+export function useSelectionSummary(contentIds: string[]) {
+  const key = contentIds.sort().join(',');
+  return useQuery({
+    queryKey: ['content', 'selection-summary', key],
+    queryFn: async () => {
+      const { data } = await api.post<{ name: string; description: string }>(
+        '/content/selection-summary',
+        { contentIds }
+      );
+      return data;
+    },
+    enabled: contentIds.length >= 2,
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
 // Triage mutation (learn/archive)
 export function useTriageMutation() {
   const queryClient = useQueryClient();
