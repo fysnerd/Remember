@@ -1234,6 +1234,33 @@ reviewRouter.post('/session/:id/complete', async (req: Request, res: Response, n
       },
     });
 
+    // Update linked DailyRecommendation if any
+    await prisma.dailyRecommendation.updateMany({
+      where: { sessionId: session.id, completedAt: null },
+      data: { completedAt: new Date() },
+    });
+
+    // Compute daily progress for the response
+    const userSettings = await prisma.userSettings.findUnique({ where: { userId: req.user!.id } });
+    const tz = userSettings?.timezone || 'UTC';
+    let todayStr: string;
+    try {
+      todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
+    } catch {
+      todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC' }).format(new Date());
+    }
+    const todayDate = new Date(todayStr + 'T00:00:00Z');
+
+    const dailyRecs = await prisma.dailyRecommendation.findMany({
+      where: { userId: req.user!.id, date: todayDate },
+    });
+
+    const dailyProgress = dailyRecs.length > 0 ? {
+      completed: dailyRecs.filter(r => r.completedAt).length,
+      total: dailyRecs.length,
+      allDone: dailyRecs.every(r => r.completedAt),
+    } : undefined;
+
     return res.json({
       session: updatedSession,
       stats: {
@@ -1241,6 +1268,7 @@ reviewRouter.post('/session/:id/complete', async (req: Request, res: Response, n
         correctCount,
         accuracy: totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0,
       },
+      dailyProgress,
     });
   } catch (error) {
     return next(error);

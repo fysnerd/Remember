@@ -42,6 +42,7 @@ model User {
   settings      UserSettings?
   pushTokens    PushToken[]
   themes        Theme[]
+  dailyRecommendations DailyRecommendation[]
 
   @@index([email])
 }
@@ -539,4 +540,24 @@ model PushToken {
 
   @@unique([userId, token])
   @@index([userId])
+}
+
+// ============================================================================
+// Daily Recommendations (fixed 3 per day)
+// ============================================================================
+
+model DailyRecommendation {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date        DateTime  @db.Date
+  slot        Int                      // 0, 1, 2
+  targetType  String                   // 'content' | 'theme'
+  targetId    String                   // Content.id or Theme.id
+  sessionId   String?                  // QuizSession.id (linked when user starts quiz)
+  completedAt DateTime?                // Copied from QuizSession.completedAt
+  createdAt   DateTime  @default(now())
+
+  @@unique([userId, date, slot])
+  @@index([userId, date])
 }

@@ -122,16 +122,32 @@ export async function runReminderWorker(): Promise<void> {
         emailSentCount++;
       }
 
-      // Send push notification (only if enough cards are due)
-      if (dueCount >= MIN_CARDS_FOR_PUSH) {
-        const streakText = streak?.currentStreak
-          ? ` (serie de ${streak.currentStreak} jours)`
-          : '';
+      // Send merged push notification (daily quiz + review cards)
+      const hasReadyContent = await prisma.content.count({
+        where: { userId: settings.userId, status: 'READY' },
+      });
+
+      if (hasReadyContent > 0 || dueCount >= MIN_CARDS_FOR_PUSH) {
+        const streakSuffix = streak?.currentStreak ? ` \uD83D\uDD25 ${streak.currentStreak}j` : '';
+        let pushTitle: string;
+        let pushBody: string;
+
+        if (hasReadyContent > 0 && dueCount >= MIN_CARDS_FOR_PUSH) {
+          pushTitle = 'Tes quiz du jour sont prets !';
+          pushBody = `+ ${dueCount} cartes a reviser${streakSuffix}`;
+        } else if (hasReadyContent > 0) {
+          pushTitle = 'Tes quiz du jour sont prets !';
+          pushBody = `3 quiz t'attendent${streakSuffix}`;
+        } else {
+          pushTitle = 'Tes connaissances t\'attendent !';
+          pushBody = `${dueCount} cartes a reviser aujourd'hui${streakSuffix}`;
+        }
+
         const pushResult = await sendPushToUser(
           settings.userId,
-          'Tes connaissances t\'attendent !',
-          `${dueCount} cartes a reviser aujourd'hui${streakText}`,
-          { screen: '/(tabs)/reviews' }
+          pushTitle,
+          pushBody,
+          { screen: '/(tabs)' }
         );
         if (pushResult.sent > 0) {
           pushSentCount++;
