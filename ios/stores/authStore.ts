@@ -13,6 +13,8 @@ interface User {
   email: string;
   name?: string;
   plan?: string;
+  onboardingCompleted?: boolean;
+  onboardingStep?: number;
 }
 
 interface LoginResponse {
@@ -28,6 +30,7 @@ interface AuthState {
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, name?: string) => Promise<void>;
+  loginWithTokens: (accessToken: string, refreshToken: string, user: User) => Promise<void>;
   logout: () => void;
   checkAuth: () => Promise<void>;
   clearError: () => void;
@@ -82,6 +85,16 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ isLoading: false, error: message });
       throw new Error(message);
     }
+  },
+
+  loginWithTokens: async (accessToken: string, refreshToken: string, user: User) => {
+    await setTokens(accessToken, refreshToken);
+    set({
+      user,
+      isAuthenticated: true,
+      isLoading: false,
+      error: null,
+    });
   },
 
   logout: () => {

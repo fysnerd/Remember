@@ -81,6 +81,9 @@ const envSchema = z.object({
   INSTAGRAM_PROXY_URL: z.string().optional(),
   INSTAGRAM_PROXY_USER: z.string().optional(),
   INSTAGRAM_PROXY_PASS: z.string().optional(),
+
+  // Apple Sign In
+  APPLE_BUNDLE_ID: z.string().default('com.fysnerd.ankora'),
 });
 
 // Parse and validate
@@ -185,5 +188,9 @@ export const config = {
     url: env.INSTAGRAM_PROXY_URL || '',
     user: env.INSTAGRAM_PROXY_USER || '',
     pass: env.INSTAGRAM_PROXY_PASS || '',
+  },
+
+  apple: {
+    bundleId: env.APPLE_BUNDLE_ID,
   },
 } as const;

@@ -2,7 +2,7 @@
  * Root Layout - Providers + Auth Guard + Font Loading + Stack Navigation
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -20,17 +20,33 @@ import { queryClient } from '../lib/queryClient';
 import { useAuthStore } from '../stores/authStore';
 import { useNotifications } from '../hooks/useNotifications';
 import { useBackgroundSync } from '../hooks/useBackgroundSync';
+import { initRevenueCat, identifyUser } from '../lib/revenueCat';
 
 // Prevent splash screen from auto-hiding (must be in module scope)
 SplashScreen.preventAutoHideAsync();
 
 // Public routes that don't require auth
-const PUBLIC_ROUTES = ['login', 'signup'];
+const PUBLIC_ROUTES = ['login', 'signup', 'onboarding', 'magic-link'];
+
+// Map onboarding step to route for resume
+const ONBOARDING_STEP_ROUTES: Record<number, string> = {
+  0: '/onboarding/splash',
+  1: '/onboarding/name',
+  2: '/onboarding/auth',
+  3: '/onboarding/interests',
+  4: '/onboarding/objective',
+  5: '/onboarding/pace',
+  6: '/onboarding/source',
+  7: '/onboarding/attribution',
+  9: '/onboarding/welcome',
+  10: '/onboarding/notifications',
+};
 
 export default function RootLayout() {
-  const { isAuthenticated, isLoading, checkAuth } = useAuthStore();
+  const { isAuthenticated, isLoading, checkAuth, user } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
+  const revenueCatInitialized = useRef(false);
 
   // Load Geist fonts
   const [fontsLoaded] = useFonts({
@@ -47,6 +63,21 @@ export default function RootLayout() {
   // Trigger background sync on launch / foreground (cooldown enforced server-side)
   useBackgroundSync(isAuthenticated);
 
+  // Init RevenueCat
+  useEffect(() => {
+    if (!revenueCatInitialized.current) {
+      revenueCatInitialized.current = true;
+      initRevenueCat().catch(() => {});
+    }
+  }, []);
+
+  // Identify user in RevenueCat after auth
+  useEffect(() => {
+    if (isAuthenticated && user?.id) {
+      identifyUser(user.id).catch(() => {});
+    }
+  }, [isAuthenticated, user?.id]);
+
   // Check auth on mount
   useEffect(() => {
     checkAuth();
@@ -59,7 +90,7 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, isLoading]);
 
-  // Auth guard - redirect based on auth state
+  // Auth guard - 3-way redirect based on auth + onboarding state
   useEffect(() => {
     if (isLoading) return;
 
@@ -67,13 +98,23 @@ export default function RootLayout() {
     const isPublicRoute = PUBLIC_ROUTES.includes(firstSegment);
 
     if (!isAuthenticated && !isPublicRoute) {
-      // Not logged in, trying to access protected route -> redirect to login
-      router.replace('/login');
-    } else if (isAuthenticated && isPublicRoute) {
-      // Logged in but on login/signup page -> redirect to tabs
+      // Not logged in → onboarding splash
+      router.replace('/onboarding/splash' as any);
+    } else if (isAuthenticated && user && !user.onboardingCompleted) {
+      // Logged in but onboarding not done → resume at saved step
+      // Don't redirect if already on an onboarding screen
+      if (firstSegment !== 'onboarding') {
+        const step = user.onboardingStep ?? 0;
+        // If step <= 2, user is post-auth so go to interests (step 3)
+        const resumeStep = step <= 2 ? 3 : step;
+        const route = ONBOARDING_STEP_ROUTES[resumeStep] || '/onboarding/interests';
+        router.replace(route as any);
+      }
+    } else if (isAuthenticated && user?.onboardingCompleted && isPublicRoute) {
+      // Logged in + onboarding done but on public route → go home
       router.replace('/(tabs)');
     }
-  }, [isAuthenticated, isLoading, segments]);
+  }, [isAuthenticated, isLoading, segments, user?.onboardingCompleted]);
 
   // Keep splash screen visible while loading
   if (isLoading || !fontsLoaded) {
@@ -95,6 +136,8 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="signup" options={{ headerShown: false }} />
+        <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+        <Stack.Screen name="magic-link" options={{ headerShown: false }} />
         <Stack.Screen
           name="content/[id]"
           options={{

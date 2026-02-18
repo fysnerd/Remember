@@ -24,6 +24,13 @@ model User {
   emailVerified Boolean   @default(false)
   verifyToken   String?
 
+  // Onboarding
+  onboardingCompleted Boolean @default(false)
+  onboardingStep      Int     @default(0) // 0=not started, 1-10=current step
+  authProvider        String? // 'apple' | 'google' | 'email'
+  appleUserId         String? @unique
+  attributionSource   String[]
+
   // Trial & Subscription
   trialEndsAt   DateTime?
   plan          Plan      @default(FREE)
@@ -56,6 +63,11 @@ model UserSettings {
   dailyReminderTime String  @default("09:00")
   timezone          String  @default("UTC")
   newCardsPerDay    Int     @default(20)
+
+  // Onboarding preferences
+  interests       String[]
+  objective       String?  // "etudes" | "travail" | "culture" | "curiosite"
+  reviewPace      String?  // "1-2/sem" | "3-5/sem" | "1/jour" | "plusieurs/jour"
 
   // Notifications
   emailReminders    Boolean @default(true)
@@ -561,4 +573,19 @@ model DailyRecommendation {
 
   @@unique([userId, date, slot])
   @@index([userId, date])
+}
+
+// ============================================================================
+// Magic Link Tokens (passwordless auth)
+// ============================================================================
+
+model MagicLinkToken {
+  id        String    @id @default(cuid())
+  email     String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([email, createdAt])
 }

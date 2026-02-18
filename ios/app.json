@@ -17,6 +17,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.fysnerd.ankora",
+      "usesAppleSignIn": true,
       "associatedDomains": [
         "applinks:api.ankora.study"
       ],
@@ -48,6 +49,8 @@
       "expo-secure-store",
       "expo-dev-client",
       "expo-web-browser",
+      "expo-apple-authentication",
+      "expo-crypto",
       [
         "expo-notifications",
         {
