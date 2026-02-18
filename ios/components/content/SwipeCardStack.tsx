@@ -16,6 +16,7 @@ import { User, Clock, X, SkipForward, Heart, Undo2 } from 'lucide-react-native';
 import { SwipeCard, SwipeCardRef } from './SwipeCard';
 import { PlatformIcon } from '../icons';
 import { Text } from '../ui';
+import { useTabBarHeight } from '../../hooks/useTabBarHeight';
 import { colors, fonts, spacing, borderRadius, glass } from '../../theme';
 import { haptics } from '../../lib/haptics';
 import type { Content } from '../../types/content';
@@ -64,6 +65,7 @@ export function SwipeCardStack({
   const [currentIndex, setCurrentIndex] = useState(0);
   const topCardRef = useRef<SwipeCardRef>(null);
   const [lastAction, setLastAction] = useState<LastAction>(null);
+  const tabBarHeight = useTabBarHeight();
 
   // Stable snapshot: prevents query refetch from removing swiped items mid-stack.
   // Only append truly new items (from pagination); never shrink.
@@ -210,7 +212,7 @@ export function SwipeCardStack({
       </View>
 
       {/* Action buttons */}
-      <View style={styles.actionsRow}>
+      <View style={[styles.actionsRow, { paddingBottom: tabBarHeight + spacing.sm }]}>
         {/* Undo button — only visible when there's a previous action */}
         <Pressable
           style={({ pressed }) => [
