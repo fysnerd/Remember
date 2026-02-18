@@ -2,7 +2,7 @@
  * Theme Memo Screen - Aggregated synthesis memo from all contents of a theme
  */
 
-import { View, ScrollView, StyleSheet, Pressable, Share } from 'react-native';
+import { View, ScrollView, StyleSheet } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Markdown from 'react-native-markdown-display';
@@ -75,20 +75,7 @@ export default function ThemeMemoScreen() {
   const insets = useSafeAreaInsets();
   const { data: memo, isLoading, error, refetch } = useThemeMemo(id!);
   const refreshMutation = useRefreshThemeMemo();
-  const { show, ToastComponent } = useToast();
-
-  const handleShare = async () => {
-    if (!memo) return;
-
-    try {
-      await Share.share({
-        message: memo.content,
-        title: `Memo - ${memo.themeName}`,
-      });
-    } catch (error) {
-      show('Erreur lors du partage', 'error');
-    }
-  };
+  const { show } = useToast();
 
   const handleRefresh = () => {
     if (!id) return;
@@ -117,25 +104,8 @@ export default function ThemeMemoScreen() {
         options={{
           title: memo.themeName,
           headerBackTitle: 'Retour',
-          headerRight: () => (
-            <Pressable
-              onPress={handleShare}
-              hitSlop={8}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                backgroundColor: colors.surface,
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
-            >
-              <Text variant="body" style={{ textAlign: 'center' }}>📤</Text>
-            </Pressable>
-          ),
         }}
       />
-      <ToastComponent />
       <ScrollView
         style={styles.container}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.lg }]}

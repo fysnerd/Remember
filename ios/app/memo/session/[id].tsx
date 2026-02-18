@@ -3,12 +3,12 @@
  */
 
 import { useEffect } from 'react';
-import { View, ScrollView, StyleSheet, Pressable, Share, Image } from 'react-native';
+import { View, ScrollView, StyleSheet, Image } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Markdown from 'react-native-markdown-display';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { Text, Button, useToast } from '../../../components/ui';
+import { Text, Button } from '../../../components/ui';
 import { LoadingScreen } from '../../../components/LoadingScreen';
 import { ErrorState } from '../../../components/ErrorState';
 import { PlatformIcon } from '../../../components/icons/PlatformIcon';
@@ -83,7 +83,6 @@ export default function SessionMemoScreen() {
   const insets = useSafeAreaInsets();
   const { data: session, isLoading, error, refetch } = useSessionDetail(id);
   const memoMutation = useGenerateSessionMemo();
-  const { show, ToastComponent } = useToast();
 
   // Auto-generate memo only once if session is completed but has no memo yet
   useEffect(() => {
@@ -93,15 +92,6 @@ export default function SessionMemoScreen() {
   }, [session?.id]); // Only trigger on first load, not on aiMemo changes
 
   const memo = memoMutation.data?.memo ?? session?.aiMemo;
-
-  const handleShare = async () => {
-    if (!memo) return;
-    try {
-      await Share.share({ message: memo, title: 'Memo de session' });
-    } catch {
-      show('Erreur lors du partage', 'error');
-    }
-  };
 
   if (isLoading) return <LoadingScreen />;
   if (!session) return <ErrorState message="Session introuvable" onRetry={refetch} hasHeader />;
@@ -128,18 +118,8 @@ export default function SessionMemoScreen() {
         options={{
           title: 'Memo',
           headerBackTitle: 'Retour',
-          headerRight: () => memo ? (
-            <Pressable
-              onPress={handleShare}
-              hitSlop={8}
-              style={styles.shareButton}
-            >
-              <Text variant="body" style={{ textAlign: 'center' }}>📤</Text>
-            </Pressable>
-          ) : null,
         }}
       />
-      <ToastComponent />
       <ScrollView
         style={styles.container}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.lg }]}
@@ -205,14 +185,6 @@ export default function SessionMemoScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg },
-  shareButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   header: {
     marginBottom: spacing.lg,
     gap: spacing.md,

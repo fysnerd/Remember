@@ -3,11 +3,11 @@
  * Header shows content title, themes, and generation date
  */
 
-import { View, ScrollView, StyleSheet, Pressable, Share } from 'react-native';
+import { View, ScrollView, StyleSheet, Linking } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Markdown from 'react-native-markdown-display';
-import { Text, Button, useToast } from '../../components/ui';
+import { Text, Button } from '../../components/ui';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { ErrorState } from '../../components/ErrorState';
 import { useMemo, useContent } from '../../hooks';
@@ -93,23 +93,19 @@ export default function MemoScreen() {
   const insets = useSafeAreaInsets();
   const { data: memo, isLoading: memoLoading, error: memoError, refetch } = useMemo(id!);
   const { data: content } = useContent(id!);
-  const { show, ToastComponent } = useToast();
 
   const handleDone = () => {
     router.replace('/(tabs)');
   };
 
-  const handleShare = async () => {
-    if (!memo) return;
-
-    try {
-      await Share.share({
-        message: memo.content,
-        title: content?.title || 'Memo Ankora',
-      });
-    } catch (error) {
-      show('Erreur lors du partage', 'error');
+  const handleWatchVideo = () => {
+    if (content?.url) {
+      Linking.openURL(content.url);
     }
+  };
+
+  const handleRedoQuiz = () => {
+    router.push({ pathname: '/quiz/[id]' as any, params: { id: id! } });
   };
 
   if (memoLoading) {
@@ -130,18 +126,8 @@ export default function MemoScreen() {
         options={{
           title: '',
           headerBackTitle: 'Retour',
-          headerRight: () => (
-            <Pressable
-              onPress={handleShare}
-              hitSlop={8}
-              style={styles.shareButton}
-            >
-              <Text variant="body" style={{ textAlign: 'center' }}>📤</Text>
-            </Pressable>
-          ),
         }}
       />
-      <ToastComponent />
       <ScrollView
         style={styles.container}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.lg }]}
@@ -174,9 +160,19 @@ export default function MemoScreen() {
         {/* Markdown Content */}
         <Markdown style={markdownStyles}>{memo.content}</Markdown>
 
-        {/* Done button */}
-        <View style={styles.doneButton}>
-          <Button variant="primary" fullWidth onPress={handleDone}>
+        {/* Actions */}
+        <View style={styles.actions}>
+          {content?.url && (
+            <Button variant="secondary" fullWidth onPress={handleWatchVideo}>
+              Consulter le contenu
+            </Button>
+          )}
+          {content && (content.quizCount ?? 0) > 0 && (
+            <Button variant="primary" fullWidth onPress={handleRedoQuiz}>
+              Refaire le quiz
+            </Button>
+          )}
+          <Button variant="secondary" fullWidth onPress={handleDone}>
             OK
           </Button>
         </View>
@@ -188,14 +184,6 @@ export default function MemoScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg },
-  shareButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   header: {
     marginBottom: spacing.lg,
     paddingBottom: spacing.lg,
@@ -219,5 +207,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
   },
-  doneButton: { marginTop: spacing.xl },
+  actions: { marginTop: spacing.xl, gap: spacing.sm },
 });
