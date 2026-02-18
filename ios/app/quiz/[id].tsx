@@ -133,10 +133,10 @@ export default function QuizScreen() {
 
   const handleQuit = () => router.back();
   const handleViewMemo = () => {
-    if (sessionId) {
-      router.replace(`/memo/session/${sessionId}`);
-    } else {
+    if (isMulti) {
       router.replace('/(tabs)');
+    } else {
+      router.replace(`/memo/${id}`);
     }
   };
   const handleClose = () => router.replace('/(tabs)');

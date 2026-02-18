@@ -123,7 +123,12 @@ export default function ReviewsScreen() {
               >
                 <SessionCard
                   session={session}
-                  onPress={() => router.push({ pathname: '/memo/session/[id]' as any, params: { id: session.id } })}
+                  onPress={() => {
+                    const contentId = session.contents[0]?.id;
+                    if (contentId) {
+                      router.push({ pathname: '/memo/[id]' as any, params: { id: contentId } });
+                    }
+                  }}
                 />
               </Animated.View>
             ))}
