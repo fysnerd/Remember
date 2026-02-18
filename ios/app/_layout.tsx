@@ -3,7 +3,6 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { Alert } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -85,36 +84,12 @@ export default function RootLayout() {
     if (__DEV__) return;
     (async () => {
       try {
-        // Read native expo-updates logs for deep diagnostics
-        const logs = await Updates.readLogEntriesAsync(300);
-        const recentLogs = logs
-          .slice(-10)
-          .map((l: any) => `[${l.level}] ${l.message}`)
-          .join('\n');
-
-        const info = [
-          `channel: ${(Updates as any).channel}`,
-          `runtime: ${(Updates as any).runtimeVersion}`,
-          `updateId: ${(Updates as any).updateId}`,
-          `embedded: ${(Updates as any).isEmbeddedLaunch}`,
-          `enabled: ${(Updates as any).isEnabled}`,
-        ].join('\n');
-
         const check = await Updates.checkForUpdateAsync();
         if (check.isAvailable) {
           await Updates.fetchUpdateAsync();
           await Updates.reloadAsync();
-        } else {
-          // Show native logs to understand WHY no update is available
-          const reason = (check as any).reason ?? 'N/A';
-          Alert.alert(
-            'OTA v2 - No Update',
-            `reason: ${reason}\n\n${info}\n\nNative logs:\n${recentLogs || 'none'}`
-          );
         }
-      } catch (e: any) {
-        Alert.alert('OTA Error', e.message || String(e));
-      }
+      } catch (_) {}
     })();
   }, []);
 
