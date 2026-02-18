@@ -2,7 +2,7 @@
   "expo": {
     "name": "Ankora",
     "slug": "ankora",
-    "version": "1.1.0",
+    "version": "1.3.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "ankora",
@@ -40,7 +40,6 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
@@ -53,7 +52,8 @@
         {
           "sounds": []
         }
-      ]
+      ],
+      "expo-updates"
     ],
     "experiments": {
       "typedRoutes": true
@@ -69,7 +69,9 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/41df5660-1c97-4b52-8b43-e6181bd77c16"
+      "url": "https://u.expo.dev/41df5660-1c97-4b52-8b43-e6181bd77c16",
+      "checkOnLaunch": "ALWAYS",
+      "fallbackToCacheTimeout": 3000
     }
   }
 }

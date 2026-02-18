@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
+import * as Updates from 'expo-updates';
 import {
   useFonts,
   Geist_300Light,
@@ -46,6 +47,20 @@ export default function RootLayout() {
 
   // Trigger background sync on launch / foreground (cooldown enforced server-side)
   useBackgroundSync(isAuthenticated);
+
+  // Check for OTA updates on mount — download + reload silently
+  useEffect(() => {
+    if (__DEV__) return;
+    (async () => {
+      try {
+        const check = await Updates.checkForUpdateAsync();
+        if (check.isAvailable) {
+          await Updates.fetchUpdateAsync();
+          await Updates.reloadAsync();
+        }
+      } catch (_) {}
+    })();
+  }, []);
 
   // Check auth on mount
   useEffect(() => {
