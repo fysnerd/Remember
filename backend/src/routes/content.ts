@@ -8,7 +8,7 @@ import { processTikTokTranscript } from '../services/tiktokTranscription.js';
 import { processInstagramTranscript } from '../services/instagramTranscription.js';
 import { processContentQuiz, regenerateQuiz, generateMemoFromTranscript } from '../services/quizGeneration.js';
 import { autoTagContent } from '../services/tagging.js';
-import { classifyContentForUser, evolveThemesForUser } from '../services/themeClassification.js';
+import { classifyContentForUser, evolveThemesForUser, generateThemesForUser } from '../services/themeClassification.js';
 import { syncUserYouTube } from '../workers/youtubeSync.js';
 import { syncUserSpotify } from '../workers/spotifySync.js';
 import { syncTikTokForUser } from '../workers/tiktokSync.js';
@@ -670,13 +670,18 @@ contentRouter.get('/inbox/count', async (req: Request, res: Response, next: Next
   }
 });
 
-// Pipeline helper: quiz → auto-tag → theme classification (fire-and-forget)
+// Pipeline helper: quiz → auto-tag → theme generation → theme classification (fire-and-forget)
 async function quizThenClassify(contentId: string, userId: string): Promise<void> {
   await processContentQuiz(contentId);
   const tags = await autoTagContent(contentId);
   if (tags.length > 0) {
+    // If user has no themes yet, try to generate them first
+    const themeCount = await prisma.theme.count({ where: { userId } });
+    if (themeCount === 0) {
+      await generateThemesForUser(userId);
+    }
     await classifyContentForUser(contentId, userId);
-    // If content couldn't be classified, check if we need new themes
+    // If content couldn't be classified into existing themes, evolve
     await evolveThemesForUser(userId);
   }
 }
@@ -1602,21 +1607,22 @@ contentRouter.patch('/:id/triage', async (req: Request, res: Response, next: Nex
     });
 
     // OPTIMIZATION: If user clicks "Learn" and transcript already exists (pre-transcription),
-    // trigger quiz generation immediately instead of waiting for cron
+    // trigger full pipeline (quiz → auto-tag → theme classification) immediately
     let processingStarted = false;
+    const userId = req.user!.id;
     if (action === 'learn' && content.transcript && content.quizzes.length === 0) {
-      log.debug({ contentId: id, userId: req.user!.id }, 'Triage: triggering immediate quiz for transcribed content');
-      processContentQuiz(id).catch((error) => {
-        log.error({ err: error, contentId: id }, 'Triage quiz generation failed');
+      log.debug({ contentId: id, userId }, 'Triage: triggering immediate pipeline for transcribed content');
+      quizThenClassify(id, userId).catch((error) => {
+        log.error({ err: error, contentId: id }, 'Triage pipeline failed');
       });
       processingStarted = true;
     } else if (action === 'learn' && !content.transcript) {
-      // No transcript yet - trigger transcription + quiz pipeline
+      // No transcript yet - trigger transcription + full pipeline
       if (content.platform === Platform.YOUTUBE) {
         processContentTranscript(id)
           .then(async (success) => {
             if (success) {
-              await processContentQuiz(id);
+              await quizThenClassify(id, userId);
             }
           })
           .catch((error) => {
@@ -1627,7 +1633,7 @@ contentRouter.patch('/:id/triage', async (req: Request, res: Response, next: Nex
         processPodcastTranscript(id)
           .then(async (success) => {
             if (success) {
-              await processContentQuiz(id);
+              await quizThenClassify(id, userId);
             }
           })
           .catch((error) => {
@@ -1638,7 +1644,7 @@ contentRouter.patch('/:id/triage', async (req: Request, res: Response, next: Nex
         processTikTokTranscript(id)
           .then(async (success) => {
             if (success) {
-              await processContentQuiz(id);
+              await quizThenClassify(id, userId);
             }
           })
           .catch((error) => {
@@ -1649,7 +1655,7 @@ contentRouter.patch('/:id/triage', async (req: Request, res: Response, next: Nex
         processInstagramTranscript(id)
           .then(async (success) => {
             if (success) {
-              await processContentQuiz(id);
+              await quizThenClassify(id, userId);
             }
           })
           .catch((error) => {
