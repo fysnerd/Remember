@@ -262,16 +262,6 @@ export default function AuthScreen() {
                 >
                   Envoyer un lien magique
                 </Button>
-                <Pressable
-                  onPress={() => {
-                    if (email.trim()) setMode('email-login');
-                    else show('Entre ton email', 'error');
-                  }}
-                >
-                  <Text variant="caption" color="secondary" style={styles.centered}>
-                    Utiliser un mot de passe
-                  </Text>
-                </Pressable>
               </View>
             </View>
           </View>
