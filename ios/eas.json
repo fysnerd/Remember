@@ -30,6 +30,7 @@
       "channel": "production"
     },
     "sdk55-test": {
+      "distribution": "internal",
       "autoIncrement": true,
       "channel": "sdk55-ota-test"
     }
