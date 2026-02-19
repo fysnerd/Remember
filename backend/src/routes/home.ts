@@ -57,12 +57,14 @@ const formatSubtitle = (platform: string, channelName: string | null): string =>
 };
 
 async function generateRecommendations(userId: string): Promise<Recommendation[]> {
-  // Step 0: Exclude content/themes already recommended in the last 3 days
+  // Step 0: Exclude content/themes already COMPLETED in the last 3 days
+  // Non-completed recs can reappear so users get another chance
   const recentAll = await prisma.$queryRaw<{ targetType: string; targetId: string }[]>`
     SELECT DISTINCT "targetType", "targetId"
     FROM "DailyRecommendation"
     WHERE "userId" = ${userId}
       AND date >= (CURRENT_DATE - INTERVAL '3 days')
+      AND "completedAt" IS NOT NULL
   `;
   const recentContentIds = new Set(recentAll.filter(r => r.targetType === 'content').map(r => r.targetId));
   const recentThemeIds = new Set(recentAll.filter(r => r.targetType === 'theme').map(r => r.targetId));
