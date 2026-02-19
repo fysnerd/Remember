@@ -20,7 +20,7 @@ try {
 }
 
 // RevenueCat public API key (safe to embed — identifies your app, not a secret)
-const REVENUECAT_API_KEY = 'test_nkwCosIuJfTkUbtqgcXZgVJWQSA';
+const REVENUECAT_API_KEY = 'appl_xyGHXMOylgGIyTDnxsVWFJFMsIf';
 
 // Entitlement identifier — must match what's configured in RevenueCat dashboard
 export const ENTITLEMENT_ID = 'Ankora Pro';
