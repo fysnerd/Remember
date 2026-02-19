@@ -80,7 +80,7 @@ export function generateReminderEmail(params: {
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
   <div style="text-align: center; margin-bottom: 30px;">
-    <h1 style="color: #6366f1; margin: 0;">Remember</h1>
+    <h1 style="color: #D4A574; margin: 0;">Ankora</h1>
     <p style="color: #666; margin-top: 5px;">Your daily learning reminder</p>
   </div>
 
@@ -110,7 +110,7 @@ export function generateReminderEmail(params: {
       <a href="${config.frontendUrl}/settings" style="color: #94a3b8;">Manage email preferences</a>
     </p>
     <p style="margin-top: 10px;">
-      Remember - Active Learning from Social Media
+      Ankora - Active Learning from Social Media
     </p>
   </div>
 </body>
@@ -129,7 +129,7 @@ ${currentStreak > 0 ? `Current streak: ${currentStreak} day${currentStreak !== 1
 Start your review session: ${reviewUrl}
 
 ---
-Remember - Active Learning from Social Media
+Ankora - Active Learning from Social Media
 Manage email preferences: ${config.frontendUrl}/settings
   `.trim();
 

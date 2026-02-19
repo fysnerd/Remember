@@ -62,7 +62,7 @@ const envSchema = z.object({
 
   // Email (Resend)
   RESEND_API_KEY: z.string().optional(),
-  EMAIL_FROM: z.string().email().default('noreply@remember.app'),
+  EMAIL_FROM: z.string().email().default('noreply@ankora.study'),
 
   // Stripe
   STRIPE_SECRET_KEY: z.string().optional(),
