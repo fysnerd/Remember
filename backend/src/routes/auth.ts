@@ -444,13 +444,10 @@ authRouter.post('/magic-link', async (req: Request, res: Response, next: NextFun
           <h1 style="font-size: 24px; color: #F8FAFC; text-align: center;">Ankora</h1>
           <p style="color: #94A3B8; text-align: center; font-size: 16px;">Clique sur le bouton pour te connecter.</p>
           <div style="text-align: center; margin: 32px 0;">
-            <a href="${magicLinkUrl}" style="background: #D4A574; color: #0A0F1A; padding: 14px 32px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 16px; display: inline-block;">
+            <a href="${webFallbackUrl}" style="background: #D4A574; color: #0A0F1A; padding: 14px 32px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 16px; display: inline-block;">
               Se connecter
             </a>
           </div>
-          <p style="color: #64748B; text-align: center; font-size: 13px;">
-            Si le bouton ne fonctionne pas, <a href="${webFallbackUrl}" style="color: #D4A574;">clique ici</a>.
-          </p>
           <p style="color: #64748B; text-align: center; font-size: 12px; margin-top: 24px;">Ce lien expire dans 15 minutes.</p>
         </div>
       `,
