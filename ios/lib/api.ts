@@ -20,6 +20,12 @@ const api = axios.create({
   },
 });
 
+// Flag to skip token refresh during logout
+let _isLoggingOut = false;
+export function setLoggingOut(value: boolean) {
+  _isLoggingOut = value;
+}
+
 // Request interceptor - add auth token
 api.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
@@ -57,8 +63,8 @@ api.interceptors.response.use(
       _retry?: boolean;
     };
 
-    // If 401 and not already retrying
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // If 401 and not already retrying (skip during logout)
+    if (error.response?.status === 401 && !originalRequest._retry && !_isLoggingOut) {
       if (isRefreshing) {
         // Wait for token refresh
         return new Promise((resolve, reject) => {

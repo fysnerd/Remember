@@ -5,7 +5,7 @@
  */
 
 import { create } from 'zustand';
-import api from '../lib/api';
+import api, { setLoggingOut } from '../lib/api';
 import { setTokens, clearTokens, hasValidTokens } from '../lib/storage';
 import { identifyUser, resetUser } from '../lib/purchases';
 
@@ -36,7 +36,7 @@ interface AuthState {
   loginWithGoogle: (idToken: string) => Promise<void>;
   sendMagicLink: (email: string) => Promise<void>;
   verifyMagicLink: (token: string, email: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
   clearError: () => void;
   updateUser: (updates: Partial<User>) => void;
@@ -154,15 +154,16 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  logout: () => {
-    clearTokens();
-    resetUser();
-    set({
-      user: null,
-      isAuthenticated: false,
-      isLoading: false,
-      error: null,
-    });
+  logout: async () => {
+    // 1. Disable token refresh in API interceptor
+    setLoggingOut(true);
+    // 2. Update state immediately (triggers navigation to auth screen)
+    set({ user: null, isAuthenticated: false, isLoading: false, error: null });
+    // 3. Clean up async resources
+    try { await clearTokens(); } catch {}
+    try { await resetUser(); } catch {}
+    // 4. Re-enable interceptor for next session
+    setLoggingOut(false);
   },
 
   checkAuth: async () => {

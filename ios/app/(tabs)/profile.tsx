@@ -112,7 +112,22 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = () => {
-    logout();
+    Alert.alert(
+      'Deconnexion',
+      'Tu veux vraiment te deconnecter ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Deconnecter',
+          style: 'destructive',
+          onPress: async () => {
+            queryClient.cancelQueries();
+            queryClient.clear();
+            await logout();
+          },
+        },
+      ]
+    );
   };
 
   const refreshOAuthStatus = () => {
