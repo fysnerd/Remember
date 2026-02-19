@@ -57,6 +57,16 @@ const formatSubtitle = (platform: string, channelName: string | null): string =>
 };
 
 async function generateRecommendations(userId: string): Promise<Recommendation[]> {
+  // Step 0: Exclude content/themes already recommended in the last 3 days
+  const recentAll = await prisma.$queryRaw<{ targetType: string; targetId: string }[]>`
+    SELECT DISTINCT "targetType", "targetId"
+    FROM "DailyRecommendation"
+    WHERE "userId" = ${userId}
+      AND date >= (CURRENT_DATE - INTERVAL '3 days')
+  `;
+  const recentContentIds = new Set(recentAll.filter(r => r.targetType === 'content').map(r => r.targetId));
+  const recentThemeIds = new Set(recentAll.filter(r => r.targetType === 'theme').map(r => r.targetId));
+
   // Step 1: Interest profile - top reviewed tags & themes
   const [topTags, topThemes] = await Promise.all([
     prisma.$queryRaw<{ tagId: string; name: string; cnt: bigint }[]>`
@@ -115,10 +125,15 @@ async function generateRecommendations(userId: string): Promise<Recommendation[]
     LIMIT 15
   `;
 
+  // Filter out recently recommended content
+  const filteredContent = contentCandidates.filter(c => !recentContentIds.has(c.id));
+  // Fall back to unfiltered if filtering leaves nothing
+  const effectiveContent = filteredContent.length > 0 ? filteredContent : contentCandidates;
+
   // Compute tag overlap in JS for interest-based ranking
-  let rankedContent = contentCandidates;
-  if (hasHistory && interestTagIds.size > 0 && contentCandidates.length > 0) {
-    const contentIds = contentCandidates.map(c => c.id);
+  let rankedContent = effectiveContent;
+  if (hasHistory && interestTagIds.size > 0 && effectiveContent.length > 0) {
+    const contentIds = effectiveContent.map(c => c.id);
     const contentsWithTags = await prisma.content.findMany({
       where: { id: { in: contentIds } },
       select: { id: true, tags: { select: { id: true } } },
@@ -130,7 +145,7 @@ async function generateRecommendations(userId: string): Promise<Recommendation[]
       if (overlap > 0) overlapMap.set(c.id, overlap);
     }
 
-    rankedContent = [...contentCandidates].sort((a, b) => {
+    rankedContent = [...effectiveContent].sort((a, b) => {
       const overlapDiff = (overlapMap.get(b.id) || 0) - (overlapMap.get(a.id) || 0);
       if (overlapDiff !== 0) return overlapDiff;
       const dueDiff = Number(b.dueCount) - Number(a.dueCount);
@@ -168,6 +183,11 @@ async function generateRecommendations(userId: string): Promise<Recommendation[]
     LIMIT 5
   `;
 
+  // Filter out recently recommended themes
+  const filteredThemes = themeCandidates.filter(t => !recentThemeIds.has(t.id));
+  // Fall back to unfiltered if filtering leaves nothing
+  const effectiveThemes = filteredThemes.length > 0 ? filteredThemes : themeCandidates;
+
   // Step 4: Mix 3 slots
   const recommendations: Recommendation[] = [];
   const usedContentIds = new Set<string>();
@@ -175,7 +195,7 @@ async function generateRecommendations(userId: string): Promise<Recommendation[]
   const reason = hasHistory ? 'Base sur vos centres d\'interet' : 'Contenu recent';
 
   // Slot 1: best theme with due cards, otherwise best content
-  const bestTheme = themeCandidates.find(t => Number(t.dueCount) > 0);
+  const bestTheme = effectiveThemes.find(t => Number(t.dueCount) > 0);
   if (bestTheme) {
     recommendations.push({
       id: bestTheme.id, type: 'theme', title: bestTheme.name,
@@ -224,7 +244,7 @@ async function generateRecommendations(userId: string): Promise<Recommendation[]
   }
 
   // Fill remaining slots with themes
-  for (const t of themeCandidates) {
+  for (const t of effectiveThemes) {
     if (recommendations.length >= 3) break;
     if (usedThemeIds.has(t.id)) continue;
     recommendations.push({
