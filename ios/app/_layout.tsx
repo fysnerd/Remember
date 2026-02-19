@@ -55,8 +55,9 @@ export default function RootLayout() {
     Geist_700Bold,
   });
 
-  // Register push notifications (after auth)
-  useNotifications(isAuthenticated);
+  // Register push notifications (only after onboarding is completed,
+  // so the onboarding notifications screen can show the iOS permission prompt)
+  useNotifications(isAuthenticated && !!user?.onboardingCompleted);
 
   // Trigger background sync on launch / foreground (cooldown enforced server-side)
   useBackgroundSync(isAuthenticated);
