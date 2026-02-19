@@ -223,7 +223,7 @@ export default function AuthScreen() {
               ANKORA
             </Text>
             <Text variant="body" color="secondary" style={[styles.centered, { marginTop: spacing.sm }]}>
-              Apprends de ce que tu regardes.
+              Apprends de tout ce que tu regardes.
             </Text>
           </View>
 
