@@ -22,6 +22,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useNotifications } from '../hooks/useNotifications';
 import { useBackgroundSync } from '../hooks/useBackgroundSync';
 import { configurePurchases, identifyUser } from '../lib/purchases';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
 // Prevent splash screen from auto-hiding (must be in module scope)
 SplashScreen.preventAutoHideAsync();
@@ -63,6 +64,10 @@ export default function RootLayout() {
   // Initialize RevenueCat SDK on mount (before any purchase operations)
   useEffect(() => {
     configurePurchases();
+    GoogleSignin.configure({
+      iosClientId: '628216102691-2gfso5k8i4nkd0cq83etbn1767i3k75a.apps.googleusercontent.com',
+      webClientId: '628216102691-rapig42ndt06hg1dab93pquvvvnp06r1.apps.googleusercontent.com',
+    });
   }, []);
 
   // Identify user with RevenueCat when authenticated
