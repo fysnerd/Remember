@@ -430,8 +430,7 @@ authRouter.post('/magic-link', async (req: Request, res: Response, next: NextFun
       data: { email: email.toLowerCase(), token, expiresAt },
     });
 
-    // Build magic link URL (deep link for mobile)
-    const magicLinkUrl = `ankora://auth/verify?token=${token}&email=${encodeURIComponent(email.toLowerCase())}`;
+    // Build magic link URL (HTTPS redirect → deep link, since email clients block custom schemes)
     const webFallbackUrl = `${config.magicLink.baseUrl}/api/auth/magic-link/redirect?token=${token}&email=${encodeURIComponent(email.toLowerCase())}`;
 
     // Send email
