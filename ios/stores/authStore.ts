@@ -8,11 +8,14 @@ import { create } from 'zustand';
 import api from '../lib/api';
 import { setTokens, clearTokens, hasValidTokens } from '../lib/storage';
 
-interface User {
+export interface User {
   id: string;
   email: string;
   name?: string;
+  firstName?: string;
   plan?: string;
+  onboardingCompleted?: boolean;
+  onboardingStep?: number;
 }
 
 interface LoginResponse {
@@ -28,9 +31,14 @@ interface AuthState {
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, name?: string) => Promise<void>;
+  loginWithApple: (identityToken: string, fullName?: { givenName?: string | null; familyName?: string | null }) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
+  sendMagicLink: (email: string) => Promise<void>;
+  verifyMagicLink: (token: string, email: string) => Promise<void>;
   logout: () => void;
   checkAuth: () => Promise<void>;
   clearError: () => void;
+  updateUser: (updates: Partial<User>) => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -84,6 +92,62 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
+  loginWithApple: async (identityToken: string, fullName?) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await api.post<LoginResponse>('/auth/apple', {
+        identityToken,
+        fullName,
+      });
+      const { accessToken, refreshToken, user } = response.data;
+      await setTokens(accessToken, refreshToken);
+      set({ user, isAuthenticated: true, isLoading: false, error: null });
+    } catch (error: unknown) {
+      const message = getErrorMessage(error, 'Connexion Apple échouée');
+      set({ isLoading: false, error: message });
+      throw new Error(message);
+    }
+  },
+
+  loginWithGoogle: async (idToken: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await api.post<LoginResponse>('/auth/google', { idToken });
+      const { accessToken, refreshToken, user } = response.data;
+      await setTokens(accessToken, refreshToken);
+      set({ user, isAuthenticated: true, isLoading: false, error: null });
+    } catch (error: unknown) {
+      const message = getErrorMessage(error, 'Connexion Google échouée');
+      set({ isLoading: false, error: message });
+      throw new Error(message);
+    }
+  },
+
+  sendMagicLink: async (email: string) => {
+    set({ error: null });
+    try {
+      await api.post('/auth/magic-link', { email });
+    } catch (error: unknown) {
+      const message = getErrorMessage(error, "Impossible d'envoyer le lien");
+      set({ error: message });
+      throw new Error(message);
+    }
+  },
+
+  verifyMagicLink: async (token: string, email: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await api.post<LoginResponse>('/auth/verify-magic-link', { token, email });
+      const { accessToken, refreshToken, user } = response.data;
+      await setTokens(accessToken, refreshToken);
+      set({ user, isAuthenticated: true, isLoading: false, error: null });
+    } catch (error: unknown) {
+      const message = getErrorMessage(error, 'Lien magique invalide ou expiré');
+      set({ isLoading: false, error: message });
+      throw new Error(message);
+    }
+  },
+
   logout: () => {
     clearTokens();
     set({
@@ -120,6 +184,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   clearError: () => set({ error: null }),
+
+  updateUser: (updates) =>
+    set((state) => ({
+      user: state.user ? { ...state.user, ...updates } : null,
+    })),
 }));
 
 // Helper to extract error message

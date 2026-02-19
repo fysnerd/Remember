@@ -25,11 +25,22 @@ import { useBackgroundSync } from '../hooks/useBackgroundSync';
 // Prevent splash screen from auto-hiding (must be in module scope)
 SplashScreen.preventAutoHideAsync();
 
-// Public routes that don't require auth
-const PUBLIC_ROUTES = ['login', 'signup'];
+// Onboarding step → route mapping
+const ONBOARDING_ROUTES: Record<number, string> = {
+  0: '/onboarding/auth',
+  1: '/onboarding/name',
+  2: '/onboarding/interests',
+  3: '/onboarding/goals',
+  4: '/onboarding/frequency',
+  5: '/onboarding/connect',
+  6: '/onboarding/attribution',
+  7: '/onboarding/welcome',
+  8: '/onboarding/notifications',
+  9: '/onboarding/paywall',
+};
 
 export default function RootLayout() {
-  const { isAuthenticated, isLoading, checkAuth } = useAuthStore();
+  const { isAuthenticated, isLoading, user, checkAuth } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
 
@@ -74,21 +85,34 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, isLoading]);
 
-  // Auth guard - redirect based on auth state
+  // Auth guard - 3 states: unauthenticated, onboarding, authenticated
   useEffect(() => {
     if (isLoading) return;
 
     const firstSegment = segments[0] as string;
-    const isPublicRoute = PUBLIC_ROUTES.includes(firstSegment);
+    const isOnboardingRoute = firstSegment === 'onboarding';
+    const isAuthVerifyRoute = firstSegment === 'auth';
 
-    if (!isAuthenticated && !isPublicRoute) {
-      // Not logged in, trying to access protected route -> redirect to login
-      router.replace('/login');
-    } else if (isAuthenticated && isPublicRoute) {
-      // Logged in but on login/signup page -> redirect to tabs
-      router.replace('/(tabs)');
+    if (!isAuthenticated) {
+      // Not logged in → go to onboarding auth (unless already there or on magic link verify)
+      if (!isOnboardingRoute && !isAuthVerifyRoute) {
+        router.replace('/onboarding/auth');
+      }
+    } else if (!user?.onboardingCompleted) {
+      // Logged in but onboarding incomplete → resume at correct step
+      if (!isOnboardingRoute) {
+        const step = user?.onboardingStep ?? 1;
+        // After auth, minimum step is 1 (name)
+        const route = ONBOARDING_ROUTES[Math.max(step, 1)] || '/onboarding/name';
+        router.replace(route as any);
+      }
+    } else {
+      // Fully onboarded → go to tabs
+      if (isOnboardingRoute || firstSegment === 'login' || firstSegment === 'signup') {
+        router.replace('/(tabs)');
+      }
     }
-  }, [isAuthenticated, isLoading, segments]);
+  }, [isAuthenticated, isLoading, user?.onboardingCompleted, user?.onboardingStep, segments]);
 
   // Keep splash screen visible while loading
   if (isLoading || !fontsLoaded) {
@@ -108,6 +132,7 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="signup" options={{ headerShown: false }} />
         <Stack.Screen
@@ -194,6 +219,12 @@ export default function RootLayout() {
             presentation: 'card',
             headerStyle: { backgroundColor: '#0A0F1A' },
             headerTintColor: '#F8FAFC',
+          }}
+        />
+        <Stack.Screen
+          name="auth/verify"
+          options={{
+            headerShown: false,
           }}
         />
       </Stack>

@@ -17,6 +17,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.fysnerd.ankora",
+      "usesAppleSignIn": true,
       "associatedDomains": [
         "applinks:api.ankora.study"
       ],
@@ -53,7 +54,9 @@
           "sounds": []
         }
       ],
-      "expo-updates"
+      "expo-updates",
+      "expo-apple-authentication",
+      "@react-native-google-signin/google-signin"
     ],
     "experiments": {
       "typedRoutes": true
