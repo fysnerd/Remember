@@ -81,6 +81,16 @@ const envSchema = z.object({
   INSTAGRAM_PROXY_URL: z.string().optional(),
   INSTAGRAM_PROXY_USER: z.string().optional(),
   INSTAGRAM_PROXY_PASS: z.string().optional(),
+
+  // Apple Sign-In verification
+  APPLE_TEAM_ID: z.string().optional(),
+  APPLE_BUNDLE_ID: z.string().optional(),
+
+  // Google Sign-In (iOS client ID for token verification)
+  GOOGLE_IOS_CLIENT_ID: z.string().optional(),
+
+  // Magic link base URL
+  MAGIC_LINK_BASE_URL: z.string().optional(),
 });
 
 // Parse and validate
@@ -185,5 +195,18 @@ export const config = {
     url: env.INSTAGRAM_PROXY_URL || '',
     user: env.INSTAGRAM_PROXY_USER || '',
     pass: env.INSTAGRAM_PROXY_PASS || '',
+  },
+
+  apple: {
+    teamId: env.APPLE_TEAM_ID || 'HSR27437U4',
+    bundleId: env.APPLE_BUNDLE_ID || 'com.fysnerd.ankora',
+  },
+
+  googleIos: {
+    clientId: env.GOOGLE_IOS_CLIENT_ID || '',
+  },
+
+  magicLink: {
+    baseUrl: env.MAGIC_LINK_BASE_URL || 'https://api.ankora.study',
   },
 } as const;

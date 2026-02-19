@@ -28,6 +28,20 @@ model User {
   trialEndsAt   DateTime?
   plan          Plan      @default(FREE)
 
+  // Onboarding
+  onboardingCompleted Boolean   @default(false)
+  onboardingStep      Int       @default(0)
+  firstName           String?
+  interests           String[]  @default([])
+  goal                String?   // "culture", "exam", "skills", "curiosity"
+  quizFrequency       String?   // "relaxed", "regular", "daily"
+  attributionSource   String[]  @default([])
+
+  // Social auth
+  authProvider        String?   // "apple", "google", "email"
+  appleUserId         String?   @unique
+  googleId            String?   @unique
+
   // Timestamps
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -59,6 +73,11 @@ model UserSettings {
 
   // Notifications
   emailReminders    Boolean @default(true)
+
+  // Onboarding preferences (synced from onboarding flow)
+  interests         String[]  @default([])
+  objective         String?
+  reviewPace        String?
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -267,6 +286,9 @@ model TranscriptCache {
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  // Embedding (pgvector)
+  embedding     Unsupported("vector")?
 
   // Relations
   contents      Content[]
@@ -562,3 +584,20 @@ model DailyRecommendation {
   @@unique([userId, date, slot])
   @@index([userId, date])
 }
+
+// ============================================================================
+// Magic Link Tokens (passwordless auth)
+// ============================================================================
+
+model MagicLinkToken {
+  id          String    @id @default(cuid())
+  email       String
+  token       String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+
+  createdAt   DateTime  @default(now())
+
+  @@index([email, createdAt])
+}
+

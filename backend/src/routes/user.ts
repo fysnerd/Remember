@@ -20,6 +20,17 @@ const updateProfileSchema = z.object({
   name: z.string().min(1).max(100).optional(),
 });
 
+const onboardingSchema = z.object({
+  step: z.number().min(0).max(9),
+  data: z.object({
+    firstName: z.string().min(1).max(50).optional(),
+    interests: z.array(z.string()).optional(),
+    goal: z.enum(['culture', 'exam', 'skills', 'curiosity']).optional(),
+    quizFrequency: z.enum(['relaxed', 'regular', 'daily']).optional(),
+    attributionSource: z.string().optional(),
+  }).optional(),
+});
+
 // GET /api/users/settings
 userRouter.get('/settings', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -56,6 +67,52 @@ userRouter.patch('/settings', async (req: Request, res: Response, next: NextFunc
     });
 
     return res.json(settings);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        error: 'Validation error',
+        details: error.errors,
+      });
+    }
+    return next(error);
+  }
+});
+
+// PATCH /api/users/onboarding
+userRouter.patch('/onboarding', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { step, data } = onboardingSchema.parse(req.body);
+
+    const updateData: Record<string, unknown> = { onboardingStep: step };
+
+    if (data?.firstName) updateData.firstName = data.firstName;
+    if (data?.interests) updateData.interests = data.interests;
+    if (data?.goal) updateData.goal = data.goal;
+    if (data?.quizFrequency) updateData.quizFrequency = data.quizFrequency;
+    if (data?.attributionSource) updateData.attributionSource = [data.attributionSource];
+
+    // Mark onboarding as completed at step 9+
+    if (step >= 9) {
+      updateData.onboardingCompleted = true;
+    }
+
+    const user = await prisma.user.update({
+      where: { id: req.user!.id },
+      data: updateData,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        firstName: true,
+        onboardingCompleted: true,
+        onboardingStep: true,
+        interests: true,
+        goal: true,
+        quizFrequency: true,
+      },
+    });
+
+    return res.json(user);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({
