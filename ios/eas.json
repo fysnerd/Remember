@@ -28,6 +28,10 @@
     "production": {
       "autoIncrement": true,
       "channel": "production"
+    },
+    "sdk55-test": {
+      "autoIncrement": true,
+      "channel": "sdk55-ota-test"
     }
   },
   "submit": {
