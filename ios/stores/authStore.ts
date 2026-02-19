@@ -7,6 +7,7 @@
 import { create } from 'zustand';
 import api from '../lib/api';
 import { setTokens, clearTokens, hasValidTokens } from '../lib/storage';
+import { identifyUser, resetUser } from '../lib/purchases';
 
 export interface User {
   id: string;
@@ -56,6 +57,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       });
       const { accessToken, refreshToken, user } = response.data;
       await setTokens(accessToken, refreshToken);
+      identifyUser(user.id);
       set({
         user,
         isAuthenticated: true,
@@ -79,6 +81,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       });
       const { accessToken, refreshToken, user } = response.data;
       await setTokens(accessToken, refreshToken);
+      identifyUser(user.id);
       set({
         user,
         isAuthenticated: true,
@@ -101,6 +104,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       });
       const { accessToken, refreshToken, user } = response.data;
       await setTokens(accessToken, refreshToken);
+      identifyUser(user.id);
       set({ user, isAuthenticated: true, isLoading: false, error: null });
     } catch (error: unknown) {
       const message = getErrorMessage(error, 'Connexion Apple échouée');
@@ -115,6 +119,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const response = await api.post<LoginResponse>('/auth/google', { idToken });
       const { accessToken, refreshToken, user } = response.data;
       await setTokens(accessToken, refreshToken);
+      identifyUser(user.id);
       set({ user, isAuthenticated: true, isLoading: false, error: null });
     } catch (error: unknown) {
       const message = getErrorMessage(error, 'Connexion Google échouée');
@@ -140,6 +145,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const response = await api.post<LoginResponse>('/auth/verify-magic-link', { token, email });
       const { accessToken, refreshToken, user } = response.data;
       await setTokens(accessToken, refreshToken);
+      identifyUser(user.id);
       set({ user, isAuthenticated: true, isLoading: false, error: null });
     } catch (error: unknown) {
       const message = getErrorMessage(error, 'Lien magique invalide ou expiré');
@@ -150,6 +156,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: () => {
     clearTokens();
+    resetUser();
     set({
       user: null,
       isAuthenticated: false,

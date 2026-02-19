@@ -21,6 +21,7 @@ import { queryClient } from '../lib/queryClient';
 import { useAuthStore } from '../stores/authStore';
 import { useNotifications } from '../hooks/useNotifications';
 import { useBackgroundSync } from '../hooks/useBackgroundSync';
+import { configurePurchases, identifyUser } from '../lib/purchases';
 
 // Prevent splash screen from auto-hiding (must be in module scope)
 SplashScreen.preventAutoHideAsync();
@@ -58,6 +59,18 @@ export default function RootLayout() {
 
   // Trigger background sync on launch / foreground (cooldown enforced server-side)
   useBackgroundSync(isAuthenticated);
+
+  // Initialize RevenueCat SDK on mount (before any purchase operations)
+  useEffect(() => {
+    configurePurchases();
+  }, []);
+
+  // Identify user with RevenueCat when authenticated
+  useEffect(() => {
+    if (isAuthenticated && user?.id) {
+      identifyUser(user.id);
+    }
+  }, [isAuthenticated, user?.id]);
 
   // Check for OTA updates on mount — download + reload silently
   useEffect(() => {

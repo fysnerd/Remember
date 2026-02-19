@@ -1,8 +1,12 @@
 /**
- * Onboarding Step 10: Paywall placeholder
- * Will be replaced by RevenueCat + StoreKit later
+ * Onboarding Step 10: Paywall (RevenueCat)
+ *
+ * Displays the RevenueCat paywall configured in the dashboard.
+ * Falls back to a placeholder when the native module isn't available (OTA update).
+ * On purchase/restore/dismiss → completes onboarding and enters the app.
  */
 
+import { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -11,27 +15,72 @@ import { Text, Button } from '../../components/ui';
 import { OnboardingProgressBar } from '../../components/onboarding/OnboardingProgressBar';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useAuthStore } from '../../stores/authStore';
+import { isRevenueCatAvailable } from '../../lib/purchases';
 import { colors, spacing } from '../../theme';
 import { haptics } from '../../lib/haptics';
+
+// Try loading RevenueCatUI (native module, may not be in binary)
+let RevenueCatUI: any = null;
+try {
+  RevenueCatUI = require('react-native-purchases-ui').default;
+} catch {
+  // Not available — will show placeholder
+}
 
 export default function PaywallScreen() {
   const router = useRouter();
   const { saveStep, isSaving } = useOnboardingStore();
   const { updateUser } = useAuthStore();
+  const [completing, setCompleting] = useState(false);
 
-  const handleContinue = async () => {
-    haptics.success();
+  const completeOnboarding = async () => {
+    if (completing || isSaving) return;
+    setCompleting(true);
     try {
-      // Step 9+ marks onboarding as completed on backend
       await saveStep(9);
       updateUser({ onboardingCompleted: true, onboardingStep: 9 });
-      // Auth guard in _layout will redirect to /(tabs)
       router.replace('/(tabs)');
     } catch {
-      // Error handled in store
+      setCompleting(false);
     }
   };
 
+  const handlePurchaseCompleted = () => {
+    haptics.success();
+    completeOnboarding();
+  };
+
+  const handleRestoreCompleted = () => {
+    haptics.success();
+    completeOnboarding();
+  };
+
+  const handleDismiss = () => {
+    completeOnboarding();
+  };
+
+  const handleContinuePlaceholder = () => {
+    haptics.success();
+    completeOnboarding();
+  };
+
+  // RevenueCat paywall when native module is available
+  if (isRevenueCatAvailable && RevenueCatUI) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <OnboardingProgressBar step={10} />
+        <View style={styles.paywallContainer}>
+          <RevenueCatUI.Paywall
+            onPurchaseCompleted={handlePurchaseCompleted}
+            onRestoreCompleted={handleRestoreCompleted}
+            onDismiss={handleDismiss}
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Placeholder fallback (OTA update — native module not in binary yet)
   return (
     <SafeAreaView style={styles.container}>
       <OnboardingProgressBar step={10} />
@@ -50,8 +99,8 @@ export default function PaywallScreen() {
           <Button
             variant="primary"
             fullWidth
-            onPress={handleContinue}
-            loading={isSaving}
+            onPress={handleContinuePlaceholder}
+            loading={isSaving || completing}
           >
             C'est parti !
           </Button>
@@ -65,6 +114,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  paywallContainer: {
+    flex: 1,
   },
   content: {
     flex: 1,

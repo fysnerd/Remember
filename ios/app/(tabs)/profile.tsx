@@ -9,15 +9,25 @@ import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { ChevronRight, Wrench } from 'lucide-react-native';
+import { ChevronRight, Crown, Wrench } from 'lucide-react-native';
 import { Text } from '../../components/ui';
 import { GlassCard } from '../../components/glass/GlassCard';
 import { PlatformIcon } from '../../components/icons';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { useAuthStore } from '../../stores/authStore';
-import { useOAuthStatus } from '../../hooks';
+import { useOAuthStatus, useSubscription } from '../../hooks';
+import { restorePurchases, isRevenueCatAvailable } from '../../lib/purchases';
+
+// OTA-safe: load RevenueCatUI dynamically (native module may not be in binary)
+let RevenueCatUI: any = null;
+try {
+  RevenueCatUI = require('react-native-purchases-ui').default;
+} catch {
+  // Not available
+}
 import api from '../../lib/api';
 import { colors, spacing, borderRadius, glass } from '../../theme';
+import { haptics } from '../../lib/haptics';
 
 const platformConfig = [
   { id: 'youtube', name: 'YouTube' },
@@ -31,10 +41,13 @@ export default function ProfileScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const { user, logout } = useAuthStore();
   const { data: oauthStatus, isLoading } = useOAuthStatus();
+  const { isProUser } = useSubscription();
   const queryClient = useQueryClient();
   const [loadingPlatform, setLoadingPlatform] = useState<string | null>(null);
-  const [switchingPlan, setSwitchingPlan] = useState(false);
+  const [restoringPurchases, setRestoringPurchases] = useState(false);
 
+  // Dev tools state (only in __DEV__)
+  const [switchingPlan, setSwitchingPlan] = useState(false);
   const plans = ['FREE', 'PRO', 'LIFETIME'] as const;
   const currentPlan = user?.plan || 'FREE';
 
@@ -43,16 +56,58 @@ export default function ProfileScreen() {
     setSwitchingPlan(true);
     try {
       const { data } = await api.patch('/users/dev/plan', { plan });
-      // Update local auth store with new plan
       useAuthStore.setState((state) => ({
         user: state.user ? { ...state.user, plan: data.plan } : null,
       }));
-      // Invalidate subscription cache so all screens re-read the plan
       queryClient.invalidateQueries({ queryKey: ['subscription'] });
     } catch (error) {
       Alert.alert('Erreur', 'Impossible de changer le plan');
     } finally {
       setSwitchingPlan(false);
+    }
+  };
+
+  const handleManageSubscription = async () => {
+    haptics.light();
+    if (!RevenueCatUI) {
+      Alert.alert('Bientot disponible', 'La gestion d\'abonnement necessite une mise a jour de l\'app.');
+      return;
+    }
+    try {
+      await RevenueCatUI.presentCustomerCenter();
+    } catch (error) {
+      console.error('Customer Center error:', error);
+    }
+  };
+
+  const handleRestorePurchases = async () => {
+    haptics.light();
+    setRestoringPurchases(true);
+    try {
+      const info = await restorePurchases();
+      if (info) {
+        haptics.success();
+        Alert.alert('Achats restaures', 'Vos achats ont ete restaures avec succes.');
+      } else {
+        Alert.alert('Aucun achat', 'Aucun achat a restaurer.');
+      }
+    } catch {
+      Alert.alert('Erreur', 'Impossible de restaurer les achats.');
+    } finally {
+      setRestoringPurchases(false);
+    }
+  };
+
+  const handleShowPaywall = async () => {
+    haptics.light();
+    if (!RevenueCatUI) {
+      Alert.alert('Bientot disponible', 'Les abonnements necessite une mise a jour de l\'app.');
+      return;
+    }
+    try {
+      await RevenueCatUI.presentPaywall();
+    } catch (error) {
+      console.error('Paywall error:', error);
     }
   };
 
@@ -159,10 +214,20 @@ export default function ProfileScreen() {
             <Text variant="caption" color="secondary">
               {user?.email || ''}
             </Text>
-            <Text variant="label" color="secondary" style={styles.planBadge}>
-              {user?.plan || 'FREE'}
-            </Text>
+            <View style={styles.planBadgeRow}>
+              {isProUser && <Crown size={12} color={colors.accent} strokeWidth={2} />}
+              <Text variant="label" color={isProUser ? undefined : 'secondary'} style={isProUser ? styles.planBadgePro : styles.planBadge}>
+                {isProUser ? 'PRO' : 'FREE'}
+              </Text>
+            </View>
           </View>
+          {!isProUser && (
+            <Pressable style={styles.upgradeButton} onPress={handleShowPaywall}>
+              <Text variant="caption" weight="medium" style={styles.upgradeText}>
+                Upgrade
+              </Text>
+            </Pressable>
+          )}
         </View>
       </GlassCard>
 
@@ -213,6 +278,18 @@ export default function ProfileScreen() {
           Parametres
         </Text>
         <GlassCard padding="none">
+          <Pressable style={[styles.settingsRow, styles.platformBorder]} onPress={handleManageSubscription}>
+            <Text variant="body">Abonnement</Text>
+            <ChevronRight size={16} color={colors.textSecondary} strokeWidth={1.75} />
+          </Pressable>
+          <Pressable
+            style={[styles.settingsRow, styles.platformBorder]}
+            onPress={handleRestorePurchases}
+            disabled={restoringPurchases}
+          >
+            <Text variant="body">{restoringPurchases ? 'Restauration...' : 'Restaurer les achats'}</Text>
+            <ChevronRight size={16} color={colors.textSecondary} strokeWidth={1.75} />
+          </Pressable>
           <Pressable style={[styles.settingsRow, styles.platformBorder]}>
             <Text variant="body">A propos</Text>
             <ChevronRight size={16} color={colors.textSecondary} strokeWidth={1.75} />
@@ -224,41 +301,44 @@ export default function ProfileScreen() {
           </Pressable>
         </GlassCard>
       </View>
-      {/* Dev Tools */}
-      <View style={styles.section}>
-        <View style={styles.devHeader}>
-          <Wrench size={14} color={colors.textSecondary} strokeWidth={2} />
-          <Text variant="h3" color="secondary" style={styles.devTitle}>
-            Dev Tools
-          </Text>
-        </View>
-        <GlassCard padding="md">
-          <Text variant="caption" color="secondary" style={styles.devLabel}>
-            Plan actif
-          </Text>
-          <View style={styles.planRow}>
-            {plans.map((plan) => (
-              <Pressable
-                key={plan}
-                style={[
-                  styles.planChip,
-                  currentPlan === plan && styles.planChipActive,
-                ]}
-                onPress={() => handleSwitchPlan(plan)}
-                disabled={switchingPlan}
-              >
-                <Text
-                  variant="caption"
-                  weight={currentPlan === plan ? 'medium' : 'regular'}
-                  style={currentPlan === plan ? styles.planChipTextActive : styles.planChipText}
-                >
-                  {plan}
-                </Text>
-              </Pressable>
-            ))}
+
+      {/* Dev Tools — only in development */}
+      {__DEV__ && (
+        <View style={styles.section}>
+          <View style={styles.devHeader}>
+            <Wrench size={14} color={colors.textSecondary} strokeWidth={2} />
+            <Text variant="h3" color="secondary" style={styles.devTitle}>
+              Dev Tools
+            </Text>
           </View>
-        </GlassCard>
-      </View>
+          <GlassCard padding="md">
+            <Text variant="caption" color="secondary" style={styles.devLabel}>
+              Plan actif (backend)
+            </Text>
+            <View style={styles.planRow}>
+              {plans.map((plan) => (
+                <Pressable
+                  key={plan}
+                  style={[
+                    styles.planChip,
+                    currentPlan === plan && styles.planChipActive,
+                  ]}
+                  onPress={() => handleSwitchPlan(plan)}
+                  disabled={switchingPlan}
+                >
+                  <Text
+                    variant="caption"
+                    weight={currentPlan === plan ? 'medium' : 'regular'}
+                    style={currentPlan === plan ? styles.planChipTextActive : styles.planChipText}
+                  >
+                    {plan}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </GlassCard>
+        </View>
+      )}
     </ScrollView>
     </Animated.View>
   );
@@ -283,6 +363,17 @@ const styles = StyleSheet.create({
   },
   userInfo: { flex: 1 },
   planBadge: { marginTop: spacing.xs },
+  planBadgePro: { marginTop: spacing.xs, color: colors.accent },
+  planBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.xs },
+  upgradeButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    backgroundColor: 'rgba(212, 165, 116, 0.15)',
+    borderWidth: 1,
+    borderColor: colors.accent,
+  },
+  upgradeText: { color: colors.accent },
   section: { marginBottom: spacing.xl },
   sectionTitle: { marginBottom: spacing.md },
   platformRow: { flexDirection: 'row', alignItems: 'center', padding: spacing.md },

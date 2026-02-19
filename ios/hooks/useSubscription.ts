@@ -1,29 +1,61 @@
 /**
- * Hook for subscription/plan status (freemium)
+ * Hook for subscription/plan status via RevenueCat
+ *
+ * Uses RevenueCat's cached customer info + real-time listener.
+ * Safe to call from any screen — the SDK caches internally.
+ *
+ * OTA-safe: returns free tier defaults when native module isn't available.
  */
 
-import { useQuery } from '@tanstack/react-query';
-import api from '../lib/api';
+import { useEffect, useState, useCallback } from 'react';
+import { isRevenueCatAvailable, hasProAccess, ENTITLEMENT_ID } from '../lib/purchases';
 
-interface SubscriptionStatus {
-  plan: 'FREE' | 'PRO';
-  isTrialing: boolean;
-  trialEndsAt: string | null;
-  hasActiveSubscription: boolean;
+interface SubscriptionState {
+  /** Whether the user has an active "Ankora Pro" entitlement */
+  isProUser: boolean;
+  /** Full RevenueCat customer info (for advanced checks) */
+  customerInfo: any;
+  /** True while fetching initial customer info */
+  isLoading: boolean;
 }
 
-export function useSubscription() {
-  return useQuery<SubscriptionStatus>({
-    queryKey: ['subscription', 'status'],
-    queryFn: async () => {
-      try {
-        const { data } = await api.get('/subscription/status');
-        return data;
-      } catch {
-        // Default to FREE if endpoint doesn't exist yet
-        return { plan: 'FREE', isTrialing: false, trialEndsAt: null, hasActiveSubscription: false };
-      }
-    },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+export function useSubscription(): SubscriptionState {
+  const [state, setState] = useState<SubscriptionState>({
+    isProUser: false,
+    customerInfo: null,
+    isLoading: isRevenueCatAvailable,
   });
+
+  const updateFromCustomerInfo = useCallback((info: any) => {
+    setState({
+      isProUser: hasProAccess(info),
+      customerInfo: info,
+      isLoading: false,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!isRevenueCatAvailable) return;
+
+    let Purchases: any;
+    try {
+      Purchases = require('react-native-purchases').default;
+    } catch {
+      return;
+    }
+
+    // Fetch initial customer info (cached by SDK)
+    Purchases.getCustomerInfo()
+      .then(updateFromCustomerInfo)
+      .catch(() => setState((prev) => ({ ...prev, isLoading: false })));
+
+    // Listen for real-time updates (purchase, restore, subscription change)
+    const listener = Purchases.addCustomerInfoUpdateListener(updateFromCustomerInfo);
+
+    return () => {
+      listener.remove();
+    };
+  }, [updateFromCustomerInfo]);
+
+  return state;
 }
