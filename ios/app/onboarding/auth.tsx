@@ -7,7 +7,6 @@ import { useState } from 'react';
 import { View, StyleSheet, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import * as AppleAuthentication from 'expo-apple-authentication';
 import { Text, Input, Button, useToast } from '../../components/ui';
 import { SocialAuthButton } from '../../components/onboarding/SocialAuthButton';
 import { useAuthStore } from '../../stores/authStore';
@@ -31,6 +30,7 @@ export default function AuthScreen() {
     try {
       setAppleLoading(true);
       clearError();
+      const AppleAuthentication = await import('expo-apple-authentication');
       const credential = await AppleAuthentication.signInAsync({
         requestedScopes: [
           AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
@@ -43,11 +43,10 @@ export default function AuthScreen() {
           givenName: credential.fullName?.givenName,
           familyName: credential.fullName?.familyName,
         });
-        // Auth guard in _layout will handle redirect
       }
     } catch (error: any) {
       if (error.code !== 'ERR_REQUEST_CANCELED') {
-        show('Connexion Apple échouée', 'error');
+        show('Apple Sign-In nécessite une mise à jour de l\'app', 'error');
       }
     } finally {
       setAppleLoading(false);
@@ -68,7 +67,7 @@ export default function AuthScreen() {
       }
     } catch (error: any) {
       if (error.code !== 'SIGN_IN_CANCELLED') {
-        show('Connexion Google échouée', 'error');
+        show('Google Sign-In nécessite une mise à jour de l\'app', 'error');
       }
     } finally {
       setGoogleLoading(false);
