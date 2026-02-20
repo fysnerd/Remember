@@ -33,6 +33,7 @@ const allowedOrigins = [
   config.frontendUrl,
   'https://api.ankora.study',
   'https://misc-saver-additionally-podcasts.trycloudflare.com',
+  'http://localhost:8081',
 ];
 app.use(cors({
   origin: (origin, callback) => {
