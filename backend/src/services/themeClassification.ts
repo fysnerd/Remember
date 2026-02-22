@@ -161,13 +161,17 @@ export async function generateThemesForUser(userId: string): Promise<void> {
   // Filter to tags with usage >= MIN_TAG_USAGE (drop single-use noise)
   const filteredTags = userTags.filter(t => Number(t.count) >= MIN_TAG_USAGE);
 
-  // Not enough signal for meaningful themes
-  if (filteredTags.length < 5) {
-    log.debug({ userId, tagCount: filteredTags.length }, 'Not enough tags for theme generation');
+  // Fallback: if not enough high-usage tags, use ALL tags and let the LLM cluster them
+  let tagList: { name: string; count: number }[];
+  if (filteredTags.length >= 5) {
+    tagList = filteredTags.map(t => ({ name: t.name, count: Number(t.count) }));
+  } else if (userTags.length >= 5) {
+    log.info({ userId, filteredCount: filteredTags.length, totalCount: userTags.length }, 'Not enough high-usage tags, falling back to all tags');
+    tagList = userTags.map(t => ({ name: t.name, count: Number(t.count) }));
+  } else {
+    log.debug({ userId, tagCount: userTags.length }, 'Not enough tags for theme generation');
     return;
   }
-
-  const tagList = filteredTags.map(t => ({ name: t.name, count: Number(t.count) }));
 
   // Call LLM to cluster tags into themes
   const generatedThemes = await generateThemesFromTags(tagList, []);
