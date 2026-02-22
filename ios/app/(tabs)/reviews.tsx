@@ -6,7 +6,7 @@ import { useCallback, useState, useMemo } from 'react';
 import { View, ScrollView, RefreshControl, StyleSheet } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { FileText, Search } from 'lucide-react-native';
 import { SessionCard } from '../../components/reviews/SessionCard';
@@ -21,7 +21,8 @@ import { STAGGER_DELAY, STAGGER_CAP } from '../../lib/animations';
 
 export default function ReviewsScreen() {
   const router = useRouter();
-  const tabBarHeight = useBottomTabBarHeight();
+  const { bottom: bottomInset, top: topInset } = useSafeAreaInsets();
+  const tabBarHeight = bottomInset + 49;
   const queryClient = useQueryClient();
   const { data: sessions, isLoading } = useCompletedSessions();
   const [refreshing, setRefreshing] = useState(false);
@@ -87,7 +88,7 @@ export default function ReviewsScreen() {
   }
 
   return (
-    <Animated.View entering={FadeIn.duration(200)} style={styles.container}>
+    <Animated.View entering={FadeIn.duration(200)} style={[styles.container, { paddingTop: topInset }]}>
       {/* Search bar */}
       <View style={styles.searchContainer}>
         <SearchInput

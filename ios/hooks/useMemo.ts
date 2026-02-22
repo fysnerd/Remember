@@ -19,6 +19,25 @@ interface BackendTopicMemoResponse {
   generatedAt?: string;
 }
 
+// Prefetch memo into React Query cache (call early so it's ready when needed)
+export function prefetchMemo(queryClient: ReturnType<typeof useQueryClient>, contentId: string) {
+  if (!contentId) return;
+  queryClient.prefetchQuery({
+    queryKey: ['memo', contentId],
+    queryFn: async () => {
+      const { data } = await api.get<BackendMemoResponse>(`/content/${contentId}/memo`);
+      const memo: Memo = {
+        contentId,
+        title: 'Mémo',
+        content: data.memo,
+        generatedAt: data.generatedAt,
+      };
+      return memo;
+    },
+    staleTime: Infinity,
+  });
+}
+
 // Get memo for content — cached persistently (backend stores in DB, no need to refetch)
 export function useMemo(contentId: string) {
   return useQuery({

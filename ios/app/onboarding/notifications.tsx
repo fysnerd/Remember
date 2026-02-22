@@ -97,6 +97,7 @@ const styles = StyleSheet.create({
   },
   bellIcon: {
     fontSize: 64,
+    lineHeight: 80,
   },
   title: {
     textAlign: 'center',

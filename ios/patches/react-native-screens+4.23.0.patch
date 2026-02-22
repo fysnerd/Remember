@@ -1,0 +1,12 @@
+diff --git a/node_modules/react-native-screens/ios/RNSSearchBar.mm b/node_modules/react-native-screens/ios/RNSSearchBar.mm
+index e570363..5bf50fa 100644
+--- a/node_modules/react-native-screens/ios/RNSSearchBar.mm
++++ b/node_modules/react-native-screens/ios/RNSSearchBar.mm
+@@ -71,6 +71,7 @@ namespace react = facebook::react;
+ #endif
+ 
+   _controller.searchBar.delegate = self;
++  _controller.searchBar.searchBarStyle = UISearchBarStyleMinimal;
+ 
+   _isObscureBackgroundSet = NO;
+   _isHideNavigationBarSet = NO;

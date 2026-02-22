@@ -126,6 +126,9 @@ export default function MemoScreen() {
         options={{
           title: '',
           headerBackTitle: 'Retour',
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.text,
         }}
       />
       <ScrollView

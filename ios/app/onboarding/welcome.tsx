@@ -84,6 +84,7 @@ const styles = StyleSheet.create({
   },
   emoji: {
     fontSize: 64,
+    lineHeight: 80,
   },
   title: {
     textAlign: 'center',

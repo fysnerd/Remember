@@ -1,6 +1,6 @@
 /**
  * Onboarding Step 6: Connect sources (YouTube, Spotify, TikTok, Instagram)
- * Reuses existing OAuth flows. Optional step.
+ * Uses the same OAuth flows as the profile screen.
  */
 
 import { useState, useCallback } from 'react';
@@ -10,58 +10,64 @@ import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useQueryClient } from '@tanstack/react-query';
 import { Text, Button } from '../../components/ui';
+import { PlatformIcon } from '../../components/icons';
 import { OnboardingProgressBar } from '../../components/onboarding/OnboardingProgressBar';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useAuthStore } from '../../stores/authStore';
-import { API_URL } from '../../lib/constants';
-import { getAccessToken } from '../../lib/storage';
-import { colors, spacing, borderRadius } from '../../theme';
+import { useOAuthStatus } from '../../hooks';
+import api from '../../lib/api';
+import { colors, spacing, borderRadius, glass } from '../../theme';
 import { haptics } from '../../lib/haptics';
 
-interface PlatformConfig {
-  key: string;
-  name: string;
-  emoji: string;
-  color: string;
-  type: 'oauth' | 'cookie';
-}
-
-const PLATFORMS: PlatformConfig[] = [
-  { key: 'youtube', name: 'YouTube', emoji: '▶️', color: '#FF0000', type: 'oauth' },
-  { key: 'spotify', name: 'Spotify', emoji: '🎵', color: '#1DB954', type: 'oauth' },
-  { key: 'tiktok', name: 'TikTok', emoji: '🎬', color: '#000000', type: 'cookie' },
-  { key: 'instagram', name: 'Instagram', emoji: '📸', color: '#E4405F', type: 'cookie' },
-];
+const platformConfig = [
+  { id: 'youtube', name: 'YouTube' },
+  { id: 'spotify', name: 'Spotify' },
+  { id: 'tiktok', name: 'TikTok' },
+  { id: 'instagram', name: 'Instagram' },
+] as const;
 
 export default function ConnectScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { saveStep, isSaving } = useOnboardingStore();
   const { updateUser } = useAuthStore();
-  const [connected, setConnected] = useState<Set<string>>(new Set());
-  const [connecting, setConnecting] = useState<string | null>(null);
+  const { data: oauthStatus } = useOAuthStatus();
+  const [loadingPlatform, setLoadingPlatform] = useState<string | null>(null);
 
-  const handleConnect = useCallback(async (platform: PlatformConfig) => {
+  const refreshOAuthStatus = () => {
+    queryClient.invalidateQueries({ queryKey: ['oauth', 'status'] });
+  };
+
+  const handleConnect = useCallback(async (platformId: string) => {
     haptics.light();
-    setConnecting(platform.key);
 
+    if (platformId === 'tiktok' || platformId === 'instagram') {
+      router.push({ pathname: '/oauth/[platform]', params: { platform: platformId } });
+      return;
+    }
+
+    setLoadingPlatform(platformId);
     try {
-      if (platform.type === 'oauth') {
-        // OAuth flow via web browser
-        const token = await getAccessToken();
-        const url = `${API_URL}/oauth/${platform.key}/connect?token=${token}`;
-        await WebBrowser.openBrowserAsync(url);
-        // Assume success after browser closes
-        setConnected((prev) => new Set(prev).add(platform.key));
-        queryClient.invalidateQueries({ queryKey: ['oauth-status'] });
-      } else {
-        // Cookie-based flow via WebView
-        router.push(`/oauth/${platform.key}` as any);
+      const { data } = await api.get(`/oauth/${platformId}/connect`, {
+        params: {
+          client: 'ios',
+          appRedirectUri: 'ankora://oauth/callback',
+        },
+      });
+      if (data.authUrl) {
+        const result = await WebBrowser.openAuthSessionAsync(
+          data.authUrl,
+          'ankora://oauth/callback'
+        );
+
+        if (result.type === 'success') {
+          refreshOAuthStatus();
+        }
       }
-    } catch {
-      // User cancelled
+    } catch (error) {
+      console.error('OAuth error:', error);
     } finally {
-      setConnecting(null);
+      setLoadingPlatform(null);
     }
   }, []);
 
@@ -76,16 +82,12 @@ export default function ConnectScreen() {
     }
   };
 
-  const handleSkip = async () => {
-    haptics.light();
-    try {
-      await saveStep(6);
-      updateUser({ onboardingStep: 6 });
-      router.push('/onboarding/attribution');
-    } catch {
-      // Error handled in store
-    }
-  };
+  const platforms = platformConfig.map((p) => ({
+    ...p,
+    status: oauthStatus?.[p.id as keyof typeof oauthStatus] ?? null,
+  }));
+
+  const connectedCount = platforms.filter((p) => p.status !== null).length;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -93,31 +95,40 @@ export default function ConnectScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text variant="h2">Connecte tes sources</Text>
         <Text variant="body" color="secondary" style={{ marginTop: spacing.sm }}>
-          On importera le contenu que tu regardes pour créer des quiz.
+          On importera le contenu que tu regardes pour creer des quiz.
         </Text>
 
         <View style={styles.platforms}>
-          {PLATFORMS.map((platform) => {
-            const isConnected = connected.has(platform.key);
-            const isConnecting = connecting === platform.key;
+          {platforms.map((platform, index) => {
+            const isConnected = platform.status !== null;
+            const isPlatformLoading = loadingPlatform === platform.id;
 
             return (
               <Pressable
-                key={platform.key}
-                onPress={() => handleConnect(platform)}
-                disabled={isConnected || isConnecting}
-                style={[styles.platformCard, isConnected && styles.platformConnected]}
+                key={platform.id}
+                onPress={() => handleConnect(platform.id)}
+                disabled={isConnected || isPlatformLoading}
+                style={[
+                  styles.platformRow,
+                  index < platforms.length - 1 && styles.platformBorder,
+                  isConnected && styles.platformConnected,
+                ]}
               >
-                <Text variant="h3" style={{ fontSize: 28 }}>{platform.emoji}</Text>
-                <View style={styles.platformInfo}>
-                  <Text variant="body" weight="medium">{platform.name}</Text>
-                  {isConnected && (
-                    <Text variant="caption" style={{ color: colors.success }}>Connecté</Text>
-                  )}
+                <View style={styles.platformIcon}>
+                  <PlatformIcon platform={platform.id} size={20} colored />
                 </View>
-                {!isConnected && (
-                  <Text variant="caption" weight="medium" style={{ color: colors.accent }}>
-                    {isConnecting ? '...' : 'Connecter'}
+                <Text variant="body" style={styles.platformName}>
+                  {platform.name}
+                </Text>
+                {isPlatformLoading ? (
+                  <Text variant="caption" color="secondary">...</Text>
+                ) : isConnected ? (
+                  <Text variant="caption" weight="medium" style={{ color: colors.success }}>
+                    Connecte
+                  </Text>
+                ) : (
+                  <Text variant="caption" color="secondary">
+                    Connecter
                   </Text>
                 )}
               </Pressable>
@@ -134,10 +145,10 @@ export default function ConnectScreen() {
           Continuer
         </Button>
 
-        {connected.size === 0 && (
-          <Pressable onPress={handleSkip} style={{ marginTop: spacing.md }}>
+        {connectedCount === 0 && (
+          <Pressable onPress={handleContinue} style={{ marginTop: spacing.md }}>
             <Text variant="caption" color="secondary" style={{ textAlign: 'center' }}>
-              Passer cette étape
+              Passer cette etape
             </Text>
           </Pressable>
         )}
@@ -157,25 +168,29 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxl,
   },
   platforms: {
-    gap: spacing.md,
     marginVertical: spacing.xl,
-  },
-  platformCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.lg,
     borderRadius: borderRadius.lg,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    gap: spacing.md,
+    overflow: 'hidden',
+  },
+  platformRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+  },
+  platformBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: glass.border,
   },
   platformConnected: {
-    borderColor: colors.success,
     backgroundColor: 'rgba(34, 197, 94, 0.05)',
   },
-  platformInfo: {
+  platformIcon: {
+    marginRight: spacing.md,
+  },
+  platformName: {
     flex: 1,
-    gap: 2,
   },
 });

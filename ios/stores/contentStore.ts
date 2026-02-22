@@ -26,6 +26,10 @@ interface ContentStoreState {
   themeFilter: string | null;
   setThemeFilter: (theme: string | null) => void;
   resetFilters: () => void;
+
+  // Filter drawer visibility (shared between layout header button and screen modal)
+  showFilterDrawer: boolean;
+  setShowFilterDrawer: (show: boolean) => void;
 }
 
 export const useContentStore = create<ContentStoreState>((set) => ({
@@ -51,4 +55,7 @@ export const useContentStore = create<ContentStoreState>((set) => ({
   themeFilter: null,
   setThemeFilter: (theme) => set({ themeFilter: theme }),
   resetFilters: () => set({ sourceFilters: [], themeFilter: null }),
+
+  showFilterDrawer: false,
+  setShowFilterDrawer: (show) => set({ showFilterDrawer: show }),
 }));

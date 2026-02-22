@@ -14,7 +14,8 @@ import { QuestionCard, AnswerFeedback, QuizSummary } from '../../components/quiz
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { ErrorState } from '../../components/ErrorState';
 import { haptics } from '../../lib/haptics';
-import { useQuiz, useMultiQuiz, useSubmitAnswer, useCreateSession, useCompleteSession, useLinkDailySession } from '../../hooks';
+import { useQueryClient } from '@tanstack/react-query';
+import { useQuiz, useMultiQuiz, useSubmitAnswer, useCreateSession, useCompleteSession, useLinkDailySession, prefetchMemo } from '../../hooks';
 import { colors, spacing, borderRadius } from '../../theme';
 
 type QuizState = 'question' | 'feedback' | 'summary';
@@ -37,10 +38,18 @@ export default function QuizScreen() {
   const isLoading = isMulti ? multiQuiz.isLoading : singleQuiz.isLoading;
   const refetch = isMulti ? multiQuiz.refetch : singleQuiz.refetch;
 
+  const queryClient = useQueryClient();
   const submitMutation = useSubmitAnswer();
   const createSessionMutation = useCreateSession();
   const completeSessionMutation = useCompleteSession();
   const linkDailyMutation = useLinkDailySession();
+
+  // Prefetch memo as soon as quiz loads so it's instant when user finishes
+  useEffect(() => {
+    if (!isMulti && id) {
+      prefetchMemo(queryClient, id);
+    }
+  }, [id, isMulti]);
 
   const [state, setState] = useState<QuizState>('question');
   const [currentIndex, setCurrentIndex] = useState(0);

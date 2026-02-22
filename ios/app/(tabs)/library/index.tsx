@@ -12,24 +12,22 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { View, FlatList, ScrollView, StyleSheet, RefreshControl, Dimensions, ActivityIndicator, Pressable, Modal } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useQueryClient } from '@tanstack/react-query';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Text, Button } from '../../components/ui';
-import { useToast } from '../../components/ui/Toast';
-import { ContentCard, SourcePills, SwipeCardStack, TriageModeToggle } from '../../components/content';
-import { ThemePills } from '../../components/reviews/ThemePills';
-import { SearchInput } from '../../components/explorer/SearchInput';
-import { LoadingScreen } from '../../components/LoadingScreen';
-import { EmptyState } from '../../components/EmptyState';
-import { PlatformIcon } from '../../components/icons';
-import { Search, PartyPopper, X, BookOpen, Play, SlidersHorizontal, Check } from 'lucide-react-native';
-import { useLibraryContent, useInbox, useInboxCount, useSwipeTriage, useDebouncedValue, useThemes, useAvailableSources } from '../../hooks';
-import { useContentStore, type SourceKey } from '../../stores/contentStore';
-import { haptics } from '../../lib/haptics';
-import type { Content } from '../../types/content';
-import { colors, spacing, borderRadius } from '../../theme';
-import api from '../../lib/api';
+import { Text, Button } from '../../../components/ui';
+import { useToast } from '../../../components/ui/Toast';
+import { ContentCard, SourcePills, SwipeCardStack, TriageModeToggle } from '../../../components/content';
+import { ThemePills } from '../../../components/reviews/ThemePills';
+import { LoadingScreen } from '../../../components/LoadingScreen';
+import { EmptyState } from '../../../components/EmptyState';
+import { PlatformIcon } from '../../../components/icons';
+import { Search, PartyPopper, X, BookOpen, Play, Check } from 'lucide-react-native';
+import { useLibraryContent, useInbox, useInboxCount, useSwipeTriage, useDebouncedValue, useThemes, useAvailableSources } from '../../../hooks';
+import { useContentStore, type SourceKey } from '../../../stores/contentStore';
+import { haptics } from '../../../lib/haptics';
+import type { Content } from '../../../types/content';
+import { colors, spacing, borderRadius } from '../../../theme';
+import api from '../../../lib/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_GAP = spacing.sm;
@@ -39,12 +37,11 @@ const COLUMN_WIDTH = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP) / 2;
 export default function LibraryScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const tabBarHeight = useBottomTabBarHeight();
-  const insets = useSafeAreaInsets();
+  const { bottom: bottomInset, top: topInset } = useSafeAreaInsets();
+  const tabBarHeight = bottomInset + 49;
   const [refreshing, setRefreshing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const autoSwitchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [showFilterDrawer, setShowFilterDrawer] = useState(false);
   const [pendingSources, setPendingSources] = useState<SourceKey[]>([]);
 
   const selectionMode = selectedIds.size > 0;
@@ -59,9 +56,19 @@ export default function LibraryScreen() {
     setThemeFilter,
     viewMode,
     setViewMode,
+    showFilterDrawer,
+    setShowFilterDrawer,
   } = useContentStore();
 
   const debouncedSearch = useDebouncedValue(searchQuery, 300);
+
+  // Sync pendingSources when filter drawer opens (triggered from header button)
+  useEffect(() => {
+    if (showFilterDrawer) {
+      setPendingSources([...sourceFilters]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showFilterDrawer]);
 
   // Data fetching
   const { data: inboxCount } = useInboxCount();
@@ -159,12 +166,9 @@ export default function LibraryScreen() {
     swipeTriage.mutate({ contentId: item.id, action: 'archive' });
   }, [swipeTriage]);
 
-  const handleSkip = useCallback((_item: Content) => {
-    // Skip: just advance the card, no backend action
-  }, []);
+  const handleSkip = useCallback((_item: Content) => {}, []);
 
   const handleUndo = useCallback((item: Content) => {
-    // Reset content back to INBOX on the backend
     api.patch(`/content/${item.id}/triage`, { action: 'undo' }).catch(() => {});
     showToast('Annule', 'success');
   }, [showToast]);
@@ -235,24 +239,17 @@ export default function LibraryScreen() {
   // --- Mode switching ---
   const handleOpenTriage = useCallback(() => {
     setSelectedIds(new Set());
-    // Refetch inbox to get fresh data (items may have been triaged since last fetch)
     queryClient.invalidateQueries({ queryKey: ['inbox'] });
     setViewMode('triage');
   }, [setViewMode, queryClient]);
 
   const handleCloseTriage = useCallback(() => {
     setViewMode('browse');
-    // Invalidate both library (new items appeared) and inbox (items removed)
     queryClient.invalidateQueries({ queryKey: ['content', 'library'] });
     queryClient.invalidateQueries({ queryKey: ['inbox'] });
   }, [setViewMode, queryClient]);
 
   // --- Filter drawer ---
-  const handleOpenFilterDrawer = useCallback(() => {
-    setPendingSources([...sourceFilters]);
-    setShowFilterDrawer(true);
-  }, [sourceFilters]);
-
   const handleTogglePendingSource = useCallback((source: SourceKey) => {
     haptics.selection();
     setPendingSources((prev) =>
@@ -264,9 +261,7 @@ export default function LibraryScreen() {
     setSourceFilters(pendingSources);
     setShowFilterDrawer(false);
     haptics.selection();
-  }, [pendingSources, setSourceFilters]);
-
-  const isFilterActive = sourceFilters.length > 0;
+  }, [pendingSources, setSourceFilters, setShowFilterDrawer]);
 
   // --- Render content card ---
   const renderContentItem = useCallback(({ item }: { item: Content }) => (
@@ -287,37 +282,19 @@ export default function LibraryScreen() {
     </View>
   ), [handleContentPress, handleContentLongPress, selectedIds, selectionMode]);
 
-  // =====================================================
-  // BROWSE MODE
-  // =====================================================
-  const renderBrowseMode = () => (
-    <>
-      {/* Search bar + filter icon */}
-      <View style={styles.searchRow}>
-        <View style={styles.searchContainer}>
-          <SearchInput
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
+  // --- List header for browse mode ---
+  const renderBrowseListHeader = useCallback(() => (
+    <View>
+      {selectionMode && (
+        <View style={styles.selectionHeader}>
+          <Pressable onPress={handleCancelSelection} hitSlop={8}>
+            <X size={20} color={colors.text} strokeWidth={2} />
+          </Pressable>
+          <Text variant="body" weight="medium" style={{ color: colors.text }}>
+            {selectedIds.size} selectionne{selectedIds.size > 1 ? 's' : ''}
+          </Text>
         </View>
-        <Pressable
-          style={({ pressed }) => [
-            styles.filterButton,
-            isFilterActive && styles.filterButtonActive,
-            pressed && { opacity: 0.7 },
-          ]}
-          onPress={handleOpenFilterDrawer}
-          hitSlop={4}
-        >
-          <SlidersHorizontal
-            size={18}
-            color={isFilterActive ? colors.background : colors.textSecondary}
-            strokeWidth={1.75}
-          />
-        </Pressable>
-      </View>
-
-      {/* Theme filter pills */}
+      )}
       {themeOptions.length > 0 && (
         <ThemePills
           themes={themeOptions}
@@ -325,17 +302,25 @@ export default function LibraryScreen() {
           onThemeChange={setThemeFilter}
         />
       )}
+    </View>
+  ), [selectionMode, selectedIds.size, handleCancelSelection, inboxCount, handleOpenTriage, themeOptions, themeFilter, setThemeFilter]);
 
-      {/* Content grid */}
+  // =====================================================
+  // BROWSE MODE
+  // =====================================================
+  const renderBrowseMode = () => (
+    <>
       {libraryLoading ? (
         <LoadingScreen />
       ) : !libraryItems?.length ? (
         <ScrollView
           contentContainerStyle={[styles.emptyContainer, { paddingBottom: tabBarHeight + spacing.lg }]}
+          contentInsetAdjustmentBehavior="automatic"
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
           }
         >
+          {renderBrowseListHeader()}
           {debouncedSearch ? (
             <EmptyState message="Aucun resultat" icon={Search} hasHeader />
           ) : (
@@ -353,6 +338,8 @@ export default function LibraryScreen() {
             styles.content,
             { paddingBottom: tabBarHeight + spacing.lg + (selectionMode ? 80 : 0) },
           ]}
+          contentInsetAdjustmentBehavior="automatic"
+          ListHeaderComponent={renderBrowseListHeader}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
           }
@@ -373,7 +360,6 @@ export default function LibraryScreen() {
   // =====================================================
   // TRIAGE MODE
   // =====================================================
-  // Triage mode uses single-select SourcePills (adapter)
   const triageSourceFilter = sourceFilters.length === 1 ? sourceFilters[0] : 'all';
   const handleTriageSourceChange = useCallback((source: 'all' | 'youtube' | 'spotify' | 'tiktok' | 'instagram') => {
     setSourceFilters(source === 'all' ? [] : [source as SourceKey]);
@@ -381,6 +367,20 @@ export default function LibraryScreen() {
 
   const renderTriageMode = () => (
     <>
+      {/* Triage JS header (replaces native header which is hidden) */}
+      <View style={styles.triageHeader}>
+        <Text variant="body" weight="medium" style={{ color: colors.text }}>
+          Trier
+        </Text>
+        <Pressable
+          style={({ pressed }) => [styles.closeButton, pressed && styles.closeButtonPressed]}
+          onPress={handleCloseTriage}
+          hitSlop={8}
+        >
+          <X size={20} color={colors.textSecondary} strokeWidth={2} />
+        </Pressable>
+      </View>
+
       <SourcePills
         selectedSource={triageSourceFilter}
         onSourceChange={handleTriageSourceChange}
@@ -435,46 +435,19 @@ export default function LibraryScreen() {
   );
 
   return (
-    <Animated.View entering={FadeIn.duration(200)} style={styles.container}>
-      {/* Header */}
-      <View style={styles.topTabBar}>
-        {viewMode === 'browse' ? (
-          selectionMode ? (
-            <>
-              <View style={styles.selectionHeader}>
-                <Pressable onPress={handleCancelSelection} hitSlop={8}>
-                  <X size={20} color={colors.text} strokeWidth={2} />
-                </Pressable>
-                <Text variant="body" weight="medium" style={styles.topTabTextActive}>
-                  {selectedIds.size} selectionne{selectedIds.size > 1 ? 's' : ''}
-                </Text>
-              </View>
-              <View />
-            </>
-          ) : (
-            <>
-              <View />
-              <TriageModeToggle inboxCount={inboxCount ?? 0} onPress={handleOpenTriage} />
-            </>
-          )
-        ) : (
-          <>
-            <Text variant="body" weight="medium" style={styles.topTabTextActive}>
-              Trier
-            </Text>
-            <Pressable
-              style={({ pressed }) => [styles.closeButton, pressed && styles.closeButtonPressed]}
-              onPress={handleCloseTriage}
-              hitSlop={8}
-            >
-              <X size={20} color={colors.textSecondary} strokeWidth={2} />
-            </Pressable>
-          </>
-        )}
-      </View>
-
+    <Animated.View
+      entering={FadeIn.duration(200)}
+      style={[styles.container, viewMode === 'triage' && { paddingTop: topInset }]}
+    >
       {/* Mode content */}
       {viewMode === 'browse' ? renderBrowseMode() : renderTriageMode()}
+
+      {/* Floating triage button */}
+      {viewMode === 'browse' && !selectionMode && (inboxCount ?? 0) > 0 && (
+        <View style={[styles.floatingTriageButton, { bottom: tabBarHeight + spacing.md }]}>
+          <TriageModeToggle inboxCount={inboxCount ?? 0} onPress={handleOpenTriage} />
+        </View>
+      )}
 
       {/* Selection action bar */}
       {selectionMode && viewMode === 'browse' && (
@@ -505,7 +478,7 @@ export default function LibraryScreen() {
         onRequestClose={() => setShowFilterDrawer(false)}
       >
         <Pressable style={styles.drawerOverlay} onPress={() => setShowFilterDrawer(false)}>
-          <Pressable style={[styles.drawerSheet, { paddingBottom: insets.bottom + spacing.lg }]}>
+          <Pressable style={[styles.drawerSheet, { paddingBottom: bottomInset + spacing.lg }]}>
             {/* Handle bar */}
             <View style={styles.drawerHandle} />
 
@@ -576,24 +549,30 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
 
-  // --- Header ---
-  topTabBar: {
+  // --- Selection header (in list header) ---
+  selectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+
+  // --- Floating triage button ---
+  floatingTriageButton: {
+    position: 'absolute',
+    alignSelf: 'center',
+    zIndex: 10,
+  },
+
+  // --- Triage mode header ---
+  triageHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
     paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
-  },
-  topTabTextActive: {
-    color: colors.text,
-  },
-  selectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
   },
   closeButton: {
     width: 36,
@@ -608,32 +587,6 @@ const styles = StyleSheet.create({
   closeButtonPressed: {
     opacity: 0.7,
     transform: [{ scale: 0.95 }],
-  },
-
-  // --- Search + filter ---
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    gap: spacing.sm,
-  },
-  searchContainer: {
-    flex: 1,
-  },
-  filterButton: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterButtonActive: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
   },
 
   // --- Swipe mode ---

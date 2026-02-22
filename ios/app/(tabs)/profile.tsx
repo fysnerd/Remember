@@ -8,7 +8,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useQueryClient } from '@tanstack/react-query';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronRight, Crown, Wrench } from 'lucide-react-native';
 import { Text } from '../../components/ui';
 import { GlassCard } from '../../components/glass/GlassCard';
@@ -38,7 +38,8 @@ const platformConfig = [
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const tabBarHeight = useBottomTabBarHeight();
+  const { bottom: bottomInset, top: topInset } = useSafeAreaInsets();
+  const tabBarHeight = bottomInset + 49;
   const { user, logout } = useAuthStore();
   const { data: oauthStatus, isLoading } = useOAuthStatus();
   const { isProUser } = useSubscription();
@@ -214,7 +215,7 @@ export default function ProfileScreen() {
   const initials = displayName.slice(0, 2).toUpperCase();
 
   return (
-    <Animated.View entering={FadeIn.duration(200)} style={{ flex: 1 }}>
+    <Animated.View entering={FadeIn.duration(200)} style={{ flex: 1, paddingTop: topInset, backgroundColor: colors.background }}>
     <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.lg }]}>
       {/* User Info */}
       <GlassCard padding="lg" style={styles.userCard}>

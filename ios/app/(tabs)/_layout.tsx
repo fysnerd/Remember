@@ -1,84 +1,54 @@
 /**
  * Tab Navigator Layout
  *
- * Glass blur tab bar with Lucide icons.
- * Tab bar is position: absolute so content scrolls behind the blur.
+ * Native iOS tab bar with Liquid Glass (iOS 26+).
+ * Uses SF Symbols for native icon rendering.
  */
 
-import { Tabs } from 'expo-router';
-import { StyleSheet } from 'react-native';
-import { BlurView } from 'expo-blur';
-import { House, Compass, Brain, User } from 'lucide-react-native';
-import { TabIcon } from '../../components/icons';
-import { haptics } from '../../lib/haptics';
-import { colors, fonts, glass } from '../../theme';
+import { useColorScheme } from 'react-native';
+import { ThemeProvider, DarkTheme, DefaultTheme } from '@react-navigation/native';
+import { NativeTabs } from 'expo-router/unstable-native-tabs';
+import { colors } from '../../theme';
 
 export default function TabLayout() {
+  const colorScheme = useColorScheme();
+
   return (
-    <Tabs
-      screenListeners={{
-        tabPress: () => {
-          haptics.selection();
-        },
-      }}
-      screenOptions={{
-        tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.textSecondary,
-        tabBarBackground: () => (
-          <BlurView
-            intensity={glass.tabBarIntensity}
-            tint={glass.tabBarTint}
-            style={StyleSheet.absoluteFill}
+    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <NativeTabs
+        iconColor={{
+          default: colors.textTertiary,
+          selected: colors.accent,
+        }}
+      >
+        <NativeTabs.Trigger name="index">
+          <NativeTabs.Trigger.Icon
+            sf={{ default: 'house', selected: 'house.fill' }}
           />
-        ),
-        tabBarStyle: {
-          position: 'absolute',
-          borderTopWidth: 0,
-          elevation: 0,
-          backgroundColor: 'transparent',
-        },
-        tabBarLabelStyle: {
-          fontFamily: fonts.medium,
-        },
-        headerStyle: {
-          backgroundColor: colors.background,
-        },
-        headerTintColor: colors.text,
-        headerTitleStyle: {
-          fontFamily: fonts.semibold,
-        },
-        headerShadowVisible: false,
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          headerShown: false,
-          tabBarIcon: ({ color, size }) => <TabIcon icon={House} color={color} size={size} />,
-        }}
-      />
-      <Tabs.Screen
-        name="library"
-        options={{
-          title: 'Explorer',
-          tabBarIcon: ({ color, size }) => <TabIcon icon={Compass} color={color} size={size} />,
-        }}
-      />
-      <Tabs.Screen
-        name="reviews"
-        options={{
-          title: 'Revisions',
-          tabBarIcon: ({ color, size }) => <TabIcon icon={Brain} color={color} size={size} />,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profil',
-          tabBarIcon: ({ color, size }) => <TabIcon icon={User} color={color} size={size} />,
-        }}
-      />
-    </Tabs>
+          <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
+        </NativeTabs.Trigger>
+
+        <NativeTabs.Trigger name="library">
+          <NativeTabs.Trigger.Icon
+            sf={{ default: 'safari', selected: 'safari.fill' }}
+          />
+          <NativeTabs.Trigger.Label>Explorer</NativeTabs.Trigger.Label>
+        </NativeTabs.Trigger>
+
+        <NativeTabs.Trigger name="reviews">
+          <NativeTabs.Trigger.Icon
+            sf={{ default: 'brain.head.profile', selected: 'brain.head.profile.fill' }}
+          />
+          <NativeTabs.Trigger.Label>Revisions</NativeTabs.Trigger.Label>
+        </NativeTabs.Trigger>
+
+        <NativeTabs.Trigger name="profile">
+          <NativeTabs.Trigger.Icon
+            sf={{ default: 'person', selected: 'person.fill' }}
+          />
+          <NativeTabs.Trigger.Label>Profil</NativeTabs.Trigger.Label>
+        </NativeTabs.Trigger>
+      </NativeTabs>
+    </ThemeProvider>
   );
 }

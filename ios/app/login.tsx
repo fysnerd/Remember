@@ -3,7 +3,7 @@
  */
 
 import { useState } from 'react';
-import { View, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Pressable, StyleSheet, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Text, Input, Button, useToast } from '../components/ui';
 import { useAuthStore } from '../stores/authStore';
@@ -42,9 +42,11 @@ export default function LoginScreen() {
     >
       <ToastComponent />
       <View style={styles.content}>
-        <Text variant="h1" style={styles.title}>
-          ANKORA
-        </Text>
+        <Image
+          source={require('../assets/images/splash-icon.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
 
         <View style={styles.form}>
           <Input
@@ -97,8 +99,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
   },
-  title: {
-    textAlign: 'center',
+  logo: {
+    width: 200,
+    height: 274,
+    alignSelf: 'center',
     marginBottom: spacing.xl,
   },
   form: {

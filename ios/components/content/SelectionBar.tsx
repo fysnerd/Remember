@@ -5,7 +5,6 @@
 
 import { View, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Text } from '../ui';
 import { colors, spacing, borderRadius } from '../../theme';
 
@@ -27,7 +26,7 @@ export function SelectionBar({
   loadingIgnore = false,
 }: SelectionBarProps) {
   const insets = useSafeAreaInsets();
-  const tabBarHeight = useBottomTabBarHeight();
+  const tabBarHeight = insets.bottom + 49; // Native tab bar height approximation
   const isLoading = loadingLearn || loadingIgnore;
 
   return (

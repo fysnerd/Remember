@@ -74,7 +74,7 @@ export default function ContentDetailScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: '', headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: '', headerBackTitle: 'Retour', headerShadowVisible: false, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text }} />
       <View style={styles.container}>
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
           {/* Thumbnail */}

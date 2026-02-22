@@ -7,7 +7,7 @@ export { useInbox, useInboxCount } from './useInbox';
 export { useQuiz, useMultiQuiz, useTopicQuiz, useThemeQuiz, useSubmitAnswer, useCreateSession, useCompleteSession, useLinkDailySession } from './useQuiz';
 export { useReviews, useCompletedItems, useReviewStats, useCompletedSessions, useSessionDetail, useGenerateSessionMemo } from './useReviews';
 export type { QuizSessionItem, QuizSessionContent, QuizSessionTheme } from './useReviews';
-export { useMemo, useTopicMemo, useThemeMemo, useRefreshThemeMemo } from './useMemo';
+export { prefetchMemo, useMemo, useTopicMemo, useThemeMemo, useRefreshThemeMemo } from './useMemo';
 export { useOAuthStatus, useRefreshContent } from './useOAuth';
 export { useThemes, usePendingThemes, useDiscoverThemes, useThemeDetail, useCreateTheme, useUpdateTheme, useToggleFavoriteTheme, useDeleteTheme, useAddContentToTheme, useRemoveContentFromTheme } from './useThemes';
 export { useDailyThemes } from './useDailyThemes';

@@ -4,7 +4,7 @@
  */
 
 import { useState } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
+import { View, StyleSheet, KeyboardAvoidingView, Platform, Pressable, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Text, Input, Button, useToast } from '../../components/ui';
@@ -25,6 +25,20 @@ export default function AuthScreen() {
   const [appleLoading, setAppleLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [magicLinkLoading, setMagicLinkLoading] = useState(false);
+  const [devLoading, setDevLoading] = useState(false);
+
+  // Auto-login for web preview (dev only)
+  const handleDevLogin = async () => {
+    try {
+      setDevLoading(true);
+      clearError();
+      await login('test@remember.app', 'testpassword123');
+    } catch {
+      show('Dev login failed', 'error');
+    } finally {
+      setDevLoading(false);
+    }
+  };
 
   const handleAppleSignIn = async () => {
     try {
@@ -219,12 +233,11 @@ export default function AuthScreen() {
         <ToastComponent />
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text variant="h1" style={styles.centered}>
-              ANKORA
-            </Text>
-            <Text variant="body" color="secondary" style={[styles.centered, { marginTop: spacing.sm }]}>
-              Apprends de tout ce que tu regardes.
-            </Text>
+            <Image
+              source={require('../../assets/images/splash-icon.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
           </View>
 
           <View style={styles.buttons}>
@@ -260,10 +273,21 @@ export default function AuthScreen() {
                   onPress={handleMagicLink}
                   loading={magicLinkLoading}
                 >
-                  Envoyer un lien magique
+                  Recevoir un lien
                 </Button>
               </View>
             </View>
+
+            {Platform.OS === 'web' && (
+              <Button
+                variant="secondary"
+                fullWidth
+                onPress={handleDevLogin}
+                loading={devLoading}
+              >
+                Dev Login (test account)
+              </Button>
+            )}
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -285,7 +309,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   header: {
+    alignItems: 'center',
     marginBottom: spacing.xxl,
+  },
+  logo: {
+    width: 180,
+    height: 247,
   },
   centered: {
     textAlign: 'center',

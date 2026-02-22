@@ -1,58 +1,32 @@
 /**
- * GreetingHeader - Time-of-day greeting with user name, daily progress dots, and streak
+ * GreetingHeader - Casual greeting, motivational subtitle, and streak counter
  */
 
 import { View, StyleSheet } from 'react-native';
 import { Flame } from 'lucide-react-native';
 import { Text } from '../ui';
 import { colors, spacing, fonts } from '../../theme';
-import type { DailyProgress } from '../../types/content';
 
 interface GreetingHeaderProps {
   userName?: string;
-  dailyProgress?: DailyProgress;
   streak?: number;
 }
 
-function getGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'Bonjour';
-  if (hour < 18) return 'Bon apres-midi';
-  return 'Bonsoir';
-}
-
-export function GreetingHeader({ userName, dailyProgress, streak }: GreetingHeaderProps) {
-  const greeting = getGreeting();
-
+export function GreetingHeader({ userName, streak }: GreetingHeaderProps) {
   return (
     <View style={styles.container}>
-      <View style={styles.topRow}>
-        <Text variant="h2">
-          {greeting}, {userName || 'there'}
+      <View style={styles.textBlock}>
+        <Text style={styles.greeting}>
+          Hey {userName || 'there'} !
         </Text>
-        {streak != null && streak > 0 && (
-          <View style={styles.streak}>
-            <Flame size={16} color={colors.accent} />
-            <Text style={styles.streakText}>{streak}</Text>
-          </View>
-        )}
+        <Text style={styles.subtitle}>
+          It's time to remember what you've seen last few days!
+        </Text>
       </View>
-      {dailyProgress && dailyProgress.total > 0 && (
-        <View style={styles.progressRow}>
-          <Text style={styles.progressText}>
-            {dailyProgress.completed}/{dailyProgress.total} quiz du jour
-          </Text>
-          <View style={styles.dots}>
-            {Array.from({ length: dailyProgress.total }).map((_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.dot,
-                  i < dailyProgress.completed ? styles.dotFilled : styles.dotEmpty,
-                ]}
-              />
-            ))}
-          </View>
+      {streak != null && streak > 0 && (
+        <View style={styles.streakRow}>
+          <Text style={styles.streakText}>{streak}</Text>
+          <Flame size={18} color="#FF6B35" fill="#FF6B35" />
         </View>
       )}
     </View>
@@ -62,46 +36,34 @@ export function GreetingHeader({ userName, dailyProgress, streak }: GreetingHead
 const styles = StyleSheet.create({
   container: {
     marginBottom: spacing.xl,
+    gap: spacing.md,
   },
-  topRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  textBlock: {
+    gap: spacing.sm,
+    paddingRight: spacing.xl,
   },
-  streak: {
+  greeting: {
+    fontSize: 18,
+    fontFamily: fonts.regular,
+    color: colors.textSecondary,
+    letterSpacing: -0.64,
+  },
+  subtitle: {
+    fontSize: 34,
+    fontFamily: fonts.semibold,
+    color: colors.text,
+    letterSpacing: -1.2,
+    lineHeight: 34,
+  },
+  streakRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'flex-end',
+    gap: 2,
   },
   streakText: {
-    color: colors.accent,
-    fontFamily: fonts.semibold,
-    fontSize: 16,
-  },
-  progressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.sm,
-    gap: spacing.sm,
-  },
-  progressText: {
-    color: colors.textSecondary,
-    fontFamily: fonts.medium,
-    fontSize: 14,
-  },
-  dots: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  dotFilled: {
-    backgroundColor: colors.accent,
-  },
-  dotEmpty: {
-    backgroundColor: colors.surfaceElevated,
+    fontSize: 17,
+    fontFamily: fonts.bold,
+    color: colors.text,
   },
 });

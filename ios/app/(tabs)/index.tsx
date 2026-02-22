@@ -4,11 +4,10 @@
 
 import { useCallback, useState } from 'react';
 import { View, ScrollView, StyleSheet, RefreshControl } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Link2 } from 'lucide-react-native';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
@@ -23,7 +22,8 @@ import { colors, spacing } from '../../theme';
 export default function HomeScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const tabBarHeight = useBottomTabBarHeight();
+  const { bottom: bottomInset } = useSafeAreaInsets();
+  const tabBarHeight = bottomInset + 49;
   const [refreshing, setRefreshing] = useState(false);
 
   const { user } = useAuthStore();
@@ -75,33 +75,33 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.lg }]}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
-      }
-    >
-      <GreetingHeader userName={userName} dailyProgress={dailyProgress} streak={reviewStats?.currentStreak ?? 0} />
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.lg }]}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
+        }
+      >
+        <GreetingHeader userName={userName} streak={reviewStats?.currentStreak ?? 0} />
 
-      {dailyProgress?.allDone ? (
-        <DailyVictoryScreen streak={reviewStats?.currentStreak ?? 0} />
-      ) : (
-        <View style={styles.cardsList}>
-          {recommendations.map((rec, index) => (
-            <Animated.View
-              key={rec.id}
-              entering={FadeInDown.delay(Math.min(index, STAGGER_CAP) * STAGGER_DELAY).duration(250)}
-            >
-              <QuizRecommendationCard
-                recommendation={rec}
-                onPress={() => handleRecommendationPress(rec)}
-              />
-            </Animated.View>
-          ))}
-        </View>
-      )}
-    </ScrollView>
+        {dailyProgress?.allDone ? (
+          <DailyVictoryScreen streak={reviewStats?.currentStreak ?? 0} />
+        ) : (
+          <View style={styles.cardsList}>
+            {recommendations.map((rec, index) => (
+              <Animated.View
+                key={rec.id}
+                entering={FadeInDown.delay(Math.min(index, STAGGER_CAP) * STAGGER_DELAY).duration(250)}
+              >
+                <QuizRecommendationCard
+                  recommendation={rec}
+                  onPress={() => handleRecommendationPress(rec)}
+                />
+              </Animated.View>
+            ))}
+          </View>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }

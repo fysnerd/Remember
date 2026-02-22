@@ -7,10 +7,8 @@
 // Cloudflare tunnel URL - update this when tunnel restarts
 const TUNNEL_URL = 'https://atomic-floyd-couple-portrait.trycloudflare.com';
 
-// API base URL
-export const API_URL = __DEV__
-  ? `${TUNNEL_URL}/api`
-  : 'https://api.ankora.study/api';
+// API base URL — in dev, use prod API directly (tunnel often expires)
+export const API_URL = 'https://api.ankora.study/api';
 
 // Frontend web URL (for OAuth callbacks)
 export const FRONTEND_URL = __DEV__
