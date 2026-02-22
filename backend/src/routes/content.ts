@@ -257,11 +257,12 @@ contentRouter.get('/', async (req: Request, res: Response, next: NextFunction) =
       }
     }
 
-    // Theme filter (themeId from ContentTheme join table)
+    // Theme filter (themeId from ContentTheme join table, supports comma-separated)
     const { themeId } = req.query;
     if (themeId && typeof themeId === 'string') {
+      const themeIds = themeId.split(',').filter(Boolean);
       where.contentThemes = {
-        some: { themeId },
+        some: themeIds.length === 1 ? { themeId: themeIds[0] } : { themeId: { in: themeIds } },
       };
     }
 
