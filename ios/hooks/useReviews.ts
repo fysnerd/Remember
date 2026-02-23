@@ -85,6 +85,22 @@ export function useGenerateSessionMemo() {
 }
 
 // ============================================================================
+// Delete session
+// ============================================================================
+
+export function useDeleteSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (sessionId: string) => {
+      await api.delete(`/reviews/session/${sessionId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reviews', 'sessions'] });
+    },
+  });
+}
+
+// ============================================================================
 // Legacy hooks (still used elsewhere)
 // ============================================================================
 
