@@ -18,6 +18,28 @@ const BLOCKED_REGEX = new RegExp(
 const MIN_DURATION_SECONDS = 10;
 
 /**
+ * Clean a TikTok/Instagram caption for use as title:
+ * 1. Keep only the first line
+ * 2. Remove any #hashtag words
+ * 3. Trim whitespace
+ */
+export function cleanTitle(rawText: string | null, fallback: string): string {
+  if (!rawText) return fallback;
+
+  // Take only the first line
+  const firstLine = rawText.split('\n')[0].trim();
+  if (!firstLine) return fallback;
+
+  // Remove hashtag words (#something)
+  const cleaned = firstLine.replace(/#\S+/g, '').trim();
+
+  // If nothing left after removing hashtags, use fallback
+  if (!cleaned) return fallback;
+
+  return cleaned.substring(0, 255);
+}
+
+/**
  * Check if a TikTok/Instagram content should be skipped during sync.
  * Returns a reason string if filtered, null if OK to import.
  */
