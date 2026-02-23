@@ -101,6 +101,22 @@ export function useDeleteSession() {
 }
 
 // ============================================================================
+// Delete all reviews for a content (removes it from the reviews list)
+// ============================================================================
+
+export function useDeleteContentReviews() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (contentId: string) => {
+      await api.delete(`/reviews/content/${contentId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reviews', 'sessions'] });
+    },
+  });
+}
+
+// ============================================================================
 // Legacy hooks (still used elsewhere)
 // ============================================================================
 

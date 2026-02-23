@@ -1,5 +1,5 @@
 /**
- * Reviews Tab - List of completed quiz sessions with theme filter + search
+ * Reviews Tab - List of quizzed contents (one card per content, no session duplicates)
  */
 
 import { useCallback, useRef, useState, useMemo } from 'react';
@@ -16,10 +16,41 @@ import { ThemePills } from '../../components/reviews/ThemePills';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
 import { Text } from '../../components/ui';
-import { useCompletedSessions, useDeleteSession, useDebouncedValue } from '../../hooks';
-import type { QuizSessionTheme } from '../../hooks';
+import { useCompletedSessions, useDeleteContentReviews, useDebouncedValue } from '../../hooks';
+import type { QuizSessionTheme, QuizSessionItem } from '../../hooks';
 import { colors, spacing, borderRadius } from '../../theme';
 import { STAGGER_DELAY, STAGGER_CAP } from '../../lib/animations';
+
+/** One entry per unique content (deduplicated from sessions) */
+interface MemoItem {
+  contentId: string;
+  title: string;
+  platform: string;
+  thumbnailUrl: string | null;
+  channelName: string | null;
+  themes: QuizSessionTheme[];
+}
+
+/** Deduplicate sessions → one entry per content */
+function deduplicateByContent(sessions: QuizSessionItem[]): MemoItem[] {
+  const contentMap = new Map<string, MemoItem>();
+
+  for (const session of sessions) {
+    for (const content of session.contents) {
+      if (contentMap.has(content.id)) continue;
+      contentMap.set(content.id, {
+        contentId: content.id,
+        title: content.title,
+        platform: content.platform,
+        thumbnailUrl: content.thumbnailUrl,
+        channelName: content.channelName,
+        themes: session.themes,
+      });
+    }
+  }
+
+  return Array.from(contentMap.values());
+}
 
 export default function ReviewsScreen() {
   const router = useRouter();
@@ -27,28 +58,34 @@ export default function ReviewsScreen() {
   const tabBarHeight = bottomInset + 49;
   const queryClient = useQueryClient();
   const { data: sessions, isLoading } = useCompletedSessions();
-  const deleteSession = useDeleteSession();
+  const deleteContent = useDeleteContentReviews();
   const swipeableRefs = useRef<Map<string, Swipeable>>(new Map());
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedThemeIds, setSelectedThemeIds] = useState<string[]>([]);
 
-  const handleDelete = useCallback((sessionId: string, title: string) => {
+  const debouncedSearch = useDebouncedValue(searchQuery, 300);
+
+  // Deduplicate sessions into unique content items
+  const memoItems = useMemo(() => {
+    if (!sessions) return [];
+    return deduplicateByContent(sessions);
+  }, [sessions]);
+
+  const handleDelete = useCallback((contentId: string, title: string) => {
     Alert.alert(
       'Supprimer cette fiche',
       `Supprimer "${title}" ? Cette action est irréversible.`,
       [
-        { text: 'Annuler', style: 'cancel', onPress: () => swipeableRefs.current.get(sessionId)?.close() },
+        { text: 'Annuler', style: 'cancel', onPress: () => swipeableRefs.current.get(contentId)?.close() },
         {
           text: 'Supprimer',
           style: 'destructive',
-          onPress: () => deleteSession.mutate(sessionId),
+          onPress: () => deleteContent.mutate(contentId),
         },
       ],
     );
-  }, [deleteSession]);
-
-  const debouncedSearch = useDebouncedValue(searchQuery, 300);
+  }, [deleteContent]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -56,41 +93,40 @@ export default function ReviewsScreen() {
     setRefreshing(false);
   }, [queryClient]);
 
-  // Extract unique themes from all sessions for the pills
+  // Extract unique themes from all items for the pills
   const availableThemes = useMemo(() => {
-    if (!sessions) return [];
     const themeMap = new Map<string, QuizSessionTheme>();
-    for (const session of sessions) {
-      for (const theme of session.themes) {
+    for (const item of memoItems) {
+      for (const theme of item.themes) {
         if (!themeMap.has(theme.id)) {
           themeMap.set(theme.id, theme);
         }
       }
     }
     return Array.from(themeMap.values());
-  }, [sessions]);
+  }, [memoItems]);
 
-  // Filter sessions by theme + search
-  const filteredSessions = useMemo(() => {
-    if (!sessions) return sessions;
-    let result = sessions;
+  // Filter items by theme + search
+  const filteredItems = useMemo(() => {
+    let result = memoItems;
 
     if (selectedThemeIds.length > 0) {
-      result = result.filter((s) =>
-        s.themes.some((t) => selectedThemeIds.includes(t.id))
+      result = result.filter((item) =>
+        item.themes.some((t) => selectedThemeIds.includes(t.id))
       );
     }
 
     if (debouncedSearch) {
       const q = debouncedSearch.toLowerCase();
-      result = result.filter((s) =>
-        s.contents.some((c) => c.title.toLowerCase().includes(q)) ||
-        s.themes.some((t) => t.name.toLowerCase().includes(q))
+      result = result.filter((item) =>
+        item.title.toLowerCase().includes(q) ||
+        item.channelName?.toLowerCase().includes(q) ||
+        item.themes.some((t) => t.name.toLowerCase().includes(q))
       );
     }
 
     return result;
-  }, [sessions, selectedThemeIds, debouncedSearch]);
+  }, [memoItems, selectedThemeIds, debouncedSearch]);
 
   if (isLoading) {
     return <LoadingScreen />;
@@ -113,7 +149,7 @@ export default function ReviewsScreen() {
         <SearchInput
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholder="Rechercher une révision..."
+          placeholder="Rechercher une fiche..."
         />
       </View>
 
@@ -137,22 +173,22 @@ export default function ReviewsScreen() {
           />
         }
       >
-        {filteredSessions && filteredSessions.length > 0 ? (
+        {filteredItems.length > 0 ? (
           <View style={styles.list}>
-            {filteredSessions.map((session, index) => (
+            {filteredItems.map((item, index) => (
               <Animated.View
-                key={session.id}
+                key={item.contentId}
                 entering={FadeInDown.delay(Math.min(index, STAGGER_CAP) * STAGGER_DELAY).duration(200)}
               >
                 <Swipeable
                   ref={(ref) => {
-                    if (ref) swipeableRefs.current.set(session.id, ref);
-                    else swipeableRefs.current.delete(session.id);
+                    if (ref) swipeableRefs.current.set(item.contentId, ref);
+                    else swipeableRefs.current.delete(item.contentId);
                   }}
                   renderRightActions={() => (
                     <Pressable
                       style={styles.deleteAction}
-                      onPress={() => handleDelete(session.id, session.contents[0]?.title || 'cette fiche')}
+                      onPress={() => handleDelete(item.contentId, item.title)}
                     >
                       <Trash2 size={18} color="#FFFFFF" />
                       <Text style={styles.deleteText}>Supprimer</Text>
@@ -162,12 +198,24 @@ export default function ReviewsScreen() {
                   rightThreshold={40}
                 >
                   <SessionCard
-                    session={session}
+                    session={{
+                      id: item.contentId,
+                      completedAt: '',
+                      totalCount: 0,
+                      correctCount: 0,
+                      accuracy: 0,
+                      hasMemo: false,
+                      contents: [{
+                        id: item.contentId,
+                        title: item.title,
+                        platform: item.platform,
+                        thumbnailUrl: item.thumbnailUrl,
+                        channelName: item.channelName,
+                      }],
+                      themes: item.themes,
+                    }}
                     onPress={() => {
-                      const contentId = session.contents[0]?.id;
-                      if (contentId) {
-                        router.push({ pathname: '/memo/[id]' as any, params: { id: contentId } });
-                      }
+                      router.push({ pathname: '/memo/[id]' as any, params: { id: item.contentId } });
                     }}
                   />
                 </Swipeable>
