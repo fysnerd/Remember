@@ -1181,6 +1181,33 @@ reviewRouter.get('/session/:id', async (req: Request, res: Response, next: NextF
   }
 });
 
+// DELETE /api/reviews/session/:id - Delete a quiz session and its reviews
+reviewRouter.delete('/session/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const sessionId = asString(req.params.id);
+    const userId = req.user!.id;
+
+    const session = await prisma.quizSession.findFirst({
+      where: { id: sessionId, userId },
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Delete reviews first (foreign key), then the session
+    await prisma.$transaction([
+      prisma.review.deleteMany({ where: { sessionId } }),
+      prisma.dailyRecommendation.deleteMany({ where: { sessionId } }),
+      prisma.quizSession.delete({ where: { id: sessionId } }),
+    ]);
+
+    return res.json({ success: true });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 // GET /api/reviews/session/:id/cards - Get cards for a session
 reviewRouter.get('/session/:id/cards', async (req: Request, res: Response, next: NextFunction) => {
   try {
