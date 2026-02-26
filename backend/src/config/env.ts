@@ -70,6 +70,9 @@ const envSchema = z.object({
   STRIPE_PRICE_MONTHLY: z.string().optional(),
   STRIPE_PRICE_YEARLY: z.string().optional(),
 
+  // RevenueCat
+  REVENUECAT_WEBHOOK_SECRET: z.string().optional(),
+
   // Admin panel
   ADMIN_EMAIL: z.string().email().optional(),
   ADMIN_PASSWORD: z.string().min(8).optional(),
@@ -180,6 +183,10 @@ export const config = {
     webhookSecret: env.STRIPE_WEBHOOK_SECRET,
     priceMonthly: env.STRIPE_PRICE_MONTHLY,
     priceYearly: env.STRIPE_PRICE_YEARLY,
+  },
+
+  revenuecat: {
+    webhookSecret: env.REVENUECAT_WEBHOOK_SECRET || '',
   },
 
   admin: {

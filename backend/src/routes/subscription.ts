@@ -7,6 +7,10 @@ import {
   getSubscriptionStatus,
   handleStripeWebhook,
 } from '../services/stripe.js';
+import {
+  verifyRevenueCatWebhook,
+  handleRevenueCatWebhook,
+} from '../services/revenuecat.js';
 
 export const subscriptionRouter = Router();
 
@@ -82,3 +86,20 @@ subscriptionRouter.post(
     return res.json({ received: true });
   }
 );
+
+// POST /api/subscription/revenuecat-webhook - RevenueCat webhook (no auth middleware)
+subscriptionRouter.post('/revenuecat-webhook', async (req: Request, res: Response) => {
+  // Verify Authorization: Bearer <secret>
+  const authHeader = req.headers.authorization;
+  if (!verifyRevenueCatWebhook(authHeader as string | undefined)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const result = await handleRevenueCatWebhook(req.body);
+
+  if (!result.success) {
+    return res.status(400).json({ error: result.message });
+  }
+
+  return res.json({ received: true });
+});
