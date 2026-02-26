@@ -1,5 +1,6 @@
 /**
  * Quiz answer feedback component
+ * Full-screen tinted layout: subtle green/red background wash
  */
 
 import { View, StyleSheet } from 'react-native';
@@ -13,38 +14,57 @@ interface AnswerFeedbackProps {
   explanation: string;
 }
 
+const feedback = {
+  correct: {
+    iconBg: 'rgba(34, 197, 94, 0.15)',
+    iconColor: '#4ADE80',
+    cardBorder: 'rgba(34, 197, 94, 0.2)',
+    cardBg: 'rgba(34, 197, 94, 0.06)',
+  },
+  wrong: {
+    iconBg: 'rgba(239, 68, 68, 0.15)',
+    iconColor: '#F87171',
+    cardBorder: 'rgba(239, 68, 68, 0.2)',
+    cardBg: 'rgba(239, 68, 68, 0.06)',
+  },
+};
+
 export function AnswerFeedback({
   isCorrect,
   correctAnswer,
   explanation,
 }: AnswerFeedbackProps) {
+  const theme = isCorrect ? feedback.correct : feedback.wrong;
+
   return (
     <View style={styles.container}>
-      <View style={[styles.header, isCorrect ? styles.correct : styles.wrong]}>
-        <View style={styles.headerContent}>
+      <View style={styles.resultRow}>
+        <View style={[styles.iconCircle, { backgroundColor: theme.iconBg }]}>
           {isCorrect ? (
-            <Check size={24} color={colors.background} strokeWidth={2.5} />
+            <Check size={28} color={theme.iconColor} strokeWidth={2.5} />
           ) : (
-            <X size={24} color={colors.background} strokeWidth={2.5} />
+            <X size={28} color={theme.iconColor} strokeWidth={2.5} />
           )}
-          <Text variant="h2" color="inverse">
-            {isCorrect ? 'Correct !' : 'Incorrect'}
-          </Text>
         </View>
+        <Text variant="h2" style={{ color: theme.iconColor }}>
+          {isCorrect ? 'Correct !' : 'Incorrect'}
+        </Text>
       </View>
 
-      <View style={styles.content}>
-        <Text variant="body" color="secondary" style={styles.label}>
-          La bonne reponse etait :
+      <View>
+        <Text variant="caption" color="secondary" style={styles.label}>
+          Bonne réponse
         </Text>
         <Text variant="body" weight="medium" style={styles.answer}>
           {correctAnswer}
         </Text>
 
-        <Text variant="body" color="secondary" style={styles.label}>
-          Explication :
+        <Text variant="caption" color="secondary" style={styles.label}>
+          Explication
         </Text>
-        <Text variant="body">{explanation}</Text>
+        <Text variant="body" color="secondary">
+          {explanation}
+        </Text>
       </View>
     </View>
   );
@@ -52,32 +72,38 @@ export function AnswerFeedback({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: borderRadius.md,
-    overflow: 'hidden',
+    flex: 1,
+    gap: spacing.xl,
   },
-  header: {
-    padding: spacing.md,
-    alignItems: 'center',
-  },
-  headerContent: {
+  resultRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.md,
+    paddingTop: spacing.lg,
   },
-  correct: {
-    backgroundColor: colors.success,
+  iconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  wrong: {
-    backgroundColor: colors.error,
-  },
-  content: {
-    padding: spacing.md,
-    backgroundColor: colors.surface,
+  card: {
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    padding: spacing.lg,
   },
   label: {
     marginBottom: spacing.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    fontSize: 11,
   },
   answer: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  divider: {
+    height: 1,
+    marginBottom: spacing.lg,
   },
 });

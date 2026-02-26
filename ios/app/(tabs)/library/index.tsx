@@ -10,27 +10,26 @@
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { View, FlatList, ScrollView, StyleSheet, RefreshControl, Dimensions, ActivityIndicator, Pressable, Modal } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useQueryClient } from '@tanstack/react-query';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Text, Button } from '../../../components/ui';
 import { useToast } from '../../../components/ui/Toast';
-import { ContentCard, SourcePills, SwipeCardStack, TriageModeToggle } from '../../../components/content';
-import { ThemePills } from '../../../components/reviews/ThemePills';
+import { ContentCard, SourcePills, SwipeCardStack, TriageModeToggle, type SwipeCardStackRef } from '../../../components/content';
 import { LoadingScreen } from '../../../components/LoadingScreen';
 import { EmptyState } from '../../../components/EmptyState';
 import { PlatformIcon } from '../../../components/icons';
-import { Search, PartyPopper, X, BookOpen, Play, Check } from 'lucide-react-native';
+import { Search, PartyPopper, X, BookOpen, Play, Check, ChevronDown, Undo2 } from 'lucide-react-native';
 import { useLibraryContent, useInbox, useInboxCount, useSwipeTriage, useDebouncedValue, useThemes, useAvailableSources } from '../../../hooks';
 import { useContentStore, type SourceKey } from '../../../stores/contentStore';
 import { haptics } from '../../../lib/haptics';
 import type { Content } from '../../../types/content';
-import { colors, spacing, borderRadius } from '../../../theme';
+import { colors, spacing, borderRadius, fonts } from '../../../theme';
 import api from '../../../lib/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const GRID_GAP = spacing.sm;
+const GRID_GAP = spacing.md;
 const GRID_PADDING = spacing.lg;
 const COLUMN_WIDTH = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP) / 2;
 
@@ -41,8 +40,10 @@ export default function LibraryScreen() {
   const tabBarHeight = bottomInset + 49;
   const [refreshing, setRefreshing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const autoSwitchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [pendingSources, setPendingSources] = useState<SourceKey[]>([]);
+  const swipeStackRef = useRef<SwipeCardStackRef>(null);
+  const [canUndo, setCanUndo] = useState(false);
 
   const selectionMode = selectedIds.size > 0;
 
@@ -52,8 +53,9 @@ export default function LibraryScreen() {
     setSearchQuery,
     sourceFilters,
     setSourceFilters,
-    themeFilter,
-    setThemeFilter,
+    themeFilters,
+    toggleThemeFilter,
+    clearThemeFilters,
     viewMode,
     setViewMode,
     showFilterDrawer,
@@ -82,7 +84,7 @@ export default function LibraryScreen() {
     isFetchingNextPage: libraryFetchingNextPage,
   } = useLibraryContent({
     sources: sourceFilters.length > 0 ? sourceFilters : undefined,
-    themeId: themeFilter ?? undefined,
+    themeId: themeFilters.length > 0 ? themeFilters.join(',') : undefined,
     search: debouncedSearch || undefined,
     excludeArchived: true,
   });
@@ -97,7 +99,7 @@ export default function LibraryScreen() {
   } = useInbox(sourceFilters.length > 0 ? sourceFilters : undefined);
 
   const swipeTriage = useSwipeTriage();
-  const { show: showToast, ToastComponent } = useToast();
+  const { ToastComponent } = useToast();
 
   // Theme pills data
   const themeOptions = useMemo(() => {
@@ -105,7 +107,6 @@ export default function LibraryScreen() {
     return themes.map((t) => ({
       id: t.id,
       name: t.name,
-      emoji: t.emoji || '📚',
     }));
   }, [themes]);
 
@@ -132,23 +133,11 @@ export default function LibraryScreen() {
     }
   }, [availableSources, sourceFilters, setSourceFilters]);
 
-  // Auto-switch back to browse when triage completes
-  useEffect(() => {
-    if (viewMode === 'triage' && filteredInboxItems.length === 0 && !inboxLoading) {
-      autoSwitchTimer.current = setTimeout(() => {
-        showToast('Tout est trie !', 'success');
-        setViewMode('browse');
-      }, 1500);
-    }
-    return () => {
-      if (autoSwitchTimer.current) clearTimeout(autoSwitchTimer.current);
-    };
-  }, [viewMode, filteredInboxItems.length, inboxLoading]);
 
   // Pull-to-refresh
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    api.post('/content/refresh').catch(() => {});
+    api.post('/content/refresh').catch(() => { });
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['content'] }),
       queryClient.invalidateQueries({ queryKey: ['inbox'] }),
@@ -159,21 +148,19 @@ export default function LibraryScreen() {
   // --- Swipe handlers ---
   const handleSwipeRight = useCallback((item: Content) => {
     swipeTriage.mutate({ contentId: item.id, action: 'learn' });
-    showToast('Contenu sauvegarde', 'success');
-  }, [swipeTriage, showToast]);
+  }, [swipeTriage]);
 
   const handleSwipeLeft = useCallback((item: Content) => {
     swipeTriage.mutate({ contentId: item.id, action: 'archive' });
   }, [swipeTriage]);
 
-  const handleSkip = useCallback((_item: Content) => {}, []);
+  const handleSkip = useCallback((_item: Content) => { }, []);
 
   const handleUndo = useCallback((item: Content) => {
-    api.patch(`/content/${item.id}/triage`, { action: 'undo' }).catch(() => {});
-    showToast('Annule', 'success');
-  }, [showToast]);
+    api.patch(`/content/${item.id}/triage`, { action: 'undo' }).catch(() => { });
+  }, []);
 
-  const handleSwipeEmpty = useCallback(() => {}, []);
+  const handleSwipeEmpty = useCallback(() => { }, []);
 
   const handleNearEnd = useCallback(() => {
     if (inboxHasNextPage && !inboxFetchingNextPage) {
@@ -282,28 +269,79 @@ export default function LibraryScreen() {
     </View>
   ), [handleContentPress, handleContentLongPress, selectedIds, selectionMode]);
 
-  // --- List header for browse mode ---
+  // --- List header (filters + selection) ---
   const renderBrowseListHeader = useCallback(() => (
-    <View>
+    <>
+      <View style={styles.filterRowWrapper}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterRow}
+      >
+        <Pressable
+          style={[styles.sourcesDropdown, sourceFilters.length > 0 && styles.sourcesDropdownActive]}
+          onPress={() => setShowFilterDrawer(true)}
+        >
+          <Text
+            variant="caption"
+            weight={sourceFilters.length > 0 ? 'medium' : 'regular'}
+            style={[styles.sourcesLabel, sourceFilters.length > 0 && styles.sourcesLabelActive]}
+          >
+            Sources{sourceFilters.length > 0 ? ` (${sourceFilters.length})` : ''}
+          </Text>
+          <ChevronDown size={14} color={sourceFilters.length > 0 ? colors.background : colors.text} strokeWidth={2} />
+        </Pressable>
+
+        {themeOptions.length > 0 && <View style={styles.filterDivider} />}
+
+        {themeOptions.length > 0 && (
+          <Pressable
+            style={[styles.themePill, themeFilters.length === 0 && styles.themePillActive]}
+            onPress={clearThemeFilters}
+          >
+            <Text
+              variant="caption"
+              weight={themeFilters.length === 0 ? 'medium' : 'regular'}
+              style={[styles.themePillLabel, themeFilters.length === 0 && styles.themePillLabelActive]}
+            >
+              Tout
+            </Text>
+          </Pressable>
+        )}
+        {themeOptions.map((theme) => {
+          const isActive = themeFilters.includes(theme.id);
+          return (
+            <Pressable
+              key={theme.id}
+              style={[styles.themePill, isActive && styles.themePillActive]}
+              onPress={() => toggleThemeFilter(theme.id)}
+            >
+              <Text
+                variant="caption"
+                weight={isActive ? 'medium' : 'regular'}
+                style={[styles.themePillLabel, isActive && styles.themePillLabelActive]}
+                numberOfLines={1}
+              >
+                {theme.name}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+      </View>
+
       {selectionMode && (
         <View style={styles.selectionHeader}>
           <Pressable onPress={handleCancelSelection} hitSlop={8}>
             <X size={20} color={colors.text} strokeWidth={2} />
           </Pressable>
           <Text variant="body" weight="medium" style={{ color: colors.text }}>
-            {selectedIds.size} selectionne{selectedIds.size > 1 ? 's' : ''}
+            {selectedIds.size} sélectionné{selectedIds.size > 1 ? 's' : ''}
           </Text>
         </View>
       )}
-      {themeOptions.length > 0 && (
-        <ThemePills
-          themes={themeOptions}
-          selectedThemeId={themeFilter}
-          onThemeChange={setThemeFilter}
-        />
-      )}
-    </View>
-  ), [selectionMode, selectedIds.size, handleCancelSelection, inboxCount, handleOpenTriage, themeOptions, themeFilter, setThemeFilter]);
+    </>
+  ), [sourceFilters, themeFilters, themeOptions, selectionMode, selectedIds.size, handleCancelSelection, setShowFilterDrawer, clearThemeFilters, toggleThemeFilter]);
 
   // =====================================================
   // BROWSE MODE
@@ -320,11 +358,10 @@ export default function LibraryScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
           }
         >
-          {renderBrowseListHeader()}
           {debouncedSearch ? (
-            <EmptyState message="Aucun resultat" icon={Search} hasHeader />
+            <EmptyState message="Aucun résultat" icon={Search} />
           ) : (
-            <EmptyState message="Aucun contenu pour le moment" icon={BookOpen} hasHeader />
+            <EmptyState message="Aucun contenu pour le moment" icon={BookOpen} />
           )}
         </ScrollView>
       ) : (
@@ -367,69 +404,65 @@ export default function LibraryScreen() {
 
   const renderTriageMode = () => (
     <>
-      {/* Triage JS header (replaces native header which is hidden) */}
-      <View style={styles.triageHeader}>
-        <Text variant="body" weight="medium" style={{ color: colors.text }}>
-          Trier
-        </Text>
+      {/* Header — undo button left, close button right */}
+      <View style={[styles.triageHeader, { paddingTop: topInset + spacing.sm }]}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.closeButton,
+            !canUndo && { opacity: 0.3 },
+            pressed && canUndo && styles.closeButtonPressed,
+          ]}
+          onPress={() => swipeStackRef.current?.triggerUndo()}
+          hitSlop={8}
+          disabled={!canUndo}
+        >
+          <Undo2 size={18} color={colors.textSecondary} strokeWidth={2.5} />
+        </Pressable>
         <Pressable
           style={({ pressed }) => [styles.closeButton, pressed && styles.closeButtonPressed]}
           onPress={handleCloseTriage}
           hitSlop={8}
         >
-          <X size={20} color={colors.textSecondary} strokeWidth={2} />
+          <X size={22} color={colors.textSecondary} strokeWidth={2.5} />
         </Pressable>
       </View>
-
-      <SourcePills
-        selectedSource={triageSourceFilter}
-        onSourceChange={handleTriageSourceChange}
-        availableSources={availableSources}
-      />
 
       {inboxLoading ? (
         <LoadingScreen />
       ) : !filteredInboxItems.length ? (
-        <ScrollView
-          contentContainerStyle={[styles.swipeEmptyContainer, { paddingBottom: tabBarHeight + spacing.lg }]}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
-          }
-        >
-          {sourceFilters.length > 0 ? (
-            <EmptyState
-              message="Aucun contenu a trier pour ces sources"
-              icon={Search}
-              hasHeader
-            />
-          ) : (
-            <EmptyState
-              message="Tout est trie !"
-              icon={PartyPopper}
-              hasHeader
-            />
-          )}
-        </ScrollView>
+        <View style={styles.triageDoneContainer}>
+          <Animated.View entering={FadeInDown.duration(400)} style={styles.triageDoneContent}>
+            <Text style={styles.triageDoneEmoji}>
+              {sourceFilters.length > 0 ? '🔍' : '🎉'}
+            </Text>
+            <Text style={styles.triageDoneTitle}>
+              {sourceFilters.length > 0 ? 'Rien à trier' : 'Tout est trié !'}
+            </Text>
+            <Text style={styles.triageDoneSubtitle}>
+              {sourceFilters.length > 0
+                ? 'Aucun nouveau contenu pour ces sources'
+                : 'Tous tes contenus ont été triés. Reviens plus tard !'}
+            </Text>
+            <View style={styles.triageDoneActions}>
+              <Button variant="primary" size="lg" fullWidth onPress={handleCloseTriage}>
+                Retour
+              </Button>
+            </View>
+          </Animated.View>
+        </View>
       ) : (
-        <ScrollView
-          contentContainerStyle={styles.swipeScrollWrapper}
-          bounces={true}
-          scrollEnabled={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
-          }
-        >
-          <SwipeCardStack
-            key={sourceFilters.join(',')}
-            items={filteredInboxItems}
-            onSwipeRight={handleSwipeRight}
-            onSwipeLeft={handleSwipeLeft}
-            onSkip={handleSkip}
-            onUndo={handleUndo}
-            onEmpty={handleSwipeEmpty}
-            onNearEnd={handleNearEnd}
-          />
-        </ScrollView>
+        <SwipeCardStack
+          ref={swipeStackRef}
+          key={sourceFilters.join(',')}
+          items={filteredInboxItems}
+          onSwipeRight={handleSwipeRight}
+          onSwipeLeft={handleSwipeLeft}
+          onSkip={handleSkip}
+          onUndo={handleUndo}
+          onEmpty={handleSwipeEmpty}
+          onNearEnd={handleNearEnd}
+          onCanUndoChange={setCanUndo}
+        />
       )}
     </>
   );
@@ -437,14 +470,27 @@ export default function LibraryScreen() {
   return (
     <Animated.View
       entering={FadeIn.duration(200)}
-      style={[styles.container, viewMode === 'triage' && { paddingTop: topInset }]}
+      style={styles.container}
     >
-      {/* Mode content */}
-      {viewMode === 'browse' ? renderBrowseMode() : renderTriageMode()}
+      {/* Browse mode */}
+      {viewMode === 'browse' && renderBrowseMode()}
+
+      {/* Triage mode — fullscreen modal, hides tab bar */}
+      <Modal
+        visible={viewMode === 'triage'}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={handleCloseTriage}
+      >
+        <SafeAreaView style={styles.triageModal} edges={['bottom']}>
+          {renderTriageMode()}
+          <ToastComponent />
+        </SafeAreaView>
+      </Modal>
 
       {/* Floating triage button */}
       {viewMode === 'browse' && !selectionMode && (inboxCount ?? 0) > 0 && (
-        <View style={[styles.floatingTriageButton, { bottom: tabBarHeight + spacing.md }]}>
+        <View style={[styles.floatingTriageButton, { bottom: tabBarHeight - spacing.lg }]}>
           <TriageModeToggle inboxCount={inboxCount ?? 0} onPress={handleOpenTriage} />
         </View>
       )}
@@ -549,6 +595,69 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
 
+  // --- Filter row ---
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 0,
+    paddingBottom: spacing.sm,
+    paddingLeft: spacing.lg,
+    paddingRight: spacing.lg,
+    gap: spacing.sm,
+  },
+  filterRowWrapper: {
+    marginHorizontal: -spacing.lg,
+    marginBottom: spacing.md,
+  },
+  sourcesDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  sourcesDropdownActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  sourcesLabel: {
+    color: colors.text,
+    fontSize: 13,
+  },
+  sourcesLabelActive: {
+    color: colors.background,
+  },
+  filterDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: colors.borderLight,
+  },
+  themePill: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  themePillActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  themePillLabel: {
+    color: colors.text,
+    fontSize: 13,
+  },
+  themePillLabelActive: {
+    color: colors.background,
+  },
+
   // --- Selection header (in list header) ---
   selectionHeader: {
     flexDirection: 'row',
@@ -565,19 +674,24 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
 
-  // --- Triage mode header ---
+  // --- Triage fullscreen modal ---
+  triageModal: {
+    flex: 1,
+    backgroundColor: colors.background,
+    paddingHorizontal: spacing.lg,
+  },
   triageHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingBottom: spacing.sm,
+    marginHorizontal: -spacing.lg,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
   },
   closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.borderLight,
@@ -588,14 +702,47 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     transform: [{ scale: 0.95 }],
   },
+  undoBtnHidden: {
+    opacity: 0,
+  },
 
   // --- Swipe mode ---
   swipeScrollWrapper: {
     flex: 1,
   },
-  swipeEmptyContainer: {
-    flexGrow: 1,
+  // --- Triage done screen ---
+  triageDoneContainer: {
+    flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  triageDoneContent: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  triageDoneEmoji: {
+    fontSize: 72,
+    lineHeight: 84,
+    marginBottom: spacing.lg,
+  },
+  triageDoneTitle: {
+    color: colors.text,
+    fontFamily: fonts.bold,
+    fontSize: 32,
+    lineHeight: 38,
+    marginBottom: spacing.sm,
+  },
+  triageDoneSubtitle: {
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
+    fontSize: 16,
+    lineHeight: 22,
+    textAlign: 'center',
+    marginBottom: spacing.xxl,
+  },
+  triageDoneActions: {
+    width: '100%',
   },
 
   // --- Content area ---
@@ -615,6 +762,7 @@ const styles = StyleSheet.create({
   },
   gridItem: {
     width: COLUMN_WIDTH,
+    marginBottom: GRID_GAP,
   },
   loadingMore: {
     paddingVertical: spacing.lg,

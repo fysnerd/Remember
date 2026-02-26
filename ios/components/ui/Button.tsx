@@ -66,7 +66,7 @@ export function Button({
       {loading ? (
         <ActivityIndicator size="small" color={spinnerColor} />
       ) : (
-        <Text variant="body" weight="medium" color={textColor}>
+        <Text variant={size === 'lg' ? 'h3' : 'body'} weight={size === 'lg' ? 'semibold' : 'medium'} color={textColor}>
           {children}
         </Text>
       )}
@@ -80,6 +80,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: borderRadius.full,
+    borderCurve: 'continuous',
   },
   primary: {
     backgroundColor: colors.accent,

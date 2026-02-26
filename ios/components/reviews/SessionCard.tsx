@@ -3,7 +3,6 @@
  */
 
 import { View, Image, StyleSheet } from 'react-native';
-import { ChevronRight } from 'lucide-react-native';
 import { GlassCard } from '../glass/GlassCard';
 import { PlatformIcon } from '../icons/PlatformIcon';
 import { Text } from '../ui';
@@ -15,124 +14,85 @@ interface SessionCardProps {
   onPress: () => void;
 }
 
-function formatRelativeDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const sessionDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const diffDays = Math.floor((today.getTime() - sessionDay.getTime()) / (1000 * 60 * 60 * 24));
-
-  const time = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-
-  if (diffDays === 0) return `Aujourd'hui ${time}`;
-  if (diffDays === 1) return `Hier ${time}`;
-  if (diffDays < 7) return `Il y a ${diffDays}j`;
-
-  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-}
-
-function getAccuracyColor(accuracy: number): string {
-  if (accuracy >= 80) return colors.success;
-  if (accuracy >= 50) return '#F59E0B'; // amber
-  return colors.error;
-}
-
 export function SessionCard({ session, onPress }: SessionCardProps) {
   const contentNames = session.contents.map(c => c.title).join(', ');
-  const thumbnails = session.contents.filter(c => c.thumbnailUrl).slice(0, 3);
-  const platforms = [...new Set(session.contents.map(c => c.platform.toLowerCase()))];
-  const accuracyColor = getAccuracyColor(session.accuracy);
+  const thumbnail = session.contents.find(c => c.thumbnailUrl);
+  const platform = session.contents[0]?.platform?.toLowerCase();
 
   // Pick creator name from the first content that has one
   const creatorName = session.contents.find(c => c.channelName)?.channelName;
-  const displayTitle = creatorName || contentNames;
 
   return (
-    <GlassCard padding="md" onPress={onPress}>
+    <GlassCard padding="md" onPress={onPress} style={styles.card}>
       <View style={styles.row}>
-        {/* Left: thumbnails stack or platform icons */}
-        <View style={styles.thumbnailStack}>
-          {thumbnails.length > 0 ? (
-            thumbnails.map((content, i) => (
-              <Image
-                key={content.id}
-                source={{ uri: content.thumbnailUrl! }}
-                style={[
-                  styles.thumbnail,
-                  { marginLeft: i > 0 ? -12 : 0, zIndex: 3 - i },
-                ]}
-              />
-            ))
-          ) : (
-            platforms.slice(0, 1).map(p => (
-              <View key={p} style={styles.platformIconWrap}>
-                <PlatformIcon platform={p} size={20} colored />
-              </View>
-            ))
+        {/* Left: thumbnail */}
+        {thumbnail?.thumbnailUrl ? (
+          <Image
+            source={{ uri: thumbnail.thumbnailUrl }}
+            style={styles.thumbnail}
+          />
+        ) : platform ? (
+          <View style={styles.platformIconWrap}>
+            <PlatformIcon platform={platform} size={24} colored />
+          </View>
+        ) : null}
+
+        {/* Right: title + channel */}
+        <View style={styles.info}>
+          <Text
+            variant="body"
+            weight="semibold"
+            numberOfLines={2}
+            style={styles.title}
+          >
+            {contentNames}
+          </Text>
+          {creatorName && (
+            <Text variant="caption" numberOfLines={1} style={styles.subtitle}>
+              {creatorName}
+            </Text>
           )}
         </View>
-
-        {/* Center: info */}
-        <View style={styles.info}>
-          <Text variant="body" weight="medium" numberOfLines={1}>
-            {displayTitle}
-          </Text>
-          <Text variant="caption" color="secondary" numberOfLines={1}>
-            {session.totalCount} question{session.totalCount > 1 ? 's' : ''}
-          </Text>
-          <Text variant="caption" color="tertiary">
-            {formatRelativeDate(session.completedAt)}
-          </Text>
-        </View>
-
-        {/* Right: accuracy badge */}
-        <View style={[styles.badge, { backgroundColor: accuracyColor + '20' }]}>
-          <Text variant="caption" weight="medium" style={{ color: accuracyColor }}>
-            {session.accuracy}%
-          </Text>
-        </View>
-
-        <ChevronRight size={16} color={colors.textTertiary} strokeWidth={1.75} />
       </View>
     </GlassCard>
   );
 }
 
 const styles = StyleSheet.create({
+  card: {
+    borderWidth: 1.5,
+    borderColor: colors.borderLight,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  thumbnailStack: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: spacing.md,
-    width: 48,
+    gap: spacing.md,
   },
   thumbnail: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.sm,
-    borderWidth: 1.5,
-    borderColor: colors.surface,
+    width: 82,
+    height: 62,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surfaceElevated,
   },
   platformIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.sm,
+    width: 82,
+    height: 62,
+    borderRadius: borderRadius.md,
     backgroundColor: colors.surfaceElevated,
     justifyContent: 'center',
     alignItems: 'center',
   },
   info: {
     flex: 1,
-    marginRight: spacing.sm,
     gap: 2,
   },
-  badge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.sm,
-    marginRight: spacing.sm,
+  title: {
+    fontSize: 18,
+    letterSpacing: -0.72,
+  },
+  subtitle: {
+    color: 'rgba(255, 255, 255, 0.4)',
+    fontSize: 12,
+    letterSpacing: -0.48,
   },
 });

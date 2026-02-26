@@ -95,7 +95,7 @@ export default function ConnectScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text variant="h2">Connecte tes sources</Text>
         <Text variant="body" color="secondary" style={{ marginTop: spacing.sm }}>
-          On importera le contenu que tu regardes pour creer des quiz.
+          On importera le contenu que tu regardes pour créer des quiz.
         </Text>
 
         <View style={styles.platforms}>
@@ -124,7 +124,7 @@ export default function ConnectScreen() {
                   <Text variant="caption" color="secondary">...</Text>
                 ) : isConnected ? (
                   <Text variant="caption" weight="medium" style={{ color: colors.success }}>
-                    Connecte
+                    Connecté
                   </Text>
                 ) : (
                   <Text variant="caption" color="secondary">
@@ -148,7 +148,7 @@ export default function ConnectScreen() {
         {connectedCount === 0 && (
           <Pressable onPress={handleContinue} style={{ marginTop: spacing.md }}>
             <Text variant="caption" color="secondary" style={{ textAlign: 'center' }}>
-              Passer cette etape
+              Passer cette étape
             </Text>
           </Pressable>
         )}

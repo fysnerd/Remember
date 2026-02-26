@@ -171,7 +171,7 @@ export default function OAuthWebViewScreen() {
           <View style={styles.instructionRow}>
             <PlatformIcon platform={platformKey} size={16} colored />
             <Text variant="body" color="secondary">
-              Connectez-vous a {config.name}, puis appuyez sur le bouton ci-dessous.
+              Connectez-vous à {config.name}, puis appuyez sur le bouton ci-dessous.
             </Text>
           </View>
         </View>

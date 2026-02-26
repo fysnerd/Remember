@@ -3,7 +3,6 @@
  */
 
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
-import { Check } from 'lucide-react-native';
 import { Text } from '../ui';
 import { colors, spacing, borderRadius } from '../../theme';
 
@@ -20,6 +19,8 @@ interface QuestionCardProps {
   disabled?: boolean;
   correctId?: string;
   isSynthesis?: boolean;
+  current?: number;
+  total?: number;
 }
 
 // Clean option text - remove leading "A) ", "B) ", etc. if present
@@ -29,18 +30,18 @@ const cleanOptionText = (text: string) => {
 
 const getOptionStyle = (isCorrect: boolean, isWrong: boolean, isSelected: boolean, hasResult: boolean) => ({
   backgroundColor: isCorrect && hasResult
-    ? 'rgba(34, 197, 94, 0.15)'
+    ? 'rgba(34, 197, 94, 0.12)'
     : isWrong
-    ? 'rgba(239, 68, 68, 0.15)'
+    ? 'rgba(239, 68, 68, 0.12)'
     : isSelected
-    ? colors.surfaceElevated
+    ? 'rgba(181, 165, 254, 0.08)'
     : colors.surface,
   borderColor: isCorrect && hasResult
     ? colors.success
     : isWrong
     ? colors.error
     : isSelected
-    ? colors.text
+    ? colors.accent
     : colors.border,
 });
 
@@ -52,9 +53,16 @@ export function QuestionCard({
   disabled = false,
   correctId,
   isSynthesis = false,
+  current,
+  total,
 }: QuestionCardProps) {
   return (
     <View>
+      {current != null && total != null && (
+        <Text variant="caption" color="secondary" style={styles.counter}>
+          Question {current}/{total}
+        </Text>
+      )}
       {isSynthesis && (
         <View style={styles.synthesisBadge}>
           <Text variant="caption" weight="medium" style={styles.synthesisBadgeText}>
@@ -83,23 +91,19 @@ export function QuestionCard({
               activeOpacity={0.7}
               style={[
                 styles.option,
-                { borderWidth: isSelected ? 2 : 1 },
                 optionColors,
               ]}
             >
-              <Text variant="body" weight="medium" color="secondary" style={styles.optionLabel}>
-                {option.id})
-              </Text>
+              <View style={[styles.radio, isSelected && styles.radioSelected]}>
+                {isSelected && <View style={styles.radioDot} />}
+              </View>
               <Text
                 variant="body"
-                weight={isSelected ? 'bold' : 'regular'}
+                weight="medium"
                 style={styles.optionText}
               >
                 {cleanOptionText(option.text)}
               </Text>
-              {isSelected && !correctId && (
-                <Check size={18} color={colors.text} strokeWidth={2.5} />
-              )}
             </TouchableOpacity>
           );
         })}
@@ -109,24 +113,46 @@ export function QuestionCard({
 }
 
 const styles = StyleSheet.create({
+  counter: {
+    marginBottom: spacing.sm,
+  },
   question: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
   options: {
-    gap: spacing.md,
+    gap: spacing.sm + 2,
   },
   option: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.lg,
-    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md + 2,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1.5,
     minHeight: 56,
   },
-  optionLabel: {
-    width: 28,
+  radio: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: colors.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  radioSelected: {
+    borderColor: colors.accent,
+  },
+  radioDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: colors.accent,
   },
   optionText: {
     flex: 1,
+    lineHeight: 22,
   },
   synthesisBadge: {
     backgroundColor: colors.accent,

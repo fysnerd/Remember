@@ -78,6 +78,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: borderRadius.full,
+    borderCurve: 'continuous',
     borderWidth: 1,
     borderColor: glass.border,
     ...glass.shadow,

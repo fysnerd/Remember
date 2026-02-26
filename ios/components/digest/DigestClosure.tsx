@@ -44,7 +44,7 @@ export function DigestClosure({
 
         {/* Subtitle */}
         <Text variant="body" color="secondary" style={styles.subtitle}>
-          {score}/{total} bonnes reponses
+          {score}/{total} bonnes réponses
         </Text>
 
         {/* Stats row */}
@@ -65,7 +65,7 @@ export function DigestClosure({
               {bestStreak}
             </Text>
             <Text variant="caption" color="secondary">
-              Meilleure serie
+              Meilleure série
             </Text>
           </View>
 
@@ -75,7 +75,7 @@ export function DigestClosure({
               {formatDuration(durationMs)}
             </Text>
             <Text variant="caption" color="secondary">
-              Duree
+              Durée
             </Text>
           </View>
         </View>

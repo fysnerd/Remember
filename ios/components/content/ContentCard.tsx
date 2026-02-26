@@ -64,12 +64,6 @@ export function ContentCard({
             <PlatformIcon platform={source} size={24} color={colors.textTertiary} />
           </View>
         )}
-        {/* Source badge - top left */}
-        <View style={styles.badgeOverlay}>
-          <View style={styles.badge}>
-            <PlatformIcon platform={source} size={9} color="#FFFFFF" />
-          </View>
-        </View>
         {/* Duration badge - bottom right */}
         {durationText && (
           <View style={styles.durationOverlay}>
@@ -107,6 +101,8 @@ export function ContentCard({
           </Text>
         )}
       </View>
+      {/* Inner border overlay */}
+      <View style={[styles.innerBorder, isSelected && styles.innerBorderSelected]} pointerEvents="none" />
     </View>
   );
 
@@ -128,14 +124,21 @@ export function ContentCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.background,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: borderRadius.md,
+    borderCurve: 'continuous',
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.borderLight,
     ...shadows.sm,
   },
-  cardSelected: {
+  cardSelected: {},
+  innerBorder: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: borderRadius.md,
+    borderCurve: 'continuous',
+    borderWidth: 1.5,
+    borderColor: colors.borderLight,
+  },
+  innerBorderSelected: {
     borderWidth: 2,
     borderColor: colors.text,
   },
@@ -232,6 +235,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 13,
     lineHeight: 17,
+    height: 34,
   },
   channelName: {
     color: colors.textSecondary,

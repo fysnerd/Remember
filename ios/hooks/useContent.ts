@@ -2,7 +2,7 @@
  * Content hooks - list, detail, triage
  */
 
-import { useQuery, useQueries, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueries, useInfiniteQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import api from '../lib/api';
 import type { Content, ContentListResponse } from '../types/content';
 
@@ -113,6 +113,7 @@ export function useLibraryContent(filters?: ContentFilters) {
       const { page, totalPages } = lastPage.pagination;
       return page < totalPages ? page + 1 : undefined;
     },
+    placeholderData: keepPreviousData,
   });
 
   const data = query.data?.pages.flatMap((p) => p.contents.map(mapContent));

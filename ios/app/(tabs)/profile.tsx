@@ -71,7 +71,7 @@ export default function ProfileScreen() {
   const handleManageSubscription = async () => {
     haptics.light();
     if (!RevenueCatUI) {
-      Alert.alert('Bientot disponible', 'La gestion d\'abonnement necessite une mise a jour de l\'app.');
+      Alert.alert('Bientôt disponible', 'La gestion d\'abonnement nécessite une mise à jour de l\'app.');
       return;
     }
     try {
@@ -88,9 +88,9 @@ export default function ProfileScreen() {
       const info = await restorePurchases();
       if (info) {
         haptics.success();
-        Alert.alert('Achats restaures', 'Vos achats ont ete restaures avec succes.');
+        Alert.alert('Achats restaurés', 'Vos achats ont été restaurés avec succès.');
       } else {
-        Alert.alert('Aucun achat', 'Aucun achat a restaurer.');
+        Alert.alert('Aucun achat', 'Aucun achat à restaurer.');
       }
     } catch {
       Alert.alert('Erreur', 'Impossible de restaurer les achats.');
@@ -102,7 +102,7 @@ export default function ProfileScreen() {
   const handleShowPaywall = async () => {
     haptics.light();
     if (!RevenueCatUI) {
-      Alert.alert('Bientot disponible', 'Les abonnements necessite une mise a jour de l\'app.');
+      Alert.alert('Bientôt disponible', 'Les abonnements nécessitent une mise à jour de l\'app.');
       return;
     }
     try {
@@ -114,12 +114,12 @@ export default function ProfileScreen() {
 
   const handleLogout = () => {
     Alert.alert(
-      'Deconnexion',
-      'Tu veux vraiment te deconnecter ?',
+      'Déconnexion',
+      'Tu veux vraiment te déconnecter ?',
       [
         { text: 'Annuler', style: 'cancel' },
         {
-          text: 'Deconnecter',
+          text: 'Déconnecter',
           style: 'destructive',
           onPress: async () => {
             queryClient.cancelQueries();
@@ -168,12 +168,12 @@ export default function ProfileScreen() {
 
   const handleDisconnect = (platformId: string, platformName: string) => {
     Alert.alert(
-      'Deconnecter ' + platformName,
-      'Voulez-vous vraiment deconnecter ce compte ? Votre contenu importe sera conserve.',
+      'Déconnecter ' + platformName,
+      'Voulez-vous vraiment déconnecter ce compte ? Votre contenu importé sera conservé.',
       [
         { text: 'Annuler', style: 'cancel' },
         {
-          text: 'Deconnecter',
+          text: 'Déconnecter',
           style: 'destructive',
           onPress: async () => {
             setLoadingPlatform(platformId);
@@ -182,7 +182,7 @@ export default function ProfileScreen() {
               refreshOAuthStatus();
             } catch (error) {
               console.error('Disconnect error:', error);
-              Alert.alert('Erreur', 'Impossible de deconnecter le compte');
+              Alert.alert('Erreur', 'Impossible de déconnecter le compte');
             } finally {
               setLoadingPlatform(null);
             }
@@ -250,7 +250,7 @@ export default function ProfileScreen() {
       {/* Connected Platforms */}
       <View style={styles.section}>
         <Text variant="h3" style={styles.sectionTitle}>
-          Plateformes connectees
+          Plateformes connectées
         </Text>
         <GlassCard padding="none">
           {platforms.map((platform, index) => {
@@ -275,7 +275,7 @@ export default function ProfileScreen() {
                   </Text>
                 ) : isConnected ? (
                   <Text variant="caption" weight="medium" style={styles.disconnectText}>
-                    Deconnecter
+                    Déconnecter
                   </Text>
                 ) : (
                   <Text variant="caption" color="secondary">
@@ -291,7 +291,7 @@ export default function ProfileScreen() {
       {/* Settings */}
       <View style={styles.section}>
         <Text variant="h3" style={styles.sectionTitle}>
-          Parametres
+          Paramètres
         </Text>
         <GlassCard padding="none">
           <Pressable style={[styles.settingsRow, styles.platformBorder]} onPress={handleManageSubscription}>
@@ -307,12 +307,12 @@ export default function ProfileScreen() {
             <ChevronRight size={16} color={colors.textSecondary} strokeWidth={1.75} />
           </Pressable>
           <Pressable style={[styles.settingsRow, styles.platformBorder]}>
-            <Text variant="body">A propos</Text>
+            <Text variant="body">À propos</Text>
             <ChevronRight size={16} color={colors.textSecondary} strokeWidth={1.75} />
           </Pressable>
           <Pressable style={styles.settingsRow} onPress={handleLogout}>
             <Text variant="body" style={styles.logoutText}>
-              Deconnexion
+              Déconnexion
             </Text>
           </Pressable>
         </GlassCard>
