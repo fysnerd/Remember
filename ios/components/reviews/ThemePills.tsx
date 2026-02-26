@@ -1,5 +1,6 @@
 /**
- * ThemePills - Horizontal scrollable theme filter pills for revisions screen
+ * ThemePills - Horizontal scrollable theme filter pills
+ * Multi-select with accent color. "Tout" clears selection.
  */
 
 import { View, ScrollView, StyleSheet, Pressable } from 'react-native';
@@ -9,17 +10,19 @@ import { colors, spacing, borderRadius } from '../../theme';
 interface ThemeOption {
   id: string;
   name: string;
-  emoji: string;
 }
 
 interface ThemePillsProps {
   themes: ThemeOption[];
-  selectedThemeId: string | null;
-  onThemeChange: (themeId: string | null) => void;
+  selectedThemeIds: string[];
+  onThemeToggle: (themeId: string) => void;
+  onClearAll: () => void;
 }
 
-export function ThemePills({ themes, selectedThemeId, onThemeChange }: ThemePillsProps) {
+export function ThemePills({ themes, selectedThemeIds, onThemeToggle, onClearAll }: ThemePillsProps) {
   if (themes.length === 0) return null;
+
+  const isAllSelected = selectedThemeIds.length === 0;
 
   return (
     <View style={styles.container}>
@@ -30,27 +33,26 @@ export function ThemePills({ themes, selectedThemeId, onThemeChange }: ThemePill
       >
         {/* "Tout" pill */}
         <Pressable
-          style={[styles.pill, selectedThemeId === null && styles.pillActive]}
-          onPress={() => onThemeChange(null)}
+          style={[styles.pill, isAllSelected && styles.pillActive]}
+          onPress={onClearAll}
         >
           <Text
             variant="caption"
-            weight={selectedThemeId === null ? 'medium' : 'regular'}
-            style={[styles.label, selectedThemeId === null && styles.labelActive]}
+            weight={isAllSelected ? 'medium' : 'regular'}
+            style={[styles.label, isAllSelected && styles.labelActive]}
           >
             Tout
           </Text>
         </Pressable>
 
         {themes.map((theme) => {
-          const isActive = selectedThemeId === theme.id;
+          const isActive = selectedThemeIds.includes(theme.id);
           return (
             <Pressable
               key={theme.id}
               style={[styles.pill, isActive && styles.pillActive]}
-              onPress={() => onThemeChange(theme.id)}
+              onPress={() => onThemeToggle(theme.id)}
             >
-              <Text variant="caption" style={styles.emoji}>{theme.emoji}</Text>
               <Text
                 variant="caption"
                 weight={isActive ? 'medium' : 'regular'}
@@ -69,7 +71,9 @@ export function ThemePills({ themes, selectedThemeId, onThemeChange }: ThemePill
 
 const styles = StyleSheet.create({
   container: {
+    paddingTop: spacing.xs,
     paddingBottom: spacing.md,
+    marginHorizontal: -spacing.lg,
   },
   row: {
     flexDirection: 'row',
@@ -82,23 +86,20 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: borderRadius.full,
+    borderCurve: 'continuous',
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.borderLight,
-    gap: 4,
   },
   pillActive: {
-    backgroundColor: colors.text,
-    borderColor: colors.text,
-  },
-  emoji: {
-    fontSize: 12,
+    backgroundColor: 'transparent',
+    borderColor: colors.accent,
   },
   label: {
     color: colors.text,
     fontSize: 13,
   },
   labelActive: {
-    color: colors.background,
+    color: colors.accent,
   },
 });

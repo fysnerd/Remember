@@ -47,14 +47,14 @@ const discoverSchema = z.object({
 });
 
 const FALLBACK_SUGGESTIONS = [
-  { name: 'Developpement personnel', emoji: '🧠', description: 'Techniques de productivite et croissance personnelle' },
-  { name: 'Sciences et technologie', emoji: '🔬', description: 'Decouvertes scientifiques et innovations technologiques' },
-  { name: 'Histoire et culture', emoji: '🏛️', description: 'Evenements historiques et patrimoine culturel' },
-  { name: 'Sante et bien-etre', emoji: '💪', description: 'Nutrition, exercice et sante mentale' },
-  { name: 'Economie et finance', emoji: '📊', description: 'Marches financiers et principes economiques' },
-  { name: 'Art et creation', emoji: '🎨', description: 'Expression artistique et processus creatifs' },
-  { name: 'Philosophie et reflexion', emoji: '💭', description: 'Grandes questions philosophiques et pensee critique' },
-  { name: 'Environnement et nature', emoji: '🌿', description: 'Ecologie, biodiversite et developpement durable' },
+  { name: 'Developpement personnel', emoji: '', description: 'Techniques de productivite et croissance personnelle' },
+  { name: 'Sciences et technologie', emoji: '', description: 'Decouvertes scientifiques et innovations technologiques' },
+  { name: 'Histoire et culture', emoji: '', description: 'Evenements historiques et patrimoine culturel' },
+  { name: 'Sante et bien-etre', emoji: '', description: 'Nutrition, exercice et sante mentale' },
+  { name: 'Economie et finance', emoji: '', description: 'Marches financiers et principes economiques' },
+  { name: 'Art et creation', emoji: '', description: 'Expression artistique et processus creatifs' },
+  { name: 'Philosophie et reflexion', emoji: '', description: 'Grandes questions philosophiques et pensee critique' },
+  { name: 'Environnement et nature', emoji: '', description: 'Ecologie, biodiversite et developpement durable' },
 ];
 
 function isRecent(date: Date): boolean {
@@ -177,7 +177,7 @@ themeRouter.get('/suggestions', async (req: Request, res: Response, _next: NextF
         {
           role: 'system',
           content: `Tu es un expert en apprentissage. Suggere 8 themes d'etude bases sur les centres d'interet de l'utilisateur.
-Chaque suggestion doit avoir un nom en francais (2-4 mots), un emoji, et une description courte (1 phrase).
+Chaque suggestion doit avoir un nom en francais (2-4 mots) et une description courte (1 phrase). Pas d'emoji.
 Les suggestions doivent etre DIFFERENTES des themes existants.
 Reponds UNIQUEMENT en JSON valide.`,
         },
@@ -187,7 +187,7 @@ Reponds UNIQUEMENT en JSON valide.`,
 Tags et frequences: ${tagList}
 
 Genere 8 suggestions de nouveaux themes. Format:
-{ "suggestions": [{ "name": "...", "emoji": "...", "description": "..." }] }`,
+{ "suggestions": [{ "name": "...", "emoji": "", "description": "..." }] }`,
         },
       ],
       temperature: 0.7,
@@ -206,7 +206,7 @@ Genere 8 suggestions de nouveaux themes. Format:
       .slice(0, 8)
       .map((s: any) => ({
         name: String(s.name).trim(),
-        emoji: typeof s.emoji === 'string' ? s.emoji : '📚',
+        emoji: '',
         description: typeof s.description === 'string' ? s.description.trim() : '',
       }));
 

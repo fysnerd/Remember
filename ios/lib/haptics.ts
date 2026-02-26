@@ -24,6 +24,8 @@ export const haptics = {
   light: safe(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)),
   /** Medium impact - quiz submit, card selection */
   medium: safe(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)),
+  /** Heavy impact - emphasis moments */
+  heavy: safe(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)),
   /** Selection change - tab switch, quiz option pick, filter change */
   selection: safe(() => Haptics.selectionAsync()),
   /** Success - quiz correct, triage batch complete */
@@ -32,4 +34,16 @@ export const haptics = {
   error: safe(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)),
   /** Warning - destructive action */
   warning: safe(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)),
+  /** Double error - strong wrong answer feel */
+  doubleError: () => {
+    safe(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error))();
+    setTimeout(() => safe(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy))(), 200);
+  },
+  /** Celebration - quiz complete with good score */
+  celebration: () => {
+    safe(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success))();
+    setTimeout(() => safe(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light))(), 150);
+    setTimeout(() => safe(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium))(), 300);
+    setTimeout(() => safe(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy))(), 450);
+  },
 };

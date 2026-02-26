@@ -27,7 +27,7 @@ export function ErrorState({ message, onRetry, hasHeader = false }: ErrorStatePr
         </Text>
         {onRetry && (
           <Button variant="outline" onPress={onRetry}>
-            Reessayer
+            Réessayer
           </Button>
         )}
       </View>

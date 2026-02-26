@@ -165,7 +165,7 @@ export default function DigestScreen() {
               Erreur de chargement
             </Text>
             <Button variant="primary" onPress={() => digestMutation.mutate()}>
-              Reessayer
+              Réessayer
             </Button>
             <Button variant="outline" onPress={handleQuit}>
               Retour
@@ -181,7 +181,7 @@ export default function DigestScreen() {
         <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
           <View style={styles.emptyContainer}>
             <Text variant="h3" style={styles.emptyText}>
-              Rien a reviser aujourd'hui !
+              Rien à réviser aujourd'hui !
             </Text>
             <Text variant="body" color="secondary" style={styles.emptySubtext}>
               Reviens demain pour de nouvelles questions.
@@ -277,7 +277,7 @@ export default function DigestScreen() {
             />
             <View style={styles.buttonContainer}>
               <Button variant="primary" fullWidth onPress={handleNext}>
-                {currentIndex < cards.length - 1 ? 'Suivant' : 'Voir le resultat'}
+                {currentIndex < cards.length - 1 ? 'Suivant' : 'Voir le résultat'}
               </Button>
             </View>
           </>

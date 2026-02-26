@@ -1,150 +1,314 @@
 /**
- * QuizRecommendationCard - Glass card for recommended quiz on Home screen
+ * QuizRecommendationCard - Home screen daily quiz card
  *
- * Shows thumbnail (content) or emoji (theme), title, creator name, and date.
+ * Four layout variants:
+ * - Horizontal (YouTube): full-width 16:9 thumbnail (Figma 130:309)
+ * - Vertical (TikTok/Instagram): small portrait 9:16 thumbnail (Figma 130:267)
+ * - Square (Spotify): 100×100 album/podcast cover (Figma 130:137)
+ * - Theme: full background image, light info pill at bottom (Figma 130:98)
  * Completed cards show a checkmark and reduced opacity.
  */
 
-import { View, Image, StyleSheet } from 'react-native';
-import { CheckCircle } from 'lucide-react-native';
-import { GlassCard } from '../glass/GlassCard';
+import { View, Image, StyleSheet, Pressable } from 'react-native';
 import { Text } from '../ui';
-import { colors, spacing, fonts } from '../../theme';
+import { PlatformIcon } from '../icons';
+import { haptics } from '../../lib/haptics';
+import { colors, spacing, fonts, borderRadius, glass } from '../../theme';
 import type { QuizRecommendation } from '../../types/content';
+
+// Placeholder until AI-generated covers (ANK-169)
+const THEME_PLACEHOLDER = require('../../assets/images/theme-placeholder.png');
 
 interface QuizRecommendationCardProps {
   recommendation: QuizRecommendation;
   onPress: () => void;
 }
 
-function formatDate(isoString: string): string {
-  const date = new Date(isoString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+type CardVariant = 'horizontal' | 'vertical' | 'square' | 'theme';
 
-  if (diffDays === 0) return "Aujourd'hui";
-  if (diffDays === 1) return 'Hier';
-  if (diffDays < 7) return `Il y a ${diffDays}j`;
-
-  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+function getCardVariant(type: string, platform: string | null): CardVariant {
+  if (type === 'theme') return 'theme';
+  const p = platform?.toUpperCase();
+  if (p === 'TIKTOK' || p === 'INSTAGRAM') return 'vertical';
+  if (p === 'SPOTIFY') return 'square';
+  return 'horizontal';
 }
 
-export function QuizRecommendationCard({ recommendation, onPress }: QuizRecommendationCardProps) {
-  const { type, title, subtitle, thumbnailUrl, emoji, channelName, capturedAt, questionCount, completed } = recommendation;
+// --- Theme card (Figma 130:98) ---
+
+function ThemeCard({ recommendation, completed }: { recommendation: QuizRecommendation; completed: boolean }) {
+  const { title, thumbnailUrl, questionCount, subtitle } = recommendation;
 
   return (
-    <GlassCard padding="lg" onPress={onPress} style={[styles.card, completed && styles.cardCompleted]}>
-      {/* Completed checkmark */}
-      {completed && (
-        <View style={styles.checkmark}>
-          <CheckCircle size={24} color={colors.success} />
-        </View>
-      )}
+    <View style={[styles.themeCardOuter, completed && styles.cardCompleted]}>
+      <View style={styles.themeCard}>
+        {/* Background image — AI cover or placeholder */}
+        <Image
+          source={thumbnailUrl ? { uri: thumbnailUrl } : THEME_PLACEHOLDER}
+          style={styles.themeBackground}
+          resizeMode="cover"
+        />
 
-      {/* Top: Thumbnail/Emoji */}
-      <View style={styles.header}>
-        {type === 'content' && thumbnailUrl ? (
-          <Image source={{ uri: thumbnailUrl }} style={styles.thumbnail} />
-        ) : (
-          <Text style={styles.emoji}>{emoji || '📚'}</Text>
-        )}
-      </View>
-
-      {/* Bottom: Title + creator + date */}
-      <View style={styles.bottom}>
-        <Text style={styles.title} numberOfLines={2}>
-          {title}
-        </Text>
-        <View style={styles.meta}>
-          {type === 'content' && channelName ? (
-            <Text style={styles.creator} numberOfLines={1}>{channelName}</Text>
-          ) : (
-            <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text>
-          )}
-          {type === 'content' && capturedAt && (
-            <>
-              <View style={styles.dot} />
-              <Text style={styles.date}>{formatDate(capturedAt)}</Text>
-            </>
-          )}
-          {type === 'theme' && (
-            <>
-              <View style={styles.dot} />
-              <Text style={styles.date}>{questionCount} question{questionCount !== 1 ? 's' : ''}</Text>
-            </>
-          )}
+        {/* Bottom info pill — light background */}
+        <View style={styles.themeInfoPill}>
+          <Text style={styles.themeTitle} numberOfLines={2}>
+            {title}
+          </Text>
+          <View style={styles.themeMetaRow}>
+            <Text style={styles.themeMeta}>
+              {questionCount} Question{questionCount !== 1 ? 's' : ''}
+            </Text>
+            {subtitle && (
+              <>
+                <Text style={styles.themeMetaSep}>|</Text>
+                <Text style={styles.themeMeta}>{subtitle}</Text>
+              </>
+            )}
+          </View>
         </View>
       </View>
-    </GlassCard>
+    </View>
   );
 }
 
+// --- Content card (YouTube / TikTok / Instagram / Spotify) ---
+
+function ContentCard({ recommendation, completed }: { recommendation: QuizRecommendation; completed: boolean }) {
+  const { type, title, thumbnailUrl, emoji, platform, questionCount } = recommendation;
+  const variant = getCardVariant(type, platform);
+  const compact = variant === 'vertical' || variant === 'square';
+
+  return (
+    <View style={[styles.card, compact && styles.cardCompact, completed && styles.cardCompleted]}>
+      {/* Thumbnail area */}
+      {variant === 'horizontal' && (
+        <View style={styles.horizontalThumbWrap}>
+          {thumbnailUrl ? (
+            <Image source={{ uri: thumbnailUrl }} style={styles.fillImage} resizeMode="cover" />
+          ) : (
+            <View style={styles.placeholderFill}>
+              {emoji ? (
+                <Text style={styles.emoji}>{emoji}</Text>
+              ) : platform ? (
+                <PlatformIcon platform={platform as any} size={32} color={colors.textTertiary} />
+              ) : null}
+            </View>
+          )}
+        </View>
+      )}
+
+      {variant === 'vertical' && (
+        <View style={styles.compactThumbWrap}>
+          {thumbnailUrl ? (
+            <Image source={{ uri: thumbnailUrl }} style={styles.verticalThumb} resizeMode="cover" />
+          ) : (
+            <View style={[styles.placeholderSmall, styles.verticalThumb]}>
+              <PlatformIcon platform={platform as any} size={24} color={colors.textTertiary} />
+            </View>
+          )}
+        </View>
+      )}
+
+      {variant === 'square' && (
+        <View style={styles.compactThumbWrap}>
+          {thumbnailUrl ? (
+            <Image source={{ uri: thumbnailUrl }} style={styles.squareThumb} resizeMode="cover" />
+          ) : (
+            <View style={[styles.placeholderSmall, styles.squareThumb]}>
+              <PlatformIcon platform="spotify" size={24} color={colors.textTertiary} />
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Info: Title + question count */}
+      <View style={styles.infoContainer}>
+        <Text style={styles.title} numberOfLines={3}>
+          {title}
+        </Text>
+        <Text style={styles.questionCount}>
+          {questionCount} Question{questionCount !== 1 ? 's' : ''}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// --- Main export ---
+
+export function QuizRecommendationCard({ recommendation, onPress }: QuizRecommendationCardProps) {
+  const isTheme = recommendation.type === 'theme';
+  const completed = recommendation.completed ?? false;
+
+  return (
+    <Pressable
+      onPress={() => { haptics.light(); onPress(); }}
+      style={({ pressed }) => pressed && styles.pressed}
+    >
+      {isTheme ? (
+        <ThemeCard recommendation={recommendation} completed={completed} />
+      ) : (
+        <ContentCard recommendation={recommendation} completed={completed} />
+      )}
+    </Pressable>
+  );
+}
+
+const CARD_BORDER_WIDTH = 2;
+const CARD_SHADOW = {
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.4,
+  shadowRadius: 8,
+  elevation: 8,
+} as const;
+
 const styles = StyleSheet.create({
+  // -- Content card shell --
   card: {
-    minHeight: 170,
-    justifyContent: 'space-between',
+    borderWidth: CARD_BORDER_WIDTH,
+    borderColor: glass.borderLight,
+    borderRadius: borderRadius.lg,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
+    padding: spacing.md,
+    gap: spacing.sm,
+    ...CARD_SHADOW,
+  },
+  cardCompact: {
+    gap: spacing.md,
   },
   cardCompleted: {
-    opacity: 0.7,
+    opacity: 0.5,
   },
-  checkmark: {
-    position: 'absolute',
-    top: spacing.md,
-    right: spacing.md,
-    zIndex: 1,
+
+  // -- Horizontal thumbnail (YouTube) --
+  horizontalThumbWrap: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: borderRadius.md,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceElevated,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+  fillImage: {
+    width: '100%',
+    height: '100%',
   },
-  thumbnail: {
-    width: 48,
-    height: 48,
-    borderRadius: 8,
-    backgroundColor: colors.surface,
+
+  // -- Compact thumbnail wrapper (Vertical + Square) --
+  compactThumbWrap: {},
+
+  // -- Vertical thumbnail (TikTok / Instagram) --
+  verticalThumb: {
+    width: 90,
+    height: 156,
+    borderRadius: borderRadius.md,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceElevated,
+  },
+
+  // -- Square thumbnail (Spotify) --
+  squareThumb: {
+    width: 100,
+    height: 100,
+    borderRadius: borderRadius.md,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceElevated,
+  },
+
+  // -- Content shared --
+  placeholderFill: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceElevated,
+  },
+  placeholderSmall: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emoji: {
     fontSize: 48,
-    lineHeight: 56,
   },
-  bottom: {
-    marginTop: spacing.md,
+  infoContainer: {
+    gap: 2,
   },
   title: {
     color: colors.text,
-    fontFamily: fonts.bold,
-    fontSize: 22,
-    lineHeight: 28,
-    marginBottom: spacing.sm,
+    fontFamily: fonts.semibold,
+    fontSize: 20,
+    lineHeight: 24,
+    letterSpacing: -0.8,
   },
-  meta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-  },
-  creator: {
-    color: colors.text,
-    fontFamily: fonts.medium,
-    fontSize: 14,
-    flexShrink: 1,
-  },
-  subtitle: {
+  questionCount: {
     color: colors.textSecondary,
     fontFamily: fonts.regular,
-    fontSize: 14,
+    fontSize: 15,
+    letterSpacing: -0.6,
   },
-  date: {
-    color: colors.textTertiary,
+
+  // -- Theme card (Figma 130:98) --
+  themeCardOuter: {
+    height: 388,
+    borderWidth: CARD_BORDER_WIDTH,
+    borderColor: glass.borderLight,
+    borderRadius: borderRadius.lg,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
+    ...CARD_SHADOW,
+  },
+  themeCard: {
+    flex: 1,
+    borderRadius: borderRadius.lg - CARD_BORDER_WIDTH,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
+    padding: spacing.md,
+    justifyContent: 'flex-end',
+  },
+  themeBackground: {
+    ...StyleSheet.absoluteFillObject,
+    width: undefined,
+    height: undefined,
+  },
+  themeInfoPill: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: borderRadius.sm,
+    borderCurve: 'continuous',
+    padding: spacing.md,
+    gap: 2,
+  },
+  themeTitle: {
+    color: '#111827',
+    fontFamily: fonts.semibold,
+    fontSize: 20,
+    lineHeight: 24,
+    letterSpacing: -0.8,
+  },
+  themeMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  themeMeta: {
+    color: '#475569',
     fontFamily: fonts.regular,
-    fontSize: 14,
+    fontSize: 15,
+    letterSpacing: -0.6,
   },
-  dot: {
-    width: 3,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: colors.textTertiary,
-    marginHorizontal: spacing.sm,
+  themeMetaSep: {
+    color: '#94A3B8',
+    fontFamily: fonts.regular,
+    fontSize: 15,
+    letterSpacing: -0.6,
+  },
+
+  // -- Shared --
+  pressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
   },
 });

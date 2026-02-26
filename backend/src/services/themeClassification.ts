@@ -161,13 +161,17 @@ export async function generateThemesForUser(userId: string): Promise<void> {
   // Filter to tags with usage >= MIN_TAG_USAGE (drop single-use noise)
   const filteredTags = userTags.filter(t => Number(t.count) >= MIN_TAG_USAGE);
 
-  // Not enough signal for meaningful themes
-  if (filteredTags.length < 5) {
-    log.debug({ userId, tagCount: filteredTags.length }, 'Not enough tags for theme generation');
+  // Fallback: if not enough high-usage tags, use ALL tags and let the LLM cluster them
+  let tagList: { name: string; count: number }[];
+  if (filteredTags.length >= 5) {
+    tagList = filteredTags.map(t => ({ name: t.name, count: Number(t.count) }));
+  } else if (userTags.length >= 5) {
+    log.info({ userId, filteredCount: filteredTags.length, totalCount: userTags.length }, 'Not enough high-usage tags, falling back to all tags');
+    tagList = userTags.map(t => ({ name: t.name, count: Number(t.count) }));
+  } else {
+    log.debug({ userId, tagCount: userTags.length }, 'Not enough tags for theme generation');
     return;
   }
-
-  const tagList = filteredTags.map(t => ({ name: t.name, count: Number(t.count) }));
 
   // Call LLM to cluster tags into themes
   const generatedThemes = await generateThemesFromTags(tagList, []);
@@ -443,7 +447,8 @@ Regles:
 - Fusionne les variantes (ex: "rap", "french rap", "hip hop" = un seul theme)
 - Ignore les tags utilises une seule fois sauf s'ils correspondent a un theme existant
 - Noms de themes en francais, clairs et concis (2-4 mots max)
-- Chaque theme doit avoir UN SEUL emoji representatif (pas de combinaisons, ex: "🎵" et non "🎵🎶") et une couleur hex
+- PAS D'EMOJI dans la reponse (mettre une chaine vide pour emoji)
+- Chaque theme doit avoir une couleur hex
 - Un tag peut appartenir a plusieurs themes si pertinent
 
 Reponds UNIQUEMENT en JSON valide.`,
@@ -456,7 +461,6 @@ ${existingList}
 
 Regroupe ces tags en themes coherents. Pour chaque theme, indique:
 - name: nom du theme en francais
-- emoji: un seul emoji representatif
 - description: une courte description du theme (1 phrase, max 15 mots, en francais)
 - color: code hex (parmi: #EF4444, #F97316, #EAB308, #22C55E, #14B8A6, #3B82F6, #6366F1, #8B5CF6, #EC4899, #F43F5E, #06B6D4, #84CC16)
 - tags: liste des tags regroupes dans ce theme
@@ -466,7 +470,7 @@ Format:
   "themes": [
     {
       "name": "Nom du theme",
-      "emoji": "emoji",
+      "emoji": "",
       "description": "Courte description du theme",
       "color": "#hex",
       "tags": ["tag1", "tag2", "tag3"]

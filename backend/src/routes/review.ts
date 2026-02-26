@@ -1181,6 +1181,64 @@ reviewRouter.get('/session/:id', async (req: Request, res: Response, next: NextF
   }
 });
 
+// DELETE /api/reviews/session/:id - Delete a quiz session and its reviews
+reviewRouter.delete('/session/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const sessionId = asString(req.params.id);
+    const userId = req.user!.id;
+
+    const session = await prisma.quizSession.findFirst({
+      where: { id: sessionId, userId },
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Delete reviews first (foreign key), then the session
+    await prisma.$transaction([
+      prisma.review.deleteMany({ where: { sessionId } }),
+      prisma.dailyRecommendation.deleteMany({ where: { sessionId } }),
+      prisma.quizSession.delete({ where: { id: sessionId } }),
+    ]);
+
+    return res.json({ success: true });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// DELETE /api/reviews/content/:contentId - Delete all sessions & reviews for a content
+reviewRouter.delete('/content/:contentId', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const contentId = asString(req.params.contentId);
+    const userId = req.user!.id;
+
+    // Find all sessions that reference this content
+    const sessions = await prisma.quizSession.findMany({
+      where: {
+        userId,
+        contentIds: { has: contentId },
+      },
+      select: { id: true },
+    });
+
+    const sessionIds = sessions.map(s => s.id);
+
+    if (sessionIds.length > 0) {
+      await prisma.$transaction([
+        prisma.review.deleteMany({ where: { sessionId: { in: sessionIds } } }),
+        prisma.dailyRecommendation.deleteMany({ where: { sessionId: { in: sessionIds } } }),
+        prisma.quizSession.deleteMany({ where: { id: { in: sessionIds } } }),
+      ]);
+    }
+
+    return res.json({ success: true, deletedSessions: sessionIds.length });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 // GET /api/reviews/session/:id/cards - Get cards for a session
 reviewRouter.get('/session/:id/cards', async (req: Request, res: Response, next: NextFunction) => {
   try {

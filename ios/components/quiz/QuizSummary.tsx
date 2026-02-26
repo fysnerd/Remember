@@ -17,7 +17,7 @@ interface QuizSummaryProps {
   hideSecondButton?: boolean; // Hide the "Retour" button
 }
 
-export function QuizSummary({ score, total, onViewMemo, onClose, memoLabel = 'Voir le memo', hideSecondButton = false }: QuizSummaryProps) {
+export function QuizSummary({ score, total, onViewMemo, onClose, memoLabel = 'Voir le mémo', hideSecondButton = false }: QuizSummaryProps) {
   const percentage = Math.round((score / total) * 100);
   const ResultIcon = percentage >= 80 ? Trophy : percentage >= 50 ? ThumbsUp : Star;
 
@@ -31,7 +31,7 @@ export function QuizSummary({ score, total, onViewMemo, onClose, memoLabel = 'Vo
         </Text>
 
         <Text variant="body" color="secondary" style={styles.message}>
-          Tu as bien repondu a {score} question{score > 1 ? 's' : ''} sur {total}.
+          Tu as bien répondu à {score} question{score > 1 ? 's' : ''} sur {total}.
         </Text>
 
         <View style={styles.actions}>

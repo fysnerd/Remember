@@ -23,9 +23,14 @@ interface ContentStoreState {
   setSourceFilters: (sources: SourceKey[]) => void;
   toggleSourceFilter: (source: SourceKey) => void;
 
-  themeFilter: string | null;
-  setThemeFilter: (theme: string | null) => void;
+  themeFilters: string[];
+  toggleThemeFilter: (themeId: string) => void;
+  clearThemeFilters: () => void;
   resetFilters: () => void;
+
+  // Filter drawer visibility (shared between layout header button and screen modal)
+  showFilterDrawer: boolean;
+  setShowFilterDrawer: (show: boolean) => void;
 }
 
 export const useContentStore = create<ContentStoreState>((set) => ({
@@ -48,7 +53,17 @@ export const useContentStore = create<ContentStoreState>((set) => ({
     return { sourceFilters: [...current, source] };
   }),
 
-  themeFilter: null,
-  setThemeFilter: (theme) => set({ themeFilter: theme }),
-  resetFilters: () => set({ sourceFilters: [], themeFilter: null }),
+  themeFilters: [],
+  toggleThemeFilter: (themeId) => set((state) => {
+    const current = state.themeFilters;
+    if (current.includes(themeId)) {
+      return { themeFilters: current.filter((id) => id !== themeId) };
+    }
+    return { themeFilters: [...current, themeId] };
+  }),
+  clearThemeFilters: () => set({ themeFilters: [] }),
+  resetFilters: () => set({ sourceFilters: [], themeFilters: [] }),
+
+  showFilterDrawer: false,
+  setShowFilterDrawer: (show) => set({ showFilterDrawer: show }),
 }));

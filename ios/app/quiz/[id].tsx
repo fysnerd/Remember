@@ -6,15 +6,17 @@
  * - Multi content: /quiz/multi?ids=id1,id2,id3 (uses useMultiQuiz)
  */
 
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { View, StyleSheet, Pressable, Animated } from 'react-native';
+import { useState, useEffect, useMemo } from 'react';
+import { View, StyleSheet, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text, Button } from '../../components/ui';
+import { GlassButton } from '../../components/glass/GlassButton';
 import { QuestionCard, AnswerFeedback, QuizSummary } from '../../components/quiz';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { ErrorState } from '../../components/ErrorState';
 import { haptics } from '../../lib/haptics';
-import { useQuiz, useMultiQuiz, useSubmitAnswer, useCreateSession, useCompleteSession, useLinkDailySession } from '../../hooks';
+import { useQueryClient } from '@tanstack/react-query';
+import { useQuiz, useMultiQuiz, useSubmitAnswer, useCreateSession, useCompleteSession, useLinkDailySession, prefetchMemo } from '../../hooks';
 import { colors, spacing, borderRadius } from '../../theme';
 
 type QuizState = 'question' | 'feedback' | 'summary';
@@ -37,10 +39,18 @@ export default function QuizScreen() {
   const isLoading = isMulti ? multiQuiz.isLoading : singleQuiz.isLoading;
   const refetch = isMulti ? multiQuiz.refetch : singleQuiz.refetch;
 
+  const queryClient = useQueryClient();
   const submitMutation = useSubmitAnswer();
   const createSessionMutation = useCreateSession();
   const completeSessionMutation = useCompleteSession();
   const linkDailyMutation = useLinkDailySession();
+
+  // Prefetch memo as soon as quiz loads so it's instant when user finishes
+  useEffect(() => {
+    if (!isMulti && id) {
+      prefetchMemo(queryClient, id);
+    }
+  }, [id, isMulti]);
 
   const [state, setState] = useState<QuizState>('question');
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -48,7 +58,14 @@ export default function QuizScreen() {
   const [score, setScore] = useState(0);
   const [startTime, setStartTime] = useState(Date.now());
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const progressAnim = useRef(new Animated.Value(0)).current;
+  const [results, setResults] = useState<(boolean | null)[]>([]);
+
+  // Initialize results array when quiz loads
+  useEffect(() => {
+    if (quiz && results.length === 0) {
+      setResults(new Array(quiz.questions.length).fill(null));
+    }
+  }, [quiz]);
 
   // Create session when quiz loads
   useEffect(() => {
@@ -68,17 +85,6 @@ export default function QuizScreen() {
     }
   }, [quiz, id, isMulti]);
 
-  const answeredCount = state === 'feedback' ? currentIndex + 1 : currentIndex;
-
-  useEffect(() => {
-    if (!quiz) return;
-    const target = answeredCount / quiz.questions.length;
-    Animated.timing(progressAnim, {
-      toValue: target,
-      duration: 300,
-      useNativeDriver: false,
-    }).start();
-  }, [answeredCount, quiz?.questions.length]);
 
   if (isLoading) {
     return <LoadingScreen />;
@@ -94,9 +100,14 @@ export default function QuizScreen() {
 
   const handleValidate = () => {
     if (!selectedAnswer || !sessionId) return;
-    haptics.medium();
+    haptics.heavy();
     const isCorrect = selectedAnswer === current.correctAnswer;
     if (isCorrect) setScore((s) => s + 1);
+    setResults((prev) => {
+      const next = [...prev];
+      next[currentIndex] = isCorrect;
+      return next;
+    });
 
     submitMutation.mutate({
       cardId: current.id,
@@ -106,11 +117,11 @@ export default function QuizScreen() {
     });
 
     setState('feedback');
-    setTimeout(() => isCorrect ? haptics.success() : haptics.error(), 300);
+    setTimeout(() => isCorrect ? haptics.success() : haptics.doubleError(), 250);
   };
 
   const handleNext = () => {
-    haptics.light();
+    haptics.medium();
     if (currentIndex < total - 1) {
       setCurrentIndex((i) => i + 1);
       setSelectedAnswer(null);
@@ -122,11 +133,12 @@ export default function QuizScreen() {
         completeSessionMutation.mutate(sessionId, {
           onSuccess: (data) => {
             if (data.dailyProgress?.allDone) {
-              haptics.success();
+              haptics.celebration();
             }
           },
         });
       }
+      haptics.celebration();
       setState('summary');
     }
   };
@@ -148,64 +160,72 @@ export default function QuizScreen() {
   }
 
   const correctOption = current.options.find((o) => o.id === current.correctAnswer);
+  const isCorrect = selectedAnswer === current.correctAnswer;
+
+  const feedbackBg = state === 'feedback'
+    ? isCorrect ? '#060F09' : '#120808'
+    : undefined;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, feedbackBg && { backgroundColor: feedbackBg }]}>
       <View style={styles.header}>
-        <Text variant="body" weight="medium">
-          Question {currentIndex + 1}/{total}
-        </Text>
-        <Pressable onPress={handleQuit} hitSlop={8}>
-          <Text variant="body">✕ Quitter</Text>
-        </Pressable>
+        <GlassButton size="sm" onPress={handleQuit}>
+          ✕ Quitter
+        </GlassButton>
       </View>
 
       <View style={styles.progressTrack}>
-        <Animated.View
-          style={[
-            styles.progressFill,
-            { width: progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) },
-          ]}
-        />
+        {results.map((result, i) => (
+          <View
+            key={i}
+            style={[
+              styles.progressSegment,
+              i === 0 && styles.progressSegmentFirst,
+              i === results.length - 1 && styles.progressSegmentLast,
+              result === true && styles.progressCorrect,
+              result === false && styles.progressIncorrect,
+              result === null && i === currentIndex && styles.progressCurrent,
+            ]}
+          />
+        ))}
       </View>
 
-      <View style={styles.content}>
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} keyboardShouldPersistTaps="handled">
         {state === 'question' ? (
-          <>
-            <QuestionCard
-              question={current.question}
-              options={current.options}
-              selectedId={selectedAnswer}
-              onSelect={(optionId) => {
-                haptics.selection();
-                setSelectedAnswer(optionId);
-              }}
-            />
-            <View style={styles.buttonContainer}>
-              <Button
-                variant="primary"
-                fullWidth
-                onPress={handleValidate}
-                disabled={!selectedAnswer || !sessionId}
-                loading={submitMutation.isPending}
-              >
-                Valider
-              </Button>
-            </View>
-          </>
+          <QuestionCard
+            question={current.question}
+            options={current.options}
+            selectedId={selectedAnswer}
+            current={currentIndex + 1}
+            total={total}
+            onSelect={(optionId) => {
+              haptics.selection();
+              setSelectedAnswer(optionId);
+            }}
+          />
         ) : (
-          <>
-            <AnswerFeedback
-              isCorrect={selectedAnswer === current.correctAnswer}
-              correctAnswer={correctOption?.text ?? ''}
-              explanation={current.explanation}
-            />
-            <View style={styles.buttonContainer}>
-              <Button variant="primary" fullWidth onPress={handleNext}>
-                {currentIndex < total - 1 ? 'Question suivante' : 'Voir le resultat'}
-              </Button>
-            </View>
-          </>
+          <AnswerFeedback
+            isCorrect={selectedAnswer === current.correctAnswer}
+            correctAnswer={correctOption?.text ?? ''}
+            explanation={current.explanation}
+          />
+        )}
+      </ScrollView>
+      <View style={styles.buttonContainer}>
+        {state === 'question' ? (
+          <Button
+            variant="primary"
+            fullWidth
+            onPress={handleValidate}
+            disabled={!selectedAnswer || !sessionId}
+            loading={submitMutation.isPending}
+          >
+            Valider
+          </Button>
+        ) : (
+          <Button variant="primary" fullWidth onPress={handleNext}>
+            {currentIndex < total - 1 ? 'Question suivante' : 'Voir le résultat'}
+          </Button>
         )}
       </View>
     </View>
@@ -216,23 +236,41 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background, paddingTop: 60 },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.lg,
   },
   progressTrack: {
-    height: 4,
-    backgroundColor: colors.surfaceElevated,
+    flexDirection: 'row' as const,
+    height: 6,
     marginHorizontal: spacing.lg,
-    borderRadius: borderRadius.full,
-    overflow: 'hidden' as const,
+    gap: 3,
   },
-  progressFill: {
+  progressSegment: {
+    flex: 1,
     height: '100%',
-    backgroundColor: colors.accent,
-    borderRadius: borderRadius.full,
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 3,
   },
-  content: { flex: 1, padding: spacing.lg },
-  buttonContainer: { paddingTop: spacing.lg },
+  progressSegmentFirst: {
+    borderTopLeftRadius: 3,
+    borderBottomLeftRadius: 3,
+  },
+  progressSegmentLast: {
+    borderTopRightRadius: 3,
+    borderBottomRightRadius: 3,
+  },
+  progressCorrect: {
+    backgroundColor: colors.success,
+  },
+  progressIncorrect: {
+    backgroundColor: colors.error,
+  },
+  progressCurrent: {
+    backgroundColor: colors.accent,
+  },
+  content: { flex: 1, paddingHorizontal: spacing.lg },
+  contentInner: { paddingTop: spacing.lg, paddingBottom: spacing.md },
+  buttonContainer: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl, paddingTop: spacing.md },
 });

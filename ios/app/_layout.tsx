@@ -3,6 +3,7 @@
  */
 
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -64,6 +65,7 @@ export default function RootLayout() {
 
   // Initialize RevenueCat SDK on mount (before any purchase operations)
   useEffect(() => {
+    if (Platform.OS === 'web') return;
     configurePurchases();
     GoogleSignin.configure({
       iosClientId: '628216102691-2gfso5k8i4nkd0cq83etbn1767i3k75a.apps.googleusercontent.com',
@@ -78,19 +80,26 @@ export default function RootLayout() {
     }
   }, [isAuthenticated, user?.id]);
 
-  // Check for OTA updates on mount — download + reload silently
+  // Initialize the new hook for OTA Updates
+  const { isUpdateAvailable, isUpdatePending } = Updates.useUpdates();
+
+  // Watch for OTA updates and alert the user when one finishes downloading
   useEffect(() => {
     if (__DEV__) return;
-    (async () => {
-      try {
-        const check = await Updates.checkForUpdateAsync();
-        if (check.isAvailable) {
-          await Updates.fetchUpdateAsync();
-          await Updates.reloadAsync();
-        }
-      } catch (_) {}
-    })();
-  }, []);
+
+    if (isUpdatePending) {
+      import('react-native').then(({ Alert }) => {
+        Alert.alert(
+          'Mise à jour disponible 🚀',
+          'Une nouvelle version a été téléchargée. Voulez-vous redémarrer l\'application pour l\'appliquer ?',
+          [
+            { text: 'Plus tard', style: 'cancel' },
+            { text: 'Redémarrer', style: 'default', onPress: () => Updates.reloadAsync() },
+          ]
+        );
+      });
+    }
+  }, [isUpdatePending]);
 
   // Check auth on mount
   useEffect(() => {
@@ -111,6 +120,11 @@ export default function RootLayout() {
     const firstSegment = segments[0] as string;
     const isOnboardingRoute = firstSegment === 'onboarding';
     const isAuthVerifyRoute = firstSegment === 'auth';
+    const isOAuthRoute = firstSegment === 'oauth';
+    const isPreviewRoute = firstSegment === 'preview';
+    const isPlaygroundRoute = firstSegment === 'playground';
+
+    if (isPreviewRoute || isPlaygroundRoute) return; // Skip auth guard for dev tools
 
     if (!isAuthenticated) {
       // Not logged in → go to onboarding auth (unless already there or on magic link verify)
@@ -119,7 +133,10 @@ export default function RootLayout() {
       }
     } else if (!user?.onboardingCompleted) {
       // Logged in but onboarding incomplete → resume at correct step
-      if (!isOnboardingRoute) {
+      // Allow oauth route during onboarding (TikTok/Instagram WebView)
+      const secondSegment = segments[1] as string;
+      const isStuckOnAuth = isOnboardingRoute && secondSegment === 'auth';
+      if ((!isOnboardingRoute && !isOAuthRoute) || isStuckOnAuth) {
         const step = user?.onboardingStep ?? 1;
         // After auth, minimum step is 1 (name)
         const route = ONBOARDING_ROUTES[Math.max(step, 1)] || '/onboarding/name';
@@ -140,114 +157,120 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-    <QueryClientProvider client={queryClient}>
-      <StatusBar style="light" />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: '#0A0F1A' },
-          animation: 'fade',
-          animationDuration: 250,
-        }}
-      >
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-        <Stack.Screen name="login" options={{ headerShown: false }} />
-        <Stack.Screen name="signup" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="content/[id]"
-          options={{
-            headerShown: true,
-            headerBackTitle: 'Retour',
-            presentation: 'card',
-            headerStyle: { backgroundColor: '#0A0F1A' },
-            headerTintColor: '#F8FAFC',
-          }}
-        />
-        <Stack.Screen
-          name="quiz/preview/multi"
-          options={{
-            headerShown: true,
-            title: '',
-            presentation: 'card',
-            headerStyle: { backgroundColor: '#0A0F1A' },
-            headerTintColor: '#F8FAFC',
-          }}
-        />
-        <Stack.Screen
-          name="quiz/[id]"
-          options={{
+      <QueryClientProvider client={queryClient}>
+        <StatusBar style="light" />
+        <Stack
+          screenOptions={{
             headerShown: false,
-            presentation: 'card',
+            headerShadowVisible: false,
+            contentStyle: { backgroundColor: '#0A0F1A' },
             animation: 'fade',
             animationDuration: 250,
           }}
-        />
-        <Stack.Screen
-          name="digest"
-          options={{
-            headerShown: false,
-            presentation: 'card',
-            animation: 'fade',
-            gestureEnabled: false,
-          }}
-        />
-        <Stack.Screen
-          name="memo/[id]"
-          options={{
-            headerShown: true,
-            title: 'Memo',
-            presentation: 'card',
-            headerStyle: { backgroundColor: '#0A0F1A' },
-            headerTintColor: '#F8FAFC',
-          }}
-        />
-        <Stack.Screen
-          name="quiz/theme/[id]"
-          options={{
-            headerShown: false,
-            presentation: 'card',
-          }}
-        />
-        <Stack.Screen
-          name="memo/theme/[id]"
-          options={{
-            headerShown: true,
-            presentation: 'card',
-            headerStyle: { backgroundColor: '#0A0F1A' },
-            headerTintColor: '#F8FAFC',
-          }}
-        />
-        <Stack.Screen
-          name="oauth/[platform]"
-          options={{
-            headerShown: true,
-            title: 'Connexion',
-            presentation: 'modal',
-            animation: 'slide_from_bottom',
-            animationDuration: 300,
-            headerStyle: { backgroundColor: '#0A0F1A' },
-            headerTintColor: '#F8FAFC',
-          }}
-        />
-        <Stack.Screen
-          name="theme/[id]"
-          options={{
-            headerShown: true,
-            headerBackTitle: 'Home',
-            presentation: 'card',
-            headerStyle: { backgroundColor: '#0A0F1A' },
-            headerTintColor: '#F8FAFC',
-          }}
-        />
-        <Stack.Screen
-          name="auth/verify"
-          options={{
-            headerShown: false,
-          }}
-        />
-      </Stack>
-    </QueryClientProvider>
+        >
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+          <Stack.Screen name="login" options={{ headerShown: false }} />
+          <Stack.Screen name="signup" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="content/[id]"
+            options={{
+              headerShown: true,
+              title: '',
+              headerBackTitle: 'Retour',
+              headerShadowVisible: false,
+              presentation: 'card',
+              headerStyle: { backgroundColor: '#0A0F1A' },
+              headerTintColor: '#F8FAFC',
+              contentStyle: { backgroundColor: '#0A0F1A' },
+            }}
+          />
+          <Stack.Screen
+            name="quiz/preview/multi"
+            options={{
+              headerShown: true,
+              title: '',
+              presentation: 'card',
+              headerStyle: { backgroundColor: '#0A0F1A' },
+              headerTintColor: '#F8FAFC',
+            }}
+          />
+          <Stack.Screen
+            name="quiz/[id]"
+            options={{
+              headerShown: false,
+              presentation: 'card',
+              animation: 'fade',
+              animationDuration: 250,
+            }}
+          />
+          <Stack.Screen
+            name="digest"
+            options={{
+              headerShown: false,
+              presentation: 'card',
+              animation: 'fade',
+              gestureEnabled: false,
+            }}
+          />
+          <Stack.Screen
+            name="memo/[id]"
+            options={{
+              headerShown: true,
+              title: '',
+              headerShadowVisible: false,
+              presentation: 'card',
+              headerStyle: { backgroundColor: '#0A0F1A' },
+              headerTintColor: '#F8FAFC',
+              contentStyle: { backgroundColor: '#0A0F1A' },
+            }}
+          />
+          <Stack.Screen
+            name="quiz/theme/[id]"
+            options={{
+              headerShown: false,
+              presentation: 'card',
+            }}
+          />
+          <Stack.Screen
+            name="memo/theme/[id]"
+            options={{
+              headerShown: true,
+              presentation: 'card',
+              headerStyle: { backgroundColor: '#0A0F1A' },
+              headerTintColor: '#F8FAFC',
+            }}
+          />
+          <Stack.Screen
+            name="oauth/[platform]"
+            options={{
+              headerShown: true,
+              title: 'Connexion',
+              presentation: 'modal',
+              animation: 'slide_from_bottom',
+              animationDuration: 300,
+              headerStyle: { backgroundColor: '#0A0F1A' },
+              headerTintColor: '#F8FAFC',
+            }}
+          />
+          <Stack.Screen
+            name="theme/[id]"
+            options={{
+              headerShown: true,
+              headerBackTitle: 'Home',
+              presentation: 'card',
+              headerStyle: { backgroundColor: '#0A0F1A' },
+              headerTintColor: '#F8FAFC',
+            }}
+          />
+          <Stack.Screen
+            name="auth/verify"
+            options={{
+              headerShown: false,
+            }}
+          />
+        </Stack>
+      </QueryClientProvider>
     </GestureHandlerRootView>
   );
 }

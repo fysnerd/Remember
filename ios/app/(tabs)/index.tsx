@@ -3,18 +3,17 @@
  */
 
 import { useCallback, useState } from 'react';
-import { View, ScrollView, StyleSheet, RefreshControl } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, ScrollView, StyleSheet, RefreshControl, Alert } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Link2 } from 'lucide-react-native';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
 import { GreetingHeader } from '../../components/home/GreetingHeader';
+import { DailyProgressTracker } from '../../components/home/DailyProgressTracker';
 import { QuizRecommendationCard } from '../../components/home/QuizRecommendationCard';
-import { DailyVictoryScreen } from '../../components/home/DailyVictoryScreen';
 import { STAGGER_DELAY, STAGGER_CAP } from '../../lib/animations';
 import { useQuizRecommendations, usePipelineStatus, useReviewStats } from '../../hooks';
 import { useAuthStore } from '../../stores/authStore';
@@ -23,7 +22,8 @@ import { colors, spacing } from '../../theme';
 export default function HomeScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const tabBarHeight = useBottomTabBarHeight();
+  const { bottom: bottomInset } = useSafeAreaInsets();
+  const tabBarHeight = bottomInset + 49;
   const [refreshing, setRefreshing] = useState(false);
 
   const { user } = useAuthStore();
@@ -51,7 +51,14 @@ export default function HomeScreen() {
     }
   }, [queryClient]);
 
-  const handleRecommendationPress = (rec: { id: string; type: 'content' | 'theme'; dailyRecId?: string }) => {
+  const handleRecommendationPress = (rec: { id: string; type: 'content' | 'theme'; dailyRecId?: string; completed?: boolean }) => {
+    if (rec.completed) {
+      Alert.alert(
+        'Quiz termine',
+        'Tu as deja fait ce quiz aujourd\'hui.\nRevise avant de rejouer. A demain !',
+      );
+      return;
+    }
     if (rec.type === 'content') {
       router.push({
         pathname: '/content/[id]' as any,
@@ -75,18 +82,22 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.lg }]}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
-      }
-    >
-      <GreetingHeader userName={userName} dailyProgress={dailyProgress} streak={reviewStats?.currentStreak ?? 0} />
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.lg }]}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
+        }
+      >
+        {dailyProgress && (
+          <DailyProgressTracker
+            completed={dailyProgress.completed}
+            total={dailyProgress.total}
+            streak={reviewStats?.currentStreak ?? 0}
+          />
+        )}
+        <GreetingHeader userName={userName} />
 
-      {dailyProgress?.allDone ? (
-        <DailyVictoryScreen streak={reviewStats?.currentStreak ?? 0} />
-      ) : (
         <View style={styles.cardsList}>
           {recommendations.map((rec, index) => (
             <Animated.View
@@ -100,8 +111,7 @@ export default function HomeScreen() {
             </Animated.View>
           ))}
         </View>
-      )}
-    </ScrollView>
+      </ScrollView>
     </SafeAreaView>
   );
 }

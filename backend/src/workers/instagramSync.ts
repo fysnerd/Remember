@@ -8,7 +8,7 @@ import { config } from '../config/env.js';
 import { prisma } from '../config/database.js';
 import { Platform, ContentStatus } from '@prisma/client';
 import { instagramLimiter } from '../utils/rateLimiter.js';
-import { shouldFilterContent } from '../services/contentFilter.js';
+import { shouldFilterContent, cleanTitle } from '../services/contentFilter.js';
 
 const log = logger.child({ job: 'instagram-sync' });
 
@@ -325,7 +325,7 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
           platform: Platform.INSTAGRAM,
           externalId,
           url,
-          title: item.caption?.text?.substring(0, 255) || 'Instagram Reel',
+          title: cleanTitle(item.caption?.text || null, 'Instagram Reel'),
           description: item.caption?.text || null,
           thumbnailUrl: item.image_versions2?.candidates?.[0]?.url || null,
           duration: item.video_duration || null,

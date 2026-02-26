@@ -8,10 +8,9 @@
  * Action buttons: Archive (X), Skip (→), Learn (♥)
  */
 
-import React, { useRef, useState, useCallback, useEffect } from 'react';
+import React, { useRef, useState, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { View, StyleSheet, Image, Dimensions, Pressable } from 'react-native';
-import { BlurView } from 'expo-blur';
-import { User, Clock, X, SkipForward, Heart, Undo2 } from 'lucide-react-native';
+import { X, SkipForward, Heart } from 'lucide-react-native';
 import { SwipeCard, SwipeCardRef } from './SwipeCard';
 import { PlatformIcon } from '../icons';
 import { Text } from '../ui';
@@ -21,7 +20,12 @@ import type { Content } from '../../types/content';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const VISIBLE_COUNT = 3;
-const CARD_HEIGHT = SCREEN_HEIGHT * 0.55;
+const CARD_HEIGHT = SCREEN_HEIGHT * 0.62;
+
+export interface SwipeCardStackRef {
+  triggerUndo: () => void;
+  canUndo: boolean;
+}
 
 interface SwipeCardStackProps {
   items: Content[];
@@ -31,6 +35,7 @@ interface SwipeCardStackProps {
   onUndo?: (item: Content) => void;
   onEmpty: () => void;
   onNearEnd?: () => void;
+  onCanUndoChange?: (canUndo: boolean) => void;
 }
 
 type LastAction = {
@@ -49,7 +54,7 @@ function formatDuration(seconds?: number): string | null {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-export function SwipeCardStack({
+export const SwipeCardStack = forwardRef<SwipeCardStackRef, SwipeCardStackProps>(function SwipeCardStack({
   items,
   onSwipeRight,
   onSwipeLeft,
@@ -57,7 +62,8 @@ export function SwipeCardStack({
   onUndo,
   onEmpty,
   onNearEnd,
-}: SwipeCardStackProps) {
+  onCanUndoChange,
+}, ref) {
   const currentIndexRef = useRef(0);
   const [currentIndex, setCurrentIndex] = useState(0);
   const topCardRef = useRef<SwipeCardRef>(null);
@@ -156,6 +162,17 @@ export function SwipeCardStack({
     setLastAction(null);
   }, [lastAction, currentIndex, onUndo]);
 
+  // Expose undo to parent
+  useImperativeHandle(ref, () => ({
+    triggerUndo: handleUndo,
+    canUndo: !!lastAction && currentIndex > 0,
+  }), [handleUndo, lastAction, currentIndex]);
+
+  // Notify parent of canUndo changes
+  useEffect(() => {
+    onCanUndoChange?.(!!lastAction && currentIndex > 0);
+  }, [lastAction, currentIndex, onCanUndoChange]);
+
   if (visibleItems.length === 0) {
     return null;
   }
@@ -164,6 +181,7 @@ export function SwipeCardStack({
 
   return (
     <View style={styles.container}>
+      <View style={styles.cardsCenter}>
       <View style={styles.cardsArea}>
         {reversedItems.map((item, reverseIndex) => {
           const actualIndex = visibleItems.length - 1 - reverseIndex;
@@ -206,30 +224,16 @@ export function SwipeCardStack({
           );
         })}
       </View>
+      </View>
 
       {/* Action buttons */}
       <View style={styles.actionsRow}>
-        {/* Undo button — only visible when there's a previous action */}
-        <Pressable
-          style={({ pressed }) => [
-            styles.actionBtn,
-            styles.undoBtn,
-            !lastAction && styles.actionBtnHidden,
-            pressed && lastAction && styles.actionBtnPressed,
-          ]}
-          onPress={handleUndo}
-          hitSlop={4}
-          disabled={!lastAction}
-        >
-          <Undo2 size={16} color={colors.textTertiary} strokeWidth={2.5} />
-        </Pressable>
-
         <Pressable
           style={({ pressed }) => [styles.actionBtn, styles.archiveBtn, pressed && styles.actionBtnPressed]}
           onPress={handleButtonArchive}
           hitSlop={4}
         >
-          <X size={22} color={colors.error} strokeWidth={2.5} />
+          <X size={26} color={colors.error} strokeWidth={2.5} />
         </Pressable>
 
         <Pressable
@@ -237,7 +241,7 @@ export function SwipeCardStack({
           onPress={handleButtonSkip}
           hitSlop={4}
         >
-          <SkipForward size={18} color={colors.textSecondary} strokeWidth={2.5} />
+          <SkipForward size={20} color={colors.textSecondary} strokeWidth={2.5} />
         </Pressable>
 
         <Pressable
@@ -245,23 +249,16 @@ export function SwipeCardStack({
           onPress={handleButtonLearn}
           hitSlop={4}
         >
-          <Heart size={22} color={colors.success} strokeWidth={2.5} />
+          <Heart size={26} color={colors.success} strokeWidth={2.5} />
         </Pressable>
       </View>
     </View>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // Platform config
 // ---------------------------------------------------------------------------
-
-const PLATFORM_LABELS: Record<string, string> = {
-  youtube: 'YouTube',
-  spotify: 'Spotify',
-  tiktok: 'TikTok',
-  instagram: 'Instagram',
-};
 
 const PLATFORM_COLORS: Record<string, string> = {
   youtube: '#FF0000',
@@ -274,98 +271,77 @@ const PLATFORM_COLORS: Record<string, string> = {
 // CardDisplay — cinematic editorial card
 // ---------------------------------------------------------------------------
 
+type ThumbVariant = 'horizontal' | 'vertical' | 'square';
+
+function getThumbVariant(source: string): ThumbVariant {
+  const s = source.toUpperCase();
+  if (s === 'TIKTOK' || s === 'INSTAGRAM') return 'vertical';
+  if (s === 'SPOTIFY') return 'square';
+  return 'horizontal';
+}
+
 function CardDisplay({ item }: { item: Content }) {
   const durationText = formatDuration(item.duration);
-  const platformLabel = PLATFORM_LABELS[item.source] || item.source;
   const platformColor = PLATFORM_COLORS[item.source] || colors.accent;
-  const synopsis = item.synopsis || item.description;
+  const variant = getThumbVariant(item.source);
+
+  const thumbContent = item.thumbnailUrl ? (
+    <Image
+      source={{ uri: item.thumbnailUrl }}
+      style={
+        variant === 'horizontal' ? styles.thumbHorizontal :
+        variant === 'vertical' ? styles.thumbVertical :
+        styles.thumbSquare
+      }
+      resizeMode="cover"
+    />
+  ) : (
+    <View style={[
+      styles.placeholder,
+      variant === 'horizontal' ? styles.thumbHorizontal :
+      variant === 'vertical' ? styles.thumbVertical :
+      styles.thumbSquare,
+    ]}>
+      <PlatformIcon platform={item.source} size={48} color={colors.textTertiary} />
+    </View>
+  );
 
   return (
     <View style={styles.card}>
-      {/* ---- Thumbnail with gradient fade ---- */}
-      <View style={styles.thumbnailArea}>
-        {item.thumbnailUrl ? (
-          <Image
-            source={{ uri: item.thumbnailUrl }}
-            style={styles.thumbnail}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={styles.placeholder}>
-            <PlatformIcon platform={item.source} size={56} color={colors.textTertiary} />
-          </View>
-        )}
+      {/* ---- Thumbnail wrapper — centers the image ---- */}
+      <View style={styles.thumbWrapper}>
+        <View style={styles.thumbInner}>
+          {thumbContent}
 
-        {/* Gradient fade — 5 strips from transparent to surface color */}
-        <View style={styles.gradientContainer} pointerEvents="none">
-          <View style={[styles.gradientStrip, { backgroundColor: 'transparent' }]} />
-          <View style={[styles.gradientStrip, { backgroundColor: colors.surface, opacity: 0.15 }]} />
-          <View style={[styles.gradientStrip, { backgroundColor: colors.surface, opacity: 0.4 }]} />
-          <View style={[styles.gradientStrip, { backgroundColor: colors.surface, opacity: 0.7 }]} />
-          <View style={[styles.gradientStrip, { backgroundColor: colors.surface, opacity: 0.92 }]} />
-          <View style={[styles.gradientStrip, { backgroundColor: colors.surface }]} />
+          {/* Duration badge — bottom right (YouTube only) */}
+          {item.source === 'youtube' && durationText && (
+            <View style={styles.durationWrap}>
+              <View style={styles.durationBadge}>
+                <Text style={styles.durationText}>{durationText}</Text>
+              </View>
+            </View>
+          )}
         </View>
-
-        {/* Platform badge — frosted glass pill, top-left */}
-        <View style={styles.platformBadgeWrap}>
-          <BlurView intensity={50} tint="dark" style={styles.platformBadge}>
-            <View style={[styles.platformDot, { backgroundColor: platformColor }]} />
-            <Text style={styles.platformLabel}>{platformLabel}</Text>
-          </BlurView>
-        </View>
-
-        {/* Duration badge — frosted glass pill, bottom-right */}
-        {durationText && (
-          <View style={styles.durationWrap}>
-            <BlurView intensity={50} tint="dark" style={styles.durationBadge}>
-              <Clock size={11} color="rgba(255,255,255,0.7)" strokeWidth={2} />
-              <Text style={styles.durationText}>{durationText}</Text>
-            </BlurView>
-          </View>
-        )}
       </View>
 
       {/* ---- Info section ---- */}
       <View style={styles.infoContainer}>
-        {/* Title */}
         <Text numberOfLines={2} style={styles.title}>
           {item.title}
         </Text>
 
-        {/* Author row */}
-        {item.channelName && (
-          <View style={styles.authorRow}>
-            <View style={styles.authorIconWrap}>
-              <User size={12} color={colors.accent} strokeWidth={2} />
-            </View>
-            <Text numberOfLines={1} style={styles.authorName}>
-              {item.channelName}
-            </Text>
-          </View>
-        )}
-
-        {/* Divider */}
-        <View style={styles.divider} />
-
-        {/* Synopsis */}
-        {synopsis ? (
-          <Text numberOfLines={3} style={styles.synopsis}>
-            {synopsis}
+        <View style={styles.metaRow}>
+          <View style={[styles.platformDot, { backgroundColor: platformColor }]} />
+          <Text numberOfLines={1} style={styles.channelName}>
+            {item.channelName || item.source}
           </Text>
-        ) : (
-          <Text style={styles.synopsisEmpty}>Pas encore de resume disponible</Text>
-        )}
-
-        {/* Topics — pinned to bottom */}
-        {item.topics && item.topics.length > 0 && (
-          <View style={styles.topicsRow}>
-            {item.topics.slice(0, 4).map((topic) => (
-              <View key={topic} style={styles.topicChip}>
-                <Text style={styles.topicText}>{topic}</Text>
-              </View>
-            ))}
-          </View>
-        )}
+          {item.source === 'youtube' && durationText && (
+            <>
+              <Text style={styles.metaSep}>·</Text>
+              <Text style={styles.metaText}>{durationText}</Text>
+            </>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -375,198 +351,153 @@ function CardDisplay({ item }: { item: Content }) {
 // Styles
 // ---------------------------------------------------------------------------
 
-const THUMBNAIL_RATIO = 0.48;
-const ACTION_BTN_SIZE = 56;
-const SKIP_BTN_SIZE = 44;
+const ACTION_BTN_SIZE = 64;
+const SKIP_BTN_SIZE = 48;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  cardsCenter: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   cardsArea: {
     height: CARD_HEIGHT,
-    paddingHorizontal: spacing.md,
+    width: '100%',
+    paddingHorizontal: spacing.xl,
   },
   cardWrapper: {
     justifyContent: 'flex-start',
   },
 
-  // Card shell
+  // Card shell — matches home card aesthetic
   card: {
     width: '100%',
     height: CARD_HEIGHT,
-    borderRadius: 24,
     backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    borderCurve: 'continuous',
+    borderWidth: 2,
+    borderColor: glass.borderLight,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: glass.border,
-    ...glass.shadow,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8,
   },
 
   // ---- Thumbnail ----
-  thumbnailArea: {
-    width: '100%',
-    height: CARD_HEIGHT * THUMBNAIL_RATIO,
-    position: 'relative',
-    backgroundColor: colors.surfaceElevated,
-  },
-  thumbnail: {
-    width: '100%',
-    height: '100%',
-  },
-  placeholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: colors.surfaceElevated,
+  thumbWrapper: {
+    flex: 1,
+    padding: spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
-
-  // Gradient fade strips
-  gradientContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 100,
-    flexDirection: 'column',
-  },
-  gradientStrip: {
-    flex: 1,
-  },
-
-  // Platform badge
-  platformBadgeWrap: {
-    position: 'absolute',
-    top: 14,
-    left: 14,
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  platformBadge: {
-    flexDirection: 'row',
+  thumbInner: {
+    width: '100%',
+    height: '100%',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    gap: 7,
+    justifyContent: 'center',
+    position: 'relative',
   },
+  // YouTube — 16:9 horizontal, full width, rounded
+  thumbHorizontal: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceElevated,
+  },
+  // TikTok / Instagram — 9:16 portrait, full height, centered
+  thumbVertical: {
+    height: '100%',
+    aspectRatio: 9 / 16,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceElevated,
+  },
+  // Spotify — square, centered
+  thumbSquare: {
+    height: '85%',
+    aspectRatio: 1,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceElevated,
+  },
+  placeholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceElevated,
+  },
+
+  // Platform dot
   platformDot: {
-    width: 8,
-    height: 8,
+    width: 7,
+    height: 7,
     borderRadius: 4,
-  },
-  platformLabel: {
-    fontFamily: fonts.semibold,
-    fontSize: 12,
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
   },
 
   // Duration badge
   durationWrap: {
     position: 'absolute',
-    bottom: 20,
-    right: 14,
-    borderRadius: 14,
-    overflow: 'hidden',
+    bottom: spacing.sm,
+    right: spacing.sm,
   },
   durationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    gap: 5,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    borderRadius: borderRadius.xs,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   durationText: {
     fontFamily: fonts.medium,
     fontSize: 12,
-    color: 'rgba(255,255,255,0.9)',
+    color: '#FFFFFF',
     fontVariant: ['tabular-nums'],
   },
 
   // ---- Info section ----
   infoContainer: {
-    flex: 1,
-    paddingHorizontal: 22,
-    paddingTop: 2,
-    paddingBottom: 16,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+    gap: spacing.xs,
   },
 
   // Title
   title: {
-    fontFamily: fonts.bold,
+    fontFamily: fonts.semibold,
     fontSize: 20,
-    lineHeight: 26,
+    lineHeight: 24,
     color: colors.text,
+    letterSpacing: -0.8,
+  },
+
+  // Meta row (platform dot + channel + duration)
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  channelName: {
+    fontFamily: fonts.regular,
+    fontSize: 15,
+    color: colors.textSecondary,
     letterSpacing: -0.3,
+    flexShrink: 1,
   },
-
-  // Author
-  authorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-    gap: 8,
-  },
-  authorIconWrap: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: 'rgba(212, 165, 116, 0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  authorName: {
-    fontFamily: fonts.medium,
-    fontSize: 14,
-    color: colors.accent,
-    flex: 1,
-  },
-
-  // Divider
-  divider: {
-    height: 1,
-    backgroundColor: glass.border,
-    marginTop: 14,
-    marginBottom: 14,
-  },
-
-  // Synopsis
-  synopsis: {
+  metaSep: {
     fontFamily: fonts.regular,
-    fontSize: 14,
-    lineHeight: 21,
-    color: colors.textSecondary,
-  },
-  synopsisEmpty: {
-    fontFamily: fonts.regular,
-    fontSize: 14,
+    fontSize: 15,
     color: colors.textTertiary,
-    fontStyle: 'italic',
   },
-
-  // Topics
-  topicsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 'auto' as any,
-    paddingTop: 14,
-  },
-  topicChip: {
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    backgroundColor: 'rgba(30, 41, 59, 0.7)',
-    borderWidth: 1,
-    borderColor: glass.borderLight,
-  },
-  topicText: {
-    fontFamily: fonts.medium,
-    fontSize: 11,
+  metaText: {
+    fontFamily: fonts.regular,
+    fontSize: 15,
     color: colors.textSecondary,
-    letterSpacing: 0.3,
+    letterSpacing: -0.3,
   },
 
   // ---- Action buttons ----
@@ -574,8 +505,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 24,
-    paddingVertical: spacing.md,
+    gap: 32,
+    paddingVertical: spacing.lg,
   },
   actionBtn: {
     alignItems: 'center',
@@ -606,17 +537,5 @@ const styles = StyleSheet.create({
     borderRadius: ACTION_BTN_SIZE / 2,
     backgroundColor: 'rgba(34, 197, 94, 0.10)',
     borderColor: 'rgba(34, 197, 94, 0.30)',
-  },
-  undoBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(148, 163, 184, 0.06)',
-    borderColor: 'rgba(148, 163, 184, 0.15)',
-    position: 'absolute',
-    left: 24,
-  },
-  actionBtnHidden: {
-    opacity: 0,
   },
 });

@@ -50,10 +50,10 @@ export function useSubscription(): SubscriptionState {
       .catch(() => setState((prev) => ({ ...prev, isLoading: false })));
 
     // Listen for real-time updates (purchase, restore, subscription change)
-    const listener = Purchases.addCustomerInfoUpdateListener(updateFromCustomerInfo);
+    const remove = Purchases.addCustomerInfoUpdateListener(updateFromCustomerInfo);
 
     return () => {
-      listener.remove();
+      if (typeof remove === 'function') remove();
     };
   }, [updateFromCustomerInfo]);
 

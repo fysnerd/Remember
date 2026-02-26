@@ -3,9 +3,10 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Pressable, Animated } from 'react-native';
+import { View, StyleSheet, Animated, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text, Button } from '../../../components/ui';
+import { GlassButton } from '../../../components/glass/GlassButton';
 import { QuestionCard, AnswerFeedback, QuizSummary } from '../../../components/quiz';
 import { LoadingScreen } from '../../../components/LoadingScreen';
 import { ErrorState } from '../../../components/ErrorState';
@@ -63,7 +64,7 @@ export default function ThemeQuizScreen() {
   }
 
   if (!quiz || !quiz.questions.length) {
-    return <ErrorState message="Aucun quiz pour ce theme" onRetry={refetch} />;
+    return <ErrorState message="Aucun quiz pour ce thème" onRetry={refetch} />;
   }
 
   const questions = quiz.questions;
@@ -123,9 +124,14 @@ export default function ThemeQuizScreen() {
   }
 
   const correctOption = current.options.find((o) => o.id === current.correctAnswer);
+  const isCorrect = selectedAnswer === current.correctAnswer;
+
+  const feedbackBg = state === 'feedback'
+    ? isCorrect ? '#060F09' : '#120808'
+    : undefined;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, feedbackBg && { backgroundColor: feedbackBg }]}>
       <View style={styles.header}>
         <View>
           <Text variant="caption" color="secondary">
@@ -135,9 +141,9 @@ export default function ThemeQuizScreen() {
             Question {currentIndex + 1}/{total}
           </Text>
         </View>
-        <Pressable onPress={handleQuit} hitSlop={8}>
-          <Text variant="body">✕ Quitter</Text>
-        </Pressable>
+        <GlassButton size="sm" onPress={handleQuit}>
+          ✕ Quitter
+        </GlassButton>
       </View>
 
       <View style={styles.progressTrack}>
@@ -149,43 +155,40 @@ export default function ThemeQuizScreen() {
         />
       </View>
 
-      <View style={styles.content}>
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} keyboardShouldPersistTaps="handled">
         {state === 'question' ? (
-          <>
-            <QuestionCard
-              question={current.question}
-              options={current.options}
-              selectedId={selectedAnswer}
-              onSelect={(optionId) => {
-                setSelectedAnswer(optionId);
-              }}
-              isSynthesis={current.isSynthesis}
-            />
-            <View style={styles.buttonContainer}>
-              <Button
-                variant="primary"
-                fullWidth
-                onPress={handleValidate}
-                disabled={!selectedAnswer || !sessionId}
-                loading={submitMutation.isPending}
-              >
-                Valider
-              </Button>
-            </View>
-          </>
+          <QuestionCard
+            question={current.question}
+            options={current.options}
+            selectedId={selectedAnswer}
+            onSelect={(optionId) => {
+              setSelectedAnswer(optionId);
+            }}
+            isSynthesis={current.isSynthesis}
+          />
         ) : (
-          <>
-            <AnswerFeedback
-              isCorrect={selectedAnswer === current.correctAnswer}
-              correctAnswer={correctOption?.text ?? ''}
-              explanation={current.explanation}
-            />
-            <View style={styles.buttonContainer}>
-              <Button variant="primary" fullWidth onPress={handleNext}>
-                {currentIndex < total - 1 ? 'Question suivante' : 'Voir le resultat'}
-              </Button>
-            </View>
-          </>
+          <AnswerFeedback
+            isCorrect={selectedAnswer === current.correctAnswer}
+            correctAnswer={correctOption?.text ?? ''}
+            explanation={current.explanation}
+          />
+        )}
+      </ScrollView>
+      <View style={styles.buttonContainer}>
+        {state === 'question' ? (
+          <Button
+            variant="primary"
+            fullWidth
+            onPress={handleValidate}
+            disabled={!selectedAnswer || !sessionId}
+            loading={submitMutation.isPending}
+          >
+            Valider
+          </Button>
+        ) : (
+          <Button variant="primary" fullWidth onPress={handleNext}>
+            {currentIndex < total - 1 ? 'Question suivante' : 'Voir le résultat'}
+          </Button>
         )}
       </View>
     </View>
@@ -213,6 +216,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
     borderRadius: borderRadius.full,
   },
-  content: { flex: 1, padding: spacing.lg },
-  buttonContainer: { paddingTop: spacing.lg },
+  content: { flex: 1, paddingHorizontal: spacing.lg },
+  contentInner: { paddingTop: spacing.lg, paddingBottom: spacing.md },
+  buttonContainer: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, paddingTop: spacing.md },
 });

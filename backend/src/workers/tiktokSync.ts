@@ -6,7 +6,7 @@ import { logger } from '../config/logger.js';
 import { prisma } from '../config/database.js';
 import { Platform, ContentStatus } from '@prisma/client';
 import { tiktokLimiter } from '../utils/rateLimiter.js';
-import { shouldFilterContent } from '../services/contentFilter.js';
+import { shouldFilterContent, cleanTitle } from '../services/contentFilter.js';
 
 const log = logger.child({ job: 'tiktok-sync' });
 
@@ -405,7 +405,7 @@ async function syncUserTikTok(userId: string, connectionId: string): Promise<num
             platform: Platform.TIKTOK,
             externalId: video.id,
             url: `https://www.tiktok.com/@${authorUsername}/video/${video.id}`,
-            title: video.desc?.substring(0, 255) || `TikTok by @${authorUsername}`,
+            title: cleanTitle(video.desc || null, `TikTok by @${authorUsername}`),
             description: video.desc || null,
             thumbnailUrl: video.video?.cover || null,
             duration: video.video?.duration || null,
@@ -594,7 +594,7 @@ async function syncUserTikTokScroll(page: any, userId: string, connectionId: str
         platform: Platform.TIKTOK,
         externalId: video.id,
         url: `https://www.tiktok.com/@${authorUsername}/video/${video.id}`,
-        title: video.desc?.substring(0, 255) || `TikTok by @${authorUsername}`,
+        title: cleanTitle(video.desc || null, `TikTok by @${authorUsername}`),
         description: video.desc || null,
         thumbnailUrl: video.video?.cover || null,
         duration: video.video?.duration || null,

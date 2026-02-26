@@ -184,13 +184,13 @@ export default function ThemeDetailScreen() {
         </View>
         {!canQuiz && (
           <Text variant="caption" color="secondary" style={styles.quizHint}>
-            Il faut au moins 3 contenus avec quiz pour lancer un quiz theme.
+            Il faut au moins 3 contenus avec quiz pour lancer un quiz thème.
           </Text>
         )}
 
         {/* Content Grid */}
         {contents.length === 0 ? (
-          <EmptyState message="Aucun contenu dans ce theme" icon={Inbox} />
+          <EmptyState message="Aucun contenu dans ce thème" icon={Inbox} />
         ) : (
           <View style={styles.grid}>
             {contents.map((item) => (
@@ -241,7 +241,7 @@ export default function ThemeDetailScreen() {
             </Pressable>
 
             <Text variant="body" weight="medium" style={styles.selectionCount}>
-              {selectedIds.size} selectionne{selectedIds.size > 1 ? 's' : ''}
+              {selectedIds.size} sélectionné{selectedIds.size > 1 ? 's' : ''}
             </Text>
 
             <View style={styles.selectionActions}>

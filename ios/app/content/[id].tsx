@@ -3,15 +3,16 @@
  */
 
 import { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, Image, Linking, Pressable, Modal, FlatList } from 'react-native';
+import { View, ScrollView, StyleSheet, Image, Pressable, Modal, FlatList } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text, Button } from '../../components/ui';
 import { PlatformIcon } from '../../components/icons';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { ErrorState } from '../../components/ErrorState';
-import { useContent, useThemes, useAddContentToTheme } from '../../hooks';
-import { colors, spacing, borderRadius } from '../../theme';
+import Markdown from 'react-native-markdown-display';
+import { useContent, useThemes, useAddContentToTheme, useRemoveContentFromTheme } from '../../hooks';
+import { colors, spacing, borderRadius, fonts } from '../../theme';
 
 const sourceLabel: Record<string, string> = {
   youtube: 'YouTube',
@@ -40,6 +41,7 @@ export default function ContentDetailScreen() {
   const [showThemeModal, setShowThemeModal] = useState(false);
   const { data: allThemes } = useThemes();
   const addContentToTheme = useAddContentToTheme();
+  const removeContentFromTheme = useRemoveContentFromTheme();
 
   // Auto-refresh when content is processing
   useEffect(() => {
@@ -63,72 +65,56 @@ export default function ContentDetailScreen() {
     router.push({ pathname: '/quiz/[id]' as any, params: { id: id!, dailyRecId: dailyRecId || '' } });
   };
 
-  const handleOpenSource = () => {
-    if (content.url) {
-      Linking.openURL(content.url);
-    }
-  };
-
   const hasQuiz = (content.quizCount ?? 0) > 0;
+  const isPodcast = content.source === 'spotify';
   const displayText = content.synopsis || content.description;
 
   return (
     <>
-      <Stack.Screen options={{ title: '', headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: '', headerBackTitle: 'Retour', headerShadowVisible: false, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text }} />
       <View style={styles.container}>
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
           {/* Thumbnail */}
-          {content.thumbnailUrl ? (
-            <Image
-              source={{ uri: content.thumbnailUrl }}
-              style={styles.thumbnail}
-              resizeMode="cover"
-            />
-          ) : (
-            <View style={[styles.thumbnail, styles.thumbnailPlaceholder]}>
-              <PlatformIcon platform={content.source} size={48} colored />
+          <View style={[styles.thumbnailWrapper, isPodcast && styles.podcastThumbnailWrapper]}>
+            {content.thumbnailUrl ? (
+              <Image
+                source={{ uri: content.thumbnailUrl }}
+                style={[styles.thumbnail, isPodcast && styles.podcastThumbnail]}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={[styles.thumbnail, styles.thumbnailPlaceholder, isPodcast && styles.podcastThumbnail]}>
+                <PlatformIcon platform={content.source} size={48} colored />
+              </View>
+            )}
+            <View style={styles.sourceBadge}>
+              <Text variant="label" style={styles.sourceBadgeText}>
+                {sourceLabel[content.source] || content.source}
+              </Text>
             </View>
-          )}
+          </View>
 
           {/* Title & Channel */}
           <Text variant="h1" style={styles.title}>
             {content.title}
           </Text>
-          {content.channelName && (
-            <Text variant="body" color="secondary" style={styles.channelName}>
-              {content.channelName}
-            </Text>
-          )}
-          <View style={styles.metaRow}>
-            <View style={styles.metaSource}>
-              <PlatformIcon platform={content.source} size={14} colored />
-              <Text variant="caption" color="secondary">
-                {sourceLabel[content.source] || content.source}
-                {content.duration && ` \u2022 ${formatDuration(content.duration)}`}
+          <View style={styles.channelRow}>
+            {content.channelName && (
+              <Text variant="body" color="secondary" numberOfLines={1} style={styles.channelName}>
+                {content.channelName}
               </Text>
-            </View>
-            {content.url && (
-              <Pressable onPress={handleOpenSource} style={styles.sourceLink}>
-                <Text variant="caption" style={styles.sourceLinkText}>
-                  Voir l'original →
-                </Text>
-              </Pressable>
+            )}
+            {content.source === 'youtube' && content.duration && (
+              <Text variant="caption" color="secondary">
+                {formatDuration(content.duration)}
+              </Text>
             )}
           </View>
-
-          {/* Quiz badge */}
-          {hasQuiz && (
-            <View style={styles.quizBadge}>
-              <Text variant="body" weight="medium">
-                {content.quizCount} question{(content.quizCount ?? 0) !== 1 ? 's' : ''} disponibles
-              </Text>
-            </View>
-          )}
 
           {/* Themes */}
           <View style={styles.section}>
             <Text variant="body" weight="medium" style={styles.sectionTitle}>
-              Themes
+              Thèmes
             </Text>
             <View style={styles.themes}>
               {content.themes && content.themes.length > 0 ? (
@@ -136,18 +122,18 @@ export default function ContentDetailScreen() {
                   <Pressable
                     key={theme.id}
                     onPress={() => router.push({ pathname: '/theme/[id]' as any, params: { id: theme.id } })}
-                    style={[styles.themeChip, { borderColor: theme.color }]}
+                    style={styles.themeChip}
                   >
-                    <Text variant="caption">{theme.emoji} {theme.name}</Text>
+                    <Text variant="caption" style={styles.themeChipLabel}>{theme.emoji} {theme.name}</Text>
                   </Pressable>
                 ))
               ) : (
                 <Text variant="caption" color="secondary">
-                  Aucun theme
+                  Aucun thème
                 </Text>
               )}
               <Pressable onPress={() => setShowThemeModal(true)} style={styles.addThemeChip}>
-                <Text variant="caption" color="secondary">+ Theme</Text>
+                <Text variant="caption" color="secondary">+ Thème</Text>
               </Pressable>
             </View>
           </View>
@@ -155,9 +141,12 @@ export default function ContentDetailScreen() {
           {/* Synopsis or Description */}
           {displayText && (
             <View style={styles.section}>
-              <Text variant="body" color="secondary">
-                {displayText}
+              <Text variant="body" weight="medium" style={styles.sectionTitle}>
+                Description
               </Text>
+              <Markdown style={markdownStyles}>
+                {displayText}
+              </Markdown>
             </View>
           )}
         </ScrollView>
@@ -166,15 +155,15 @@ export default function ContentDetailScreen() {
         <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.md }]}>
           {hasQuiz ? (
             <Button variant="primary" fullWidth onPress={handleStartQuiz}>
-              Faire le quiz
+              Quiz ({content.quizCount} question{(content.quizCount ?? 0) !== 1 ? 's' : ''})
             </Button>
           ) : (
-            <Button variant="primary" fullWidth disabled onPress={() => {}}>
+            <Button variant="primary" fullWidth disabled onPress={() => { }}>
               {content.status === 'TRANSCRIBING' ? 'Transcription en cours...' :
-               content.status === 'GENERATING' ? 'Quiz en creation...' :
-               content.status === 'FAILED' ? 'Erreur de traitement' :
-               content.status === 'UNSUPPORTED' ? 'Contenu non supporte' :
-               'En attente de traitement...'}
+                content.status === 'GENERATING' ? 'Quiz en création...' :
+                  content.status === 'FAILED' ? 'Erreur de traitement' :
+                    content.status === 'UNSUPPORTED' ? 'Contenu non supporté' :
+                      'En attente de traitement...'}
             </Button>
           )}
         </View>
@@ -189,7 +178,7 @@ export default function ContentDetailScreen() {
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text variant="h2">Ajouter a un theme</Text>
+            <Text variant="h2">Gérer les thèmes</Text>
             <Pressable onPress={() => setShowThemeModal(false)} hitSlop={8}>
               <Text variant="body" color="secondary">Fermer</Text>
             </Pressable>
@@ -199,20 +188,22 @@ export default function ContentDetailScreen() {
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.modalList}
             renderItem={({ item: theme }) => {
-              const alreadyAssigned = content.themes?.some((t) => t.id === theme.id) ?? false;
+              const isAssigned = content.themes?.some((t) => t.id === theme.id) ?? false;
               return (
                 <Pressable
                   onPress={async () => {
-                    if (alreadyAssigned) return;
                     try {
-                      await addContentToTheme.mutateAsync({ themeId: theme.id, contentIds: [id!] });
-                      setShowThemeModal(false);
+                      if (isAssigned) {
+                        await removeContentFromTheme.mutateAsync({ themeId: theme.id, contentId: id! });
+                      } else {
+                        await addContentToTheme.mutateAsync({ themeId: theme.id, contentIds: [id!] });
+                      }
+                      refetch();
                     } catch (error) {
-                      console.error('Failed to add content to theme:', error);
+                      console.error('Failed to toggle theme:', error);
                     }
                   }}
-                  style={[styles.modalItem, alreadyAssigned && styles.modalItemDimmed]}
-                  disabled={alreadyAssigned}
+                  style={styles.modalItem}
                 >
                   <Text style={styles.modalItemEmoji}>{theme.emoji}</Text>
                   <View style={styles.modalItemInfo}>
@@ -221,15 +212,15 @@ export default function ContentDetailScreen() {
                       {theme.contentCount} contenu{theme.contentCount !== 1 ? 's' : ''}
                     </Text>
                   </View>
-                  {alreadyAssigned && (
-                    <Text variant="caption" color="secondary">Deja ajoute</Text>
-                  )}
+                  <View style={[styles.checkbox, isAssigned && styles.checkboxChecked]}>
+                    {isAssigned && <Text style={styles.checkmark}>✓</Text>}
+                  </View>
                 </Pressable>
               );
             }}
             ListEmptyComponent={
               <Text variant="body" color="secondary" style={styles.modalEmpty}>
-                Aucun theme. Creez-en un d'abord.
+                Aucun thème. Créez-en un d'abord.
               </Text>
             }
           />
@@ -239,51 +230,108 @@ export default function ContentDetailScreen() {
   );
 }
 
+const markdownStyles = StyleSheet.create({
+  body: {
+    fontFamily: fonts.regular,
+    fontSize: 16,
+    lineHeight: 24,
+    color: colors.textSecondary,
+  },
+  strong: {
+    fontFamily: fonts.semibold,
+    color: colors.text,
+  },
+  em: {
+    fontFamily: fonts.regular,
+    fontStyle: 'italic',
+  },
+  heading1: {
+    fontFamily: fonts.bold,
+    fontSize: 22,
+    color: colors.text,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  heading2: {
+    fontFamily: fonts.semibold,
+    fontSize: 18,
+    color: colors.text,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  heading3: {
+    fontFamily: fonts.medium,
+    fontSize: 16,
+    color: colors.text,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  bullet_list_icon: {
+    color: colors.textSecondary,
+  },
+  ordered_list_icon: {
+    color: colors.textSecondary,
+  },
+  list_item: {
+    marginVertical: 2,
+  },
+  paragraph: {
+    marginTop: 0,
+    marginBottom: spacing.sm,
+  },
+});
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { flex: 1 },
   scrollContent: { padding: spacing.lg, paddingBottom: 160 },
+  thumbnailWrapper: {
+    position: 'relative',
+    marginBottom: spacing.lg,
+  },
   thumbnail: {
     width: '100%',
     aspectRatio: 16 / 9,
     borderRadius: borderRadius.md,
-    marginBottom: spacing.lg,
   },
   thumbnailPlaceholder: {
     backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  title: { marginBottom: spacing.xs },
-  channelName: { marginBottom: spacing.sm },
-  metaRow: {
+  podcastThumbnailWrapper: {
+    alignSelf: 'center',
+    width: '60%',
+  },
+  podcastThumbnail: {
+    aspectRatio: 1,
+    borderRadius: borderRadius.lg,
+  },
+  sourceBadge: {
+    position: 'absolute',
+    bottom: spacing.sm,
+    left: spacing.sm,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.full,
+  },
+  sourceBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontFamily: 'Geist_500Medium',
+  },
+  title: { marginBottom: spacing.xs, flexShrink: 1 },
+  channelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.lg,
   },
-  metaSource: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  sourceLink: {
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-  },
-  sourceLinkText: {
-    color: colors.accent,
-    textDecorationLine: 'underline',
-  },
-  quizBadge: {
-    backgroundColor: colors.surface,
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    marginBottom: spacing.lg,
-  },
-  section: { marginBottom: spacing.lg },
+  channelName: { flex: 1 },
+  section: { marginBottom: spacing.xl },
   sectionTitle: { marginBottom: spacing.sm },
   themes: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   bottomBar: {
@@ -295,17 +343,30 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   themeChip: {
-    borderWidth: 1,
-    borderRadius: borderRadius.full,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  themeChipLabel: {
+    color: colors.text,
+    fontSize: 13,
   },
   addThemeChip: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.full,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    borderCurve: 'continuous',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
     borderStyle: 'dashed',
   },
   modalContainer: {
@@ -330,8 +391,23 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
   },
-  modalItemDimmed: {
-    opacity: 0.4,
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: borderRadius.xs,
+    borderWidth: 2,
+    borderColor: colors.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  checkmark: {
+    color: colors.background,
+    fontSize: 14,
+    fontWeight: '700',
   },
   modalItemEmoji: {
     fontSize: 24,

@@ -81,7 +81,7 @@ export default function ThemeMemoScreen() {
     if (!id) return;
     refreshMutation.mutate(id, {
       onError: () => {
-        show('Erreur lors du rafraichissement', 'error');
+        show('Erreur lors du rafraîchissement', 'error');
       },
     });
   };
@@ -95,7 +95,7 @@ export default function ThemeMemoScreen() {
   }
 
   if (error || !memo) {
-    return <ErrorState message="Memo introuvable ou aucun contenu disponible" onRetry={refetch} hasHeader />;
+    return <ErrorState message="Mémo introuvable ou aucun contenu disponible" onRetry={refetch} hasHeader />;
   }
 
   return (
@@ -122,7 +122,7 @@ export default function ThemeMemoScreen() {
         {memo.generatedAt && (
           <View style={styles.footer}>
             <Text variant="caption" color="secondary">
-              Genere le {new Date(memo.generatedAt).toLocaleDateString('fr-FR')}
+              Généré le {new Date(memo.generatedAt).toLocaleDateString('fr-FR')}
             </Text>
           </View>
         )}
@@ -135,7 +135,7 @@ export default function ThemeMemoScreen() {
             onPress={handleRefresh}
             disabled={refreshMutation.isPending}
           >
-            {refreshMutation.isPending ? 'Rafraichissement...' : 'Rafraichir'}
+            {refreshMutation.isPending ? 'Rafraîchissement...' : 'Rafraîchir'}
           </Button>
         </View>
 

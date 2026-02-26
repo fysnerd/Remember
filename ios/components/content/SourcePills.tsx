@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
   },
   sourcesRow: {
     flexDirection: 'row',
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.xl,
     gap: spacing.sm,
   },
   sourcePill: {

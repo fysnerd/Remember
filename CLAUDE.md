@@ -91,6 +91,7 @@ FRONTEND_URL="https://ankora.study"
 | VPS | Hetzner CPX32 - `116.203.17.203` |
 | Deep link scheme | `ankora://` |
 | Frontend (legacy) | `https://ankora.study` |
+| Figma | `https://www.figma.com/design/WDa8Lez5erGG55YwD8SLvq/Ankora` (fileKey: `WDa8Lez5erGG55YwD8SLvq`) |
 
 ---
 
