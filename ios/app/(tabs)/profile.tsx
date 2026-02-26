@@ -49,7 +49,7 @@ export default function ProfileScreen() {
 
   // Dev tools state (only in __DEV__)
   const [switchingPlan, setSwitchingPlan] = useState(false);
-  const plans = ['FREE', 'PRO'] as const;
+  const plans = ['FREE', 'PRO', 'LIFETIME'] as const;
   const currentPlan = user?.plan || 'FREE';
 
   const handleSwitchPlan = async (plan: string) => {

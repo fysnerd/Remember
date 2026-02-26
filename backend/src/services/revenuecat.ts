@@ -91,13 +91,21 @@ export async function handleRevenueCatWebhook(
 
   try {
     switch (event.type) {
-      // User gained access
+      // Lifetime purchase (one-time, no expiration)
+      case 'NON_RENEWING_PURCHASE':
+        if (event.product_id === 'lifetime') {
+          await grantAccess(userId, event, Plan.LIFETIME);
+        } else {
+          await grantAccess(userId, event, Plan.PRO);
+        }
+        break;
+
+      // Subscription gained access
       case 'INITIAL_PURCHASE':
       case 'RENEWAL':
       case 'UNCANCELLATION':
-      case 'NON_RENEWING_PURCHASE':
       case 'SUBSCRIPTION_EXTENDED':
-        await grantProAccess(userId, event);
+        await grantAccess(userId, event, Plan.PRO);
         break;
 
       // User will lose access at end of period (still has access now)
@@ -108,7 +116,7 @@ export async function handleRevenueCatWebhook(
 
       // User lost access
       case 'EXPIRATION':
-        await revokeProAccess(userId, event);
+        await revokeAccess(userId, event);
         break;
 
       // Payment issue — log but don't revoke (RevenueCat retries)
@@ -118,12 +126,12 @@ export async function handleRevenueCatWebhook(
 
       // Plan change (e.g. monthly → yearly)
       case 'PRODUCT_CHANGE':
-        await grantProAccess(userId, event);
+        await grantAccess(userId, event, Plan.PRO);
         break;
 
       // Subscription paused (Google Play only)
       case 'SUBSCRIPTION_PAUSED':
-        await revokeProAccess(userId, event);
+        await revokeAccess(userId, event);
         break;
 
       default:
@@ -159,40 +167,53 @@ async function resolveUser(appUserId: string, aliases?: string[]) {
 }
 
 /**
- * Grant PRO access to a user.
+ * Grant access to a user (PRO or LIFETIME).
+ * Never downgrades a LIFETIME user to PRO.
  */
-async function grantProAccess(userId: string, event: RevenueCatEvent) {
+async function grantAccess(userId: string, event: RevenueCatEvent, plan: Plan) {
   const user = await resolveUser(userId, event.aliases);
 
   if (!user) {
-    log.warn({ userId, aliases: event.aliases }, 'User not found for PRO grant');
+    log.warn({ userId, aliases: event.aliases }, 'User not found for plan grant');
     return;
   }
 
-  if (user.plan === Plan.PRO) {
-    log.debug({ userId: user.id }, 'User already PRO — no update needed');
+  // Never downgrade LIFETIME → PRO
+  if (user.plan === Plan.LIFETIME && plan === Plan.PRO) {
+    log.debug({ userId: user.id }, 'User already LIFETIME — skipping PRO grant');
+    return;
+  }
+
+  if (user.plan === plan) {
+    log.debug({ userId: user.id, plan }, 'User already on target plan');
     return;
   }
 
   await prisma.user.update({
     where: { id: user.id },
-    data: { plan: Plan.PRO, trialEndsAt: null },
+    data: { plan, trialEndsAt: null },
   });
 
   log.info(
-    { userId: user.id, productId: event.product_id, eventType: event.type },
-    'User upgraded to PRO'
+    { userId: user.id, plan, productId: event.product_id, eventType: event.type },
+    'User plan updated'
   );
 }
 
 /**
- * Revoke PRO access — downgrade to FREE.
+ * Revoke subscription — downgrade to FREE.
+ * Never revokes LIFETIME users (lifetime = permanent access).
  */
-async function revokeProAccess(userId: string, event: RevenueCatEvent) {
+async function revokeAccess(userId: string, event: RevenueCatEvent) {
   const user = await resolveUser(userId, event.aliases);
 
   if (!user) {
-    log.warn({ userId, aliases: event.aliases }, 'User not found for PRO revocation');
+    log.warn({ userId, aliases: event.aliases }, 'User not found for revocation');
+    return;
+  }
+
+  if (user.plan === Plan.LIFETIME) {
+    log.debug({ userId: user.id }, 'LIFETIME user — never revoke');
     return;
   }
 

@@ -158,8 +158,8 @@ userRouter.patch('/profile', async (req: Request, res: Response, next: NextFunct
 userRouter.patch('/dev/plan', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { plan } = req.body;
-    if (!plan || !['FREE', 'PRO'].includes(plan)) {
-      return res.status(400).json({ error: 'Invalid plan. Use FREE or PRO.' });
+    if (!plan || !['FREE', 'PRO', 'LIFETIME'].includes(plan)) {
+      return res.status(400).json({ error: 'Invalid plan. Use FREE, PRO, or LIFETIME.' });
     }
 
     const user = await prisma.user.update({

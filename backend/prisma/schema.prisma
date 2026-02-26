@@ -86,6 +86,7 @@ model UserSettings {
 enum Plan {
   FREE
   PRO
+  LIFETIME
 }
 
 // OAuth accounts for user signup (Google, etc.)
