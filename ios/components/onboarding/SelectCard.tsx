@@ -5,7 +5,7 @@
 import { Pressable, StyleSheet } from 'react-native';
 import { Text } from '../ui';
 import { haptics } from '../../lib/haptics';
-import { colors, spacing, borderRadius } from '../../theme';
+import { colors, spacing, borderRadius, feedback } from '../../theme';
 
 interface SelectCardProps {
   emoji?: string;
@@ -44,19 +44,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1.5,
     borderColor: colors.border,
-    gap: 4,
+    overflow: 'hidden',
+    gap: spacing.xs,
   },
   cardSelected: {
     borderColor: colors.accent,
-    backgroundColor: 'rgba(212, 165, 116, 0.08)',
+    backgroundColor: feedback.selected.background,
   },
   emoji: {
-    marginBottom: 4,
+    marginBottom: spacing.xs,
   },
   labelSelected: {
     color: colors.accent,
   },
   description: {
-    marginTop: 2,
+    marginTop: spacing.xxs,
   },
 });

@@ -53,6 +53,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.border,
+    overflow: 'hidden',
   },
   pressed: {
     opacity: 0.8,

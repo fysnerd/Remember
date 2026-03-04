@@ -4,11 +4,13 @@
  */
 
 import { Pressable, StyleSheet, View, Image } from 'react-native';
+import Animated, { FadeIn, FadeOut, useAnimatedStyle, withSpring, useSharedValue, withTiming } from 'react-native-reanimated';
+import { useEffect } from 'react';
 import { Check } from 'lucide-react-native';
 import { Text } from '../ui';
 import { PlatformIcon } from '../icons';
 import { PipelineStatusBadge } from './PipelineStatusBadge';
-import { colors, spacing, borderRadius, shadows } from '../../theme';
+import { colors, spacing, borderRadius, shadows, fonts, typography, glass } from '../../theme';
 import type { ContentStatus } from '../../types/content';
 
 type ContentSource = 'youtube' | 'spotify' | 'tiktok' | 'instagram';
@@ -54,8 +56,22 @@ export function ContentCard({
   const durationText = formatDuration(duration);
   const metaText = [channelName, durationText].filter(Boolean).join(' • ');
 
+  // Animated scale for selection feedback
+  const scale = useSharedValue(1);
+
+  useEffect(() => {
+    scale.value = withSpring(isSelected ? 0.96 : 1, {
+      damping: 15,
+      stiffness: 300,
+    });
+  }, [isSelected]);
+
+  const animatedCardStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
   const content = (
-    <View style={[styles.card, isSelected && styles.cardSelected]}>
+    <Animated.View style={[styles.card, isSelected && styles.cardSelected, animatedCardStyle]}>
       <View style={styles.thumbnailContainer}>
         {thumbnailUrl ? (
           <Image source={{ uri: thumbnailUrl }} style={styles.thumbnail} resizeMode="cover" />
@@ -72,13 +88,31 @@ export function ContentCard({
             </View>
           </View>
         )}
+        {/* Selection overlay - accent tint when selected */}
+        {selectionMode && isSelected && (
+          <Animated.View
+            entering={FadeIn.duration(150)}
+            exiting={FadeOut.duration(150)}
+            style={styles.selectedOverlay}
+          />
+        )}
         {/* Selection indicator - top right */}
         {selectionMode && (
-          <View style={styles.selectionOverlay}>
-            <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-              {isSelected && <Check size={13} color={colors.background} strokeWidth={3} />}
-            </View>
-          </View>
+          <Animated.View
+            entering={FadeIn.duration(200)}
+            exiting={FadeOut.duration(150)}
+            style={styles.selectionOverlay}
+          >
+            <Animated.View
+              style={[styles.checkbox, isSelected && styles.checkboxSelected]}
+            >
+              {isSelected && (
+                <Animated.View entering={FadeIn.duration(100)}>
+                  <Check size={13} color={colors.background} strokeWidth={3} />
+                </Animated.View>
+              )}
+            </Animated.View>
+          </Animated.View>
         )}
         {/* "Nouveau" badge - top right (only in browse mode, not selection mode) */}
         {!selectionMode && status === 'INBOX' && (
@@ -103,7 +137,7 @@ export function ContentCard({
       </View>
       {/* Inner border overlay */}
       <View style={[styles.innerBorder, isSelected && styles.innerBorderSelected]} pointerEvents="none" />
-    </View>
+    </Animated.View>
   );
 
   if (onPress || onLongPress) {
@@ -124,11 +158,11 @@ export function ContentCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: glass.border,
     borderRadius: borderRadius.md,
     borderCurve: 'continuous',
     overflow: 'hidden',
-    ...shadows.sm,
+    ...shadows.md,
   },
   cardSelected: {},
   innerBorder: {
@@ -140,13 +174,18 @@ const styles = StyleSheet.create({
   },
   innerBorderSelected: {
     borderWidth: 2,
-    borderColor: colors.text,
+    borderColor: colors.accent,
   },
   thumbnailContainer: {
     width: '100%',
     aspectRatio: 16 / 9,
     position: 'relative',
     backgroundColor: colors.surfaceElevated,
+  },
+  selectedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(181, 165, 254, 0.15)',
+    zIndex: 1,
   },
   thumbnail: {
     width: '100%',
@@ -165,10 +204,10 @@ const styles = StyleSheet.create({
     left: spacing.xs,
   },
   badge: {
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: colors.overlayStrong,
     borderRadius: borderRadius.xs,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
+    paddingHorizontal: spacing.sm - spacing.xxs,
+    paddingVertical: spacing.xxs + 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -180,16 +219,16 @@ const styles = StyleSheet.create({
   checkbox: {
     width: 22,
     height: 22,
-    borderRadius: 11,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: borderRadius.md + 1,
+    backgroundColor: colors.overlayLight,
     borderWidth: 1.5,
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkboxSelected: {
-    backgroundColor: colors.text,
-    borderColor: colors.text,
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
   nouveauOverlay: {
     position: 'absolute',
@@ -199,13 +238,13 @@ const styles = StyleSheet.create({
   nouveauBadge: {
     backgroundColor: colors.accent,
     borderRadius: borderRadius.xs,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: spacing.sm - spacing.xxs,
+    paddingVertical: spacing.xxs,
   },
   nouveauText: {
-    fontSize: 9,
+    ...typography.nano,
+    fontFamily: fonts.bold,
     color: colors.background,
-    fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -215,15 +254,15 @@ const styles = StyleSheet.create({
     right: spacing.xs,
   },
   durationBadge: {
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    backgroundColor: colors.overlayDark,
     borderRadius: borderRadius.xs,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: spacing.sm - spacing.xxs,
+    paddingVertical: spacing.xxs,
   },
   durationText: {
-    fontSize: 10,
-    color: '#FFFFFF',
-    fontWeight: '500',
+    ...typography.micro,
+    fontFamily: fonts.medium,
+    color: colors.white,
     fontVariant: ['tabular-nums'],
   },
   infoContainer: {
@@ -233,14 +272,13 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.text,
-    fontSize: 13,
-    lineHeight: 17,
+    ...typography.captionSmall,
     height: 34,
   },
   channelName: {
     color: colors.textSecondary,
-    fontSize: 11,
-    marginTop: 3,
+    ...typography.labelSmall,
+    marginTop: spacing.xxs + 1,
   },
   pressed: {
     opacity: 0.85,

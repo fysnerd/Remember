@@ -6,7 +6,7 @@
 import { View, StyleSheet } from 'react-native';
 import { Check, X } from 'lucide-react-native';
 import { Text } from '../ui';
-import { colors, spacing, borderRadius } from '../../theme';
+import { colors, spacing, borderRadius, feedback as themeFeedback, typography } from '../../theme';
 
 interface AnswerFeedbackProps {
   isCorrect: boolean;
@@ -16,16 +16,16 @@ interface AnswerFeedbackProps {
 
 const feedback = {
   correct: {
-    iconBg: 'rgba(34, 197, 94, 0.15)',
-    iconColor: '#4ADE80',
-    cardBorder: 'rgba(34, 197, 94, 0.2)',
-    cardBg: 'rgba(34, 197, 94, 0.06)',
+    iconBg: themeFeedback.correct.background,
+    iconColor: colors.successLight,
+    cardBorder: themeFeedback.correct.border,
+    cardBg: themeFeedback.correct.background,
   },
   wrong: {
-    iconBg: 'rgba(239, 68, 68, 0.15)',
-    iconColor: '#F87171',
-    cardBorder: 'rgba(239, 68, 68, 0.2)',
-    cardBg: 'rgba(239, 68, 68, 0.06)',
+    iconBg: themeFeedback.incorrect.background,
+    iconColor: colors.error,
+    cardBorder: themeFeedback.incorrect.border,
+    cardBg: themeFeedback.incorrect.background,
   },
 };
 
@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    fontSize: 11,
+    ...typography.labelSmall,
   },
   answer: {
     marginBottom: spacing.lg,

@@ -26,7 +26,7 @@ try {
   // Not available
 }
 import api from '../../lib/api';
-import { colors, spacing, borderRadius, glass } from '../../theme';
+import { colors, spacing, borderRadius, glass, depth } from '../../theme';
 import { haptics } from '../../lib/haptics';
 
 const platformConfig = [
@@ -216,7 +216,7 @@ export default function ProfileScreen() {
 
   return (
     <Animated.View entering={FadeIn.duration(200)} style={{ flex: 1, paddingTop: topInset, backgroundColor: colors.background }}>
-    <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.lg }]}>
+    <ScrollView style={styles.scrollView} contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.lg }]} showsVerticalScrollIndicator={false}>
       {/* User Info */}
       <GlassCard padding="lg" style={styles.userCard}>
         <View style={styles.userRow}>
@@ -361,8 +361,8 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.lg },
+  scrollView: { flex: 1 },
+  content: { padding: spacing.md },
   userCard: { marginBottom: spacing.xl },
   userRow: { flexDirection: 'row', alignItems: 'center' },
   avatar: {

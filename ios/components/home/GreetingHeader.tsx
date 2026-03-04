@@ -4,7 +4,7 @@
 
 import { View, StyleSheet } from 'react-native';
 import { Text } from '../ui';
-import { colors, spacing, fonts } from '../../theme';
+import { colors, spacing, fonts, typography } from '../../theme';
 
 interface GreetingHeaderProps {
   userName?: string;
@@ -25,22 +25,21 @@ export function GreetingHeader({ userName }: GreetingHeaderProps) {
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: spacing.md,
+    marginTop: spacing.xl,
     marginBottom: spacing.xl,
     gap: spacing.md,
     paddingRight: spacing.xl,
   },
   greeting: {
-    fontSize: 20,
+    ...typography.h3,
     fontFamily: fonts.regular,
     color: colors.textSecondary,
     letterSpacing: -0.64,
   },
   subtitle: {
-    fontSize: 38,
+    ...typography.jumbo,
     fontFamily: fonts.semibold,
     color: colors.text,
     letterSpacing: -1.2,
-    lineHeight: 40,
   },
 });

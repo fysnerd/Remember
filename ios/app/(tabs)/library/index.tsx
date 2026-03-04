@@ -9,7 +9,7 @@
  */
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { View, FlatList, ScrollView, StyleSheet, RefreshControl, Dimensions, ActivityIndicator, Pressable, Modal } from 'react-native';
+import { View, FlatList, ScrollView, StyleSheet, RefreshControl, Dimensions, ActivityIndicator, Pressable, Modal, TextInput } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,13 +25,14 @@ import { useLibraryContent, useInbox, useInboxCount, useSwipeTriage, useDebounce
 import { useContentStore, type SourceKey } from '../../../stores/contentStore';
 import { haptics } from '../../../lib/haptics';
 import type { Content } from '../../../types/content';
-import { colors, spacing, borderRadius, fonts } from '../../../theme';
+import { colors, spacing, borderRadius, fonts, glass, depth } from '../../../theme';
 import api from '../../../lib/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_GAP = spacing.md;
-const GRID_PADDING = spacing.lg;
+const GRID_PADDING = spacing.md;
 const COLUMN_WIDTH = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP) / 2;
+const HEADER_HEIGHT = 124;
 
 export default function LibraryScreen() {
   const router = useRouter();
@@ -65,12 +66,16 @@ export default function LibraryScreen() {
   const debouncedSearch = useDebouncedValue(searchQuery, 300);
 
   // Sync pendingSources when filter drawer opens (triggered from header button)
+  // If no filters set (= all sources), initialize with all available sources checked
   useEffect(() => {
     if (showFilterDrawer) {
-      setPendingSources([...sourceFilters]);
+      if (sourceFilters.length === 0 && availableSources && availableSources.length > 0) {
+        setPendingSources([...availableSources]);
+      } else {
+        setPendingSources([...sourceFilters]);
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showFilterDrawer]);
+  }, [showFilterDrawer, sourceFilters, availableSources]);
 
   // Data fetching
   const { data: inboxCount } = useInboxCount();
@@ -191,6 +196,13 @@ export default function LibraryScreen() {
     setSelectedIds(new Set());
   }, []);
 
+  const handleSelectAll = useCallback(() => {
+    if (!libraryItems) return;
+    haptics.selection();
+    const allIds = new Set(libraryItems.map((item) => item.id));
+    setSelectedIds(allIds);
+  }, [libraryItems]);
+
   const handleLaunchQuiz = useCallback(() => {
     if (selectedIds.size === 0) return;
     const ids = Array.from(selectedIds);
@@ -245,10 +257,13 @@ export default function LibraryScreen() {
   }, []);
 
   const handleApplyFilter = useCallback(() => {
-    setSourceFilters(pendingSources);
+    // If all available sources are selected, set empty array (= all)
+    // Otherwise, set the specific selection
+    const allSelected = availableSources && pendingSources.length === availableSources.length;
+    setSourceFilters(allSelected ? [] : pendingSources);
     setShowFilterDrawer(false);
     haptics.selection();
-  }, [pendingSources, setSourceFilters, setShowFilterDrawer]);
+  }, [pendingSources, availableSources, setSourceFilters, setShowFilterDrawer]);
 
   // --- Render content card ---
   const renderContentItem = useCallback(({ item }: { item: Content }) => (
@@ -269,27 +284,76 @@ export default function LibraryScreen() {
     </View>
   ), [handleContentPress, handleContentLongPress, selectedIds, selectionMode]);
 
-  // --- List header (filters + selection) ---
+  // Total header height (search + filters + safe area)
+  const totalHeaderHeight = topInset + HEADER_HEIGHT;
+
+  // Check if all items are selected
+  const allSelected = libraryItems && libraryItems.length > 0 && selectedIds.size === libraryItems.length;
+
+  // --- List header (selection only) ---
   const renderBrowseListHeader = useCallback(() => (
     <>
-      <View style={styles.filterRowWrapper}>
+      {/* Spacer for unified header */}
+      <View style={{ height: totalHeaderHeight }} />
+
+      {/* Selection header - just count indicator */}
+      {selectionMode && (
+        <View style={styles.selectionHeader}>
+          <Text variant="h3" weight="semibold" style={styles.selectionCount}>
+            {selectedIds.size} sélectionné{selectedIds.size > 1 ? 's' : ''}
+          </Text>
+        </View>
+      )}
+    </>
+  ), [selectionMode, selectedIds.size, totalHeaderHeight]);
+
+  // --- Unified header with search + filters ---
+  const renderUnifiedHeader = () => (
+    <View style={[styles.unifiedHeader, { paddingTop: topInset }]}>
+      {/* Solid background */}
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
+
+      {/* Search bar */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchInputWrapper}>
+          <Search size={18} color={colors.textSecondary} strokeWidth={1.5} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Rechercher..."
+            placeholderTextColor={colors.textSecondary}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            keyboardAppearance="dark"
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+          />
+          {searchQuery.length > 0 && (
+            <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
+              <X size={18} color={colors.textSecondary} strokeWidth={1.5} />
+            </Pressable>
+          )}
+        </View>
+      </View>
+
+      {/* Filter pills */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.filterRow}
       >
         <Pressable
-          style={[styles.sourcesDropdown, sourceFilters.length > 0 && styles.sourcesDropdownActive]}
+          style={[styles.sourcesDropdown, styles.sourcesDropdownActive]}
           onPress={() => setShowFilterDrawer(true)}
         >
           <Text
             variant="caption"
-            weight={sourceFilters.length > 0 ? 'medium' : 'regular'}
-            style={[styles.sourcesLabel, sourceFilters.length > 0 && styles.sourcesLabelActive]}
+            weight="medium"
+            style={[styles.sourcesLabel, styles.sourcesLabelActive]}
           >
-            Sources{sourceFilters.length > 0 ? ` (${sourceFilters.length})` : ''}
+            Sources ({sourceFilters.length > 0 ? sourceFilters.length : (availableSources?.length ?? 0)})
           </Text>
-          <ChevronDown size={14} color={sourceFilters.length > 0 ? colors.background : colors.text} strokeWidth={2} />
+          <ChevronDown size={14} color={colors.background} strokeWidth={2} />
         </Pressable>
 
         {themeOptions.length > 0 && <View style={styles.filterDivider} />}
@@ -324,37 +388,25 @@ export default function LibraryScreen() {
               >
                 {theme.name}
               </Text>
+              {isActive && <Check size={12} color={colors.background} strokeWidth={3} />}
             </Pressable>
           );
         })}
       </ScrollView>
-      </View>
-
-      {selectionMode && (
-        <View style={styles.selectionHeader}>
-          <Pressable onPress={handleCancelSelection} hitSlop={8}>
-            <X size={20} color={colors.text} strokeWidth={2} />
-          </Pressable>
-          <Text variant="body" weight="medium" style={{ color: colors.text }}>
-            {selectedIds.size} sélectionné{selectedIds.size > 1 ? 's' : ''}
-          </Text>
-        </View>
-      )}
-    </>
-  ), [sourceFilters, themeFilters, themeOptions, selectionMode, selectedIds.size, handleCancelSelection, setShowFilterDrawer, clearThemeFilters, toggleThemeFilter]);
+    </View>
+  );
 
   // =====================================================
   // BROWSE MODE
   // =====================================================
   const renderBrowseMode = () => (
-    <>
+    <View style={styles.browseContainer}>
       {libraryLoading ? (
         <LoadingScreen />
       ) : !libraryItems?.length ? (
         <ScrollView
           contentContainerStyle={[styles.emptyContainer, { paddingBottom: tabBarHeight + spacing.lg }]}
-          contentInsetAdjustmentBehavior="automatic"
-          refreshControl={
+                    refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
           }
         >
@@ -375,13 +427,16 @@ export default function LibraryScreen() {
             styles.content,
             { paddingBottom: tabBarHeight + spacing.lg + (selectionMode ? 80 : 0) },
           ]}
-          contentInsetAdjustmentBehavior="automatic"
+          showsVerticalScrollIndicator={false}
           ListHeaderComponent={renderBrowseListHeader}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
           }
           onEndReached={handleLibraryLoadMore}
           onEndReachedThreshold={0.5}
+          removeClippedSubviews={false}
+          scrollsToTop={false}
+          contentInsetAdjustmentBehavior="never"
           ListFooterComponent={
             libraryFetchingNextPage ? (
               <View style={styles.loadingMore}>
@@ -391,7 +446,7 @@ export default function LibraryScreen() {
           }
         />
       )}
-    </>
+    </View>
   );
 
   // =====================================================
@@ -475,6 +530,9 @@ export default function LibraryScreen() {
       {/* Browse mode */}
       {viewMode === 'browse' && renderBrowseMode()}
 
+      {/* Unified header with search + filters */}
+      {viewMode === 'browse' && renderUnifiedHeader()}
+
       {/* Triage mode — fullscreen modal, hides tab bar */}
       <Modal
         visible={viewMode === 'triage'}
@@ -495,25 +553,55 @@ export default function LibraryScreen() {
         </View>
       )}
 
-      {/* Selection action bar */}
+      {/* Selection action bar - covers tab bar */}
       {selectionMode && viewMode === 'browse' && (
-        <View style={[styles.selectionBar, { paddingBottom: tabBarHeight + spacing.sm }]}>
-          <Button
-            variant="primary"
-            onPress={handleLaunchQuiz}
-            disabled={selectedReadyCount === 0}
-            fullWidth
-          >
-            <View style={styles.quizButtonContent}>
-              <Play size={16} color={colors.background} fill={colors.background} />
-              <Text weight="medium" style={styles.quizButtonText}>
-                {selectedReadyCount > 0
-                  ? `Lancer le quiz (${selectedReadyCount})`
-                  : 'Aucun quiz disponible'}
-              </Text>
-            </View>
-          </Button>
-        </View>
+        <Animated.View
+          entering={FadeInDown.duration(250).springify()}
+          style={[styles.selectionBar, { paddingBottom: bottomInset + spacing.md }]}
+        >
+          <View style={styles.selectionBarContent}>
+            {/* Close button (round) */}
+            <Pressable
+              style={({ pressed }) => [styles.roundButton, pressed && styles.roundButtonPressed]}
+              onPress={handleCancelSelection}
+              hitSlop={8}
+            >
+              <X size={20} color={colors.text} strokeWidth={2} />
+            </Pressable>
+
+            {/* Quiz launch button */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.quizLaunchButton,
+                selectedReadyCount === 0 && styles.quizLaunchButtonDisabled,
+                pressed && selectedReadyCount > 0 && styles.quizLaunchButtonPressed,
+              ]}
+              onPress={handleLaunchQuiz}
+              disabled={selectedReadyCount === 0}
+            >
+              <View style={styles.quizButtonContent}>
+                <Play size={16} color={colors.background} fill={colors.background} />
+                <Text weight="semibold" style={styles.quizButtonText}>
+                  {selectedReadyCount > 0 ? 'Quiz' : 'Aucun quiz'}
+                </Text>
+                {selectedReadyCount > 0 && (
+                  <View style={styles.quizCountBadge}>
+                    <Text weight="bold" style={styles.quizCountText}>{selectedReadyCount}</Text>
+                  </View>
+                )}
+              </View>
+            </Pressable>
+
+            {/* Select all button (round) */}
+            <Pressable
+              style={({ pressed }) => [styles.roundButton, pressed && styles.roundButtonPressed]}
+              onPress={allSelected ? handleCancelSelection : handleSelectAll}
+              hitSlop={8}
+            >
+              <Check size={20} color={allSelected ? colors.accent : colors.text} strokeWidth={2} />
+            </Pressable>
+          </View>
+        </Animated.View>
       )}
 
       {/* Source filter drawer */}
@@ -524,7 +612,7 @@ export default function LibraryScreen() {
         onRequestClose={() => setShowFilterDrawer(false)}
       >
         <Pressable style={styles.drawerOverlay} onPress={() => setShowFilterDrawer(false)}>
-          <Pressable style={[styles.drawerSheet, { paddingBottom: bottomInset + spacing.lg }]}>
+          <Pressable style={[styles.drawerSheet, { paddingBottom: bottomInset + spacing.sm }]}>
             {/* Handle bar */}
             <View style={styles.drawerHandle} />
 
@@ -553,13 +641,12 @@ export default function LibraryScreen() {
                   >
                     <View style={styles.drawerOptionLeft}>
                       <View style={[styles.checkbox, isChecked && styles.checkboxChecked]}>
-                        {isChecked && <Check size={14} color={colors.background} strokeWidth={3} />}
+                        {isChecked && <Check size={14} color={colors.accent} strokeWidth={3} />}
                       </View>
-                      <PlatformIcon platform={source.key} size={18} colored />
                       <Text
                         variant="body"
                         weight={isChecked ? 'medium' : 'regular'}
-                        style={{ color: colors.text }}
+                        style={styles.drawerOptionText}
                       >
                         {source.label}
                       </Text>
@@ -576,7 +663,7 @@ export default function LibraryScreen() {
               ]}
               onPress={handleApplyFilter}
             >
-              <Text variant="body" weight="medium" style={{ color: colors.background }}>
+              <Text variant="body" weight="medium" style={styles.drawerApplyText}>
                 Appliquer
               </Text>
             </Pressable>
@@ -594,20 +681,51 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  browseContainer: {
+    flex: 1,
+  },
 
-  // --- Filter row ---
+  // --- Unified header (search + filters) ---
+  unifiedHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 100,
+    paddingBottom: spacing.sm,
+  },
+  searchContainer: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xs,
+  },
+  searchInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.sm,
+    height: 40,
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: glass.border,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    fontFamily: fonts.regular,
+    color: colors.text,
+    paddingVertical: 0,
+  },
+  filterSpacer: {
+    height: HEADER_HEIGHT,
+  },
   filterRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 0,
-    paddingBottom: spacing.sm,
-    paddingLeft: spacing.lg,
-    paddingRight: spacing.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     gap: spacing.sm,
-  },
-  filterRowWrapper: {
-    marginHorizontal: -spacing.lg,
-    marginBottom: spacing.md,
   },
   sourcesDropdown: {
     flexDirection: 'row',
@@ -638,6 +756,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.borderLight,
   },
   themePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: borderRadius.full,
@@ -660,11 +781,11 @@ const styles = StyleSheet.create({
 
   // --- Selection header (in list header) ---
   selectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+  },
+  selectionCount: {
+    color: colors.text,
   },
 
   // --- Floating triage button ---
@@ -747,8 +868,7 @@ const styles = StyleSheet.create({
 
   // --- Content area ---
   content: {
-    padding: spacing.lg,
-    paddingTop: spacing.md,
+    paddingHorizontal: spacing.md,
     flexGrow: 1,
   },
   emptyContainer: {
@@ -775,11 +895,45 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     backgroundColor: colors.background,
     borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
+    borderTopColor: colors.border,
+  },
+  selectionBarContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  roundButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  roundButtonPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.95 }],
+  },
+  quizLaunchButton: {
+    flex: 1,
+    backgroundColor: colors.accent,
+    borderRadius: borderRadius.full,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.lg,
+  },
+  quizLaunchButtonDisabled: {
+    backgroundColor: colors.surface,
+  },
+  quizLaunchButtonPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
   },
   quizButtonContent: {
     flexDirection: 'row',
@@ -791,15 +945,26 @@ const styles = StyleSheet.create({
     color: colors.background,
     fontSize: 15,
   },
+  quizCountBadge: {
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginLeft: spacing.xs,
+  },
+  quizCountText: {
+    color: colors.accent,
+    fontSize: 13,
+  },
 
   // --- Filter drawer ---
   drawerOverlay: {
     flex: 1,
-    backgroundColor: colors.overlay,
+    backgroundColor: 'transparent',
     justifyContent: 'flex-end',
   },
   drawerSheet: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.accent,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
     paddingHorizontal: spacing.lg,
@@ -809,12 +974,12 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: colors.borderLight,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
     alignSelf: 'center',
     marginBottom: spacing.lg,
   },
   drawerTitle: {
-    color: colors.text,
+    color: colors.background,
     marginBottom: spacing.md,
   },
   drawerOption: {
@@ -823,31 +988,37 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
   },
   drawerOptionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
   },
+  drawerOptionText: {
+    color: colors.background,
+  },
   checkbox: {
     width: 22,
     height: 22,
     borderRadius: borderRadius.xs,
     borderWidth: 2,
-    borderColor: colors.borderLight,
+    borderColor: 'rgba(0, 0, 0, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkboxChecked: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
+    backgroundColor: colors.background,
+    borderColor: colors.background,
   },
   drawerApplyButton: {
     marginTop: spacing.lg,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.background,
     paddingVertical: 14,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.full,
     alignItems: 'center',
+  },
+  drawerApplyText: {
+    color: '#FFFFFF',
   },
 });

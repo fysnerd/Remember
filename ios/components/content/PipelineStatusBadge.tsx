@@ -9,7 +9,7 @@ import { View, StyleSheet } from 'react-native';
 import { Clock, Mic, Sparkles, AlertCircle, Ban } from 'lucide-react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Text } from '../ui';
-import { colors, borderRadius, spacing } from '../../theme';
+import { colors, borderRadius, spacing, fonts, typography } from '../../theme';
 import type { ContentStatus } from '../../types/content';
 
 const STATUS_CONFIG: Record<string, { icon: typeof Clock; label: string; color: string }> = {
@@ -45,14 +45,14 @@ const styles = StyleSheet.create({
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm - spacing.xxs,
+    paddingVertical: spacing.xxs + 1,
     borderRadius: borderRadius.xs,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: colors.overlayDark,
   },
   label: {
-    fontSize: 9,
-    fontWeight: '600',
+    ...typography.nano,
+    fontFamily: fonts.semibold,
   },
 });

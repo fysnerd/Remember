@@ -7,7 +7,7 @@
 
 import { Pressable, View, StyleSheet } from 'react-native';
 import { Text } from './ui';
-import { colors, spacing, borderRadius, shadows } from '../theme';
+import { colors, spacing, borderRadius, shadows, fonts, typography } from '../theme';
 
 interface ThemeCardProps {
   id: string;
@@ -76,7 +76,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   colorBar: {
-    width: 4,
+    width: spacing.xs,
   },
   content: {
     flex: 1,
@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   emoji: {
-    fontSize: 28,
+    fontSize: typography.h1.fontSize,
     marginBottom: spacing.xs,
   },
   name: {
@@ -94,31 +94,31 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   progressBarContainer: {
-    height: 3,
+    height: spacing.xxs + 1,
     backgroundColor: colors.borderLight,
-    borderRadius: 2,
+    borderRadius: spacing.xxs,
     marginTop: spacing.xs,
     width: '100%',
   },
   progressBar: {
     height: '100%',
-    borderRadius: 2,
+    borderRadius: spacing.xxs,
   },
   dueBadge: {
     position: 'absolute',
-    top: 6,
-    right: 6,
+    top: spacing.sm - spacing.xxs,
+    right: spacing.sm - spacing.xxs,
     backgroundColor: colors.accent,
     borderRadius: borderRadius.full,
-    minWidth: 20,
-    height: 20,
+    minWidth: spacing.lg,
+    height: spacing.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: spacing.xs,
   },
   dueText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '600',
+    color: colors.white,
+    ...typography.labelSmall,
+    fontFamily: fonts.semibold,
   },
 });

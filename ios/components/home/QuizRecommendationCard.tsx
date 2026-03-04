@@ -12,12 +12,10 @@
 import { View, Image, StyleSheet, Pressable } from 'react-native';
 import { Text } from '../ui';
 import { PlatformIcon } from '../icons';
+import { Sparkles } from 'lucide-react-native';
 import { haptics } from '../../lib/haptics';
-import { colors, spacing, fonts, borderRadius, glass } from '../../theme';
+import { colors, spacing, fonts, borderRadius, glass, typography, shadows } from '../../theme';
 import type { QuizRecommendation } from '../../types/content';
-
-// Placeholder until AI-generated covers (ANK-169)
-const THEME_PLACEHOLDER = require('../../assets/images/theme-placeholder.png');
 
 interface QuizRecommendationCardProps {
   recommendation: QuizRecommendation;
@@ -43,11 +41,17 @@ function ThemeCard({ recommendation, completed }: { recommendation: QuizRecommen
     <View style={[styles.themeCardOuter, completed && styles.cardCompleted]}>
       <View style={styles.themeCard}>
         {/* Background image — AI cover or placeholder */}
-        <Image
-          source={thumbnailUrl ? { uri: thumbnailUrl } : THEME_PLACEHOLDER}
-          style={styles.themeBackground}
-          resizeMode="cover"
-        />
+        {thumbnailUrl ? (
+          <Image
+            source={{ uri: thumbnailUrl }}
+            style={styles.themeBackground}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={styles.themePlaceholder}>
+            <Sparkles size={48} color={colors.accent} />
+          </View>
+        )}
 
         {/* Bottom info pill — light background */}
         <View style={styles.themeInfoPill}>
@@ -154,18 +158,19 @@ export function QuizRecommendationCard({ recommendation, onPress }: QuizRecommen
   );
 }
 
-const CARD_BORDER_WIDTH = 2;
+const CARD_BORDER_WIDTH = 1;
 const CARD_SHADOW = {
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 4 },
-  shadowOpacity: 0.4,
-  shadowRadius: 8,
+  shadowColor: colors.black,
+  shadowOffset: { width: 0, height: 6 },
+  shadowOpacity: 0.25,
+  shadowRadius: 12,
   elevation: 8,
 } as const;
 
 const styles = StyleSheet.create({
   // -- Content card shell --
   card: {
+    backgroundColor: glass.border,
     borderWidth: CARD_BORDER_WIDTH,
     borderColor: glass.borderLight,
     borderRadius: borderRadius.lg,
@@ -232,28 +237,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emoji: {
-    fontSize: 48,
+    fontSize: typography.hero.fontSize,
   },
   infoContainer: {
-    gap: 2,
+    gap: spacing.xxs,
   },
   title: {
     color: colors.text,
     fontFamily: fonts.semibold,
-    fontSize: 20,
-    lineHeight: 24,
+    ...typography.h3,
     letterSpacing: -0.8,
   },
   questionCount: {
     color: colors.textSecondary,
     fontFamily: fonts.regular,
-    fontSize: 15,
+    ...typography.bodySmall,
     letterSpacing: -0.6,
   },
 
   // -- Theme card (Figma 130:98) --
   themeCardOuter: {
     height: 388,
+    backgroundColor: glass.border,
     borderWidth: CARD_BORDER_WIDTH,
     borderColor: glass.borderLight,
     borderRadius: borderRadius.lg,
@@ -274,18 +279,23 @@ const styles = StyleSheet.create({
     width: undefined,
     height: undefined,
   },
+  themePlaceholder: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.surfaceElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   themeInfoPill: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.surfaceLight,
     borderRadius: borderRadius.sm,
     borderCurve: 'continuous',
     padding: spacing.md,
-    gap: 2,
+    gap: spacing.xxs,
   },
   themeTitle: {
-    color: '#111827',
+    color: colors.textDark,
     fontFamily: fonts.semibold,
-    fontSize: 20,
-    lineHeight: 24,
+    ...typography.h3,
     letterSpacing: -0.8,
   },
   themeMetaRow: {
@@ -294,15 +304,15 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   themeMeta: {
-    color: '#475569',
+    color: colors.textDarkSecondary,
     fontFamily: fonts.regular,
-    fontSize: 15,
+    ...typography.bodySmall,
     letterSpacing: -0.6,
   },
   themeMetaSep: {
-    color: '#94A3B8',
+    color: colors.textSecondary,
     fontFamily: fonts.regular,
-    fontSize: 15,
+    ...typography.bodySmall,
     letterSpacing: -0.6,
   },
 

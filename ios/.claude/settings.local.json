@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__linear-server__list_issues",
+      "mcp__linear-server__get_issue",
+      "mcp__linear-server__list_comments",
+      "Bash(ssh deploy@116.203.17.203 \"cd ~/Remember/backend && npm run build 2>&1\")",
+      "Bash(npm run build:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(ssh deploy@116.203.17.203 \"cd ~/Remember && git pull origin master && cd backend && npm run build 2>&1\")",
+      "Bash(ssh deploy@116.203.17.203 \"cd ~/Remember && git remote set-url origin https://fysnerd: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@github.com/fysnerd/Remember.git && git pull origin master\")",
+      "Bash(ssh root@116.203.17.203 \"cd ~/Remember/backend && ls -la .env && head -5 .env\")",
+      "Bash(ssh root@116.203.17.203 \"find /root -name ''Remember'' -type d 2>/dev/null && ls -la /root/\")",
+      "Bash(ssh root@116.203.17.203 \"cd /root && git clone https://fysnerd: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@github.com/fysnerd/Remember.git\")",
+      "Bash(ssh root@116.203.17.203 \"ls -la /root/Remember && ls -la /root/Remember/backend\")",
+      "Bash(ssh root@116.203.17.203 'cat > /root/Remember/backend/.env << ''''EOF''''\n# ===========================================\n# Configuration Remember - PRODUCTION VPS\n# ===========================================\n\n# Serveur\nPORT=3001\nNODE_ENV=production\n\n# Base de données Supabase \\(Session Pooler - IPv4 compatible\\)\nDATABASE_URL=\"\"postgresql://postgres.iadzfswcpgjczjpkhpjv:K2WDnPUIN9glWoRQ@aws-1-eu-west-1.pooler.supabase.com:5432/postgres\"\"\nDIRECT_URL=\"\"postgresql://postgres.iadzfswcpgjczjpkhpjv:K2WDnPUIN9glWoRQ@aws-1-eu-west-1.pooler.supabase.com:5432/postgres\"\"\n\n# Redis - désactivé\nREDIS_URL=\"\"\"\"\n\n# JWT \\(PRODUCTION - secrets générés\\)\nJWT_SECRET=\"\"''''\"\"$\\(openssl rand -hex 32\\)\"\"''''\"\"\nJWT_EXPIRES_IN=\"\"7d\"\"\nJWT_REFRESH_SECRET=\"\"''''\"\"$\\(openssl rand -hex 32\\)\"\"''''\"\"\nJWT_REFRESH_EXPIRES_IN=\"\"30d\"\"\n\n# LLM pour générer les quiz\nLLM_PROVIDER=\"\"mistral\"\"\nMISTRAL_API_KEY=\"\"NvsAQROsB66JQLPWKmpOZi8rTHSLoQgC\"\"\n\n# Groq pour la transcription Whisper\nGROQ_API_KEY=\"\"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\"\"\n\n# Podcast Index API\nPODCAST_INDEX_API_KEY=\"\"B9CDRUVXWN6DPTPHZPFC\"\"\nPODCAST_INDEX_API_SECRET=\"\"tM^2uTZtM#Q^BmX7ScdmcwP5H5TwY$ruVcc9c58n\"\"\n\n# Frontend URL \\(à mettre à jour avec le domaine final\\)\nFRONTEND_URL=\"\"http://localhost:5173\"\"\n\n# YouTube OAuth \\(Google\\) - Callback à mettre à jour\nYOUTUBE_CLIENT_ID=\"\"628216102691-rapig42ndt06hg1dab93pquvvvnp06r1.apps.googleusercontent.com\"\"\nYOUTUBE_CLIENT_SECRET=\"\"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\"\"\nYOUTUBE_CALLBACK_URL=\"\"https://api.remember.app/api/oauth/youtube/callback\"\"\n\n# Spotify OAuth - Callback à mettre à jour\nSPOTIFY_CLIENT_ID=\"\"30cba06b0bc14fa086a6f4c47b25fccf\"\"\nSPOTIFY_CLIENT_SECRET=\"\"7ab0a73d72a04ea88789f49f1e244d90\"\"\nSPOTIFY_CALLBACK_URL=\"\"https://api.remember.app/api/oauth/spotify/callback\"\"\nEOF\nchmod 600 /root/Remember/backend/.env && echo \"\"✅ .env créé avec chmod 600\"\"')",
+      "Bash(ssh root@116.203.17.203 \"grep JWT /root/Remember/backend/.env\")",
+      "Bash(ssh root@116.203.17.203 'JWT_SECRET=$\\(openssl rand -hex 32\\) && JWT_REFRESH_SECRET=$\\(openssl rand -hex 32\\) && sed -i \"\"s|JWT_SECRET=.*|JWT_SECRET=\\\\\"\"${JWT_SECRET}\\\\\"\"|\"\" /root/Remember/backend/.env && sed -i \"\"s|JWT_REFRESH_SECRET=.*|JWT_REFRESH_SECRET=\\\\\"\"${JWT_REFRESH_SECRET}\\\\\"\"|\"\" /root/Remember/backend/.env && grep JWT /root/Remember/backend/.env')",
+      "Bash(ssh root@116.203.17.203 \"cd /root/Remember/backend && npm install 2>&1 | tail -20\")",
+      "Bash(ssh root@116.203.17.203:*)",
+      "Bash(curl:*)",
+      "mcp__linear-server__create_comment"
+    ]
+  }
+}

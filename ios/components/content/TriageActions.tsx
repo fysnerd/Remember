@@ -4,7 +4,7 @@
 
 import { View, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Check, X } from 'lucide-react-native';
-import { colors, spacing, borderRadius } from '../../theme';
+import { colors, spacing, borderRadius, layout } from '../../theme';
 
 interface TriageActionsProps {
   onLearn: () => void;
@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
-    height: 40,
+    height: layout.buttonHeightSm,
     borderRadius: borderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',

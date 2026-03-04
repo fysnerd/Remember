@@ -1,14 +1,17 @@
 /**
  * Social auth button (Apple / Google styled)
+ *
+ * Apple: white background, dark text
+ * Google: transparent with border, light text
  */
 
 import { Pressable, StyleSheet, View, ActivityIndicator } from 'react-native';
 import { Text } from '../ui';
 import { haptics } from '../../lib/haptics';
-import { colors, spacing, borderRadius, layout } from '../../theme';
+import { colors, spacing, borderRadius, layout, typography } from '../../theme';
 
 interface SocialAuthButtonProps {
-  provider: 'apple' | 'google' | 'email';
+  provider: 'apple' | 'google';
   onPress: () => void;
   loading?: boolean;
   disabled?: boolean;
@@ -17,27 +20,22 @@ interface SocialAuthButtonProps {
 const PROVIDER_CONFIG = {
   apple: {
     label: 'Continuer avec Apple',
-    icon: '\uF8FF', // Apple logo (SF Symbols)
-    bg: '#FFFFFF',
-    textColor: '#000000',
+    icon: '\uF8FF',
+    bg: colors.white,
+    textColor: colors.black,
+    borderColor: colors.white,
   },
   google: {
     label: 'Continuer avec Google',
     icon: 'G',
     bg: 'transparent',
     textColor: colors.text,
-  },
-  email: {
-    label: 'Continuer avec un email',
-    icon: '@',
-    bg: 'transparent',
-    textColor: colors.text,
+    borderColor: colors.borderLight,
   },
 };
 
 export function SocialAuthButton({ provider, onPress, loading, disabled }: SocialAuthButtonProps) {
   const config = PROVIDER_CONFIG[provider];
-  const isApple = provider === 'apple';
 
   return (
     <Pressable
@@ -48,13 +46,16 @@ export function SocialAuthButton({ provider, onPress, loading, disabled }: Socia
       disabled={disabled || loading}
       style={({ pressed }) => [
         styles.button,
-        isApple ? styles.appleButton : styles.outlineButton,
+        {
+          backgroundColor: config.bg,
+          borderColor: config.borderColor,
+        },
         (disabled || loading) && styles.disabled,
         pressed && styles.pressed,
       ]}
     >
       {loading ? (
-        <ActivityIndicator size="small" color={isApple ? '#000' : colors.text} />
+        <ActivityIndicator size="small" color={config.textColor} />
       ) : (
         <View style={styles.content}>
           <Text
@@ -79,19 +80,12 @@ export function SocialAuthButton({ provider, onPress, loading, disabled }: Socia
 
 const styles = StyleSheet.create({
   button: {
-    height: layout.buttonHeight + 4,
+    height: layout.buttonHeightLg,
     borderRadius: borderRadius.md,
+    borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
     width: '100%',
-  },
-  appleButton: {
-    backgroundColor: '#FFFFFF',
-  },
-  outlineButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.borderLight,
   },
   content: {
     flexDirection: 'row',
@@ -99,8 +93,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   icon: {
-    fontSize: 20,
-    width: 24,
+    ...typography.h3,
+    width: layout.iconSize,
     textAlign: 'center',
   },
   disabled: {

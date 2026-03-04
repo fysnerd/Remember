@@ -7,7 +7,7 @@
 import { View, ScrollView, StyleSheet, Pressable } from 'react-native';
 import { Text } from '../ui';
 import { PlatformIcon } from '../icons';
-import { colors, spacing, borderRadius } from '../../theme';
+import { colors, spacing, borderRadius, typography } from '../../theme';
 
 type Source = 'all' | 'youtube' | 'spotify' | 'tiktok' | 'instagram';
 
@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.borderLight,
-    gap: 6,
+    gap: spacing.sm - spacing.xxs,
   },
   sourcePillActive: {
     backgroundColor: colors.text,
@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
   },
   sourceLabel: {
     color: colors.text,
-    fontSize: 13,
+    ...typography.captionSmall,
   },
   sourceLabelActive: {
     color: colors.background,

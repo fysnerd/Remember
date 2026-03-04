@@ -17,7 +17,7 @@ import { QuizRecommendationCard } from '../../components/home/QuizRecommendation
 import { STAGGER_DELAY, STAGGER_CAP } from '../../lib/animations';
 import { useQuizRecommendations, usePipelineStatus, useReviewStats } from '../../hooks';
 import { useAuthStore } from '../../stores/authStore';
-import { colors, spacing } from '../../theme';
+import { colors, spacing, depth } from '../../theme';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -83,8 +83,9 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView
-        style={styles.container}
+        style={styles.scrollView}
         contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.lg }]}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
         }
@@ -121,8 +122,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  scrollView: {
+    flex: 1,
+  },
   content: {
-    padding: spacing.lg,
+    padding: spacing.md,
   },
   cardsList: {
     gap: spacing.lg,

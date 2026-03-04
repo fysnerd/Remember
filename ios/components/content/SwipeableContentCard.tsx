@@ -8,7 +8,7 @@ import { Swipeable } from 'react-native-gesture-handler';
 import { Trash2 } from 'lucide-react-native';
 import { ContentCard } from './ContentCard';
 import { Text } from '../ui';
-import { colors, spacing, borderRadius } from '../../theme';
+import { colors, spacing, borderRadius, fonts, typography } from '../../theme';
 
 import type { ContentSource, ContentStatus } from '../../types/content';
 
@@ -41,7 +41,7 @@ export function SwipeableContentCard({
         onDelete();
       }}
     >
-      <Trash2 size={18} color="#FFFFFF" />
+      <Trash2 size={18} color={colors.white} />
       <Text style={styles.deleteText}>Retirer</Text>
     </Pressable>
   );
@@ -66,11 +66,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: 72,
     marginLeft: spacing.sm,
-    gap: 4,
+    gap: spacing.xs,
   },
   deleteText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '600',
+    color: colors.white,
+    ...typography.labelSmall,
+    fontFamily: fonts.semibold,
   },
 });

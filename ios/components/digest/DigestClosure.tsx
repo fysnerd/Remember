@@ -8,7 +8,7 @@ import { View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Trophy, Flame, Clock } from 'lucide-react-native';
 import { Text, Button } from '../ui';
-import { colors, spacing } from '../../theme';
+import { colors, spacing, typography } from '../../theme';
 
 interface DigestClosureProps {
   score: number;
@@ -103,8 +103,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   percentage: {
-    fontSize: 64,
-    lineHeight: 72,
+    ...typography.display,
     marginBottom: spacing.xs,
   },
   subtitle: {

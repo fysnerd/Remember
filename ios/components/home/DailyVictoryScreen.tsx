@@ -5,7 +5,7 @@
 import { View, StyleSheet } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Text } from '../ui';
-import { colors, spacing, fonts } from '../../theme';
+import { colors, spacing, fonts, typography } from '../../theme';
 
 interface DailyVictoryScreenProps {
   streak: number;
@@ -52,23 +52,20 @@ const styles = StyleSheet.create({
   subtitle: {
     color: colors.textSecondary,
     fontFamily: fonts.regular,
-    fontSize: 16,
-    lineHeight: 22,
+    ...typography.body,
     marginBottom: spacing.lg,
     textAlign: 'center',
   },
   streak: {
     color: colors.accent,
     fontFamily: fonts.medium,
-    fontSize: 18,
-    lineHeight: 24,
+    ...typography.h4,
     marginBottom: spacing.lg,
   },
   hint: {
     color: colors.textTertiary,
     fontFamily: fonts.regular,
-    fontSize: 14,
-    lineHeight: 20,
+    ...typography.caption,
     textAlign: 'center',
   },
 });

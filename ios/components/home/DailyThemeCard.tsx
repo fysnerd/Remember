@@ -7,7 +7,7 @@
 import { View, StyleSheet } from 'react-native';
 import { GlassCard } from '../glass/GlassCard';
 import { Text } from '../ui';
-import { colors, spacing, fonts } from '../../theme';
+import { colors, spacing, fonts, typography, borderRadius } from '../../theme';
 import type { ThemeListItem } from '../../types/content';
 
 interface DailyThemeCardProps {
@@ -56,19 +56,18 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   emoji: {
-    fontSize: 48,
-    lineHeight: 56,
+    ...typography.hero,
   },
   dueBadge: {
     backgroundColor: colors.accent,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    borderRadius: 9999,
+    paddingVertical: spacing.xs + spacing.xxs,
+    borderRadius: borderRadius.full,
   },
   dueText: {
     color: colors.background,
     fontFamily: fonts.bold,
-    fontSize: 11,
+    ...typography.labelSmall,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -78,8 +77,7 @@ const styles = StyleSheet.create({
   title: {
     color: colors.text,
     fontFamily: fonts.bold,
-    fontSize: 22,
-    lineHeight: 28,
+    ...typography.h2,
     marginBottom: spacing.sm,
   },
   meta: {
@@ -89,18 +87,18 @@ const styles = StyleSheet.create({
   subtitle: {
     color: colors.textSecondary,
     fontFamily: fonts.regular,
-    fontSize: 14,
+    ...typography.caption,
   },
   dot: {
-    width: 3,
-    height: 3,
-    borderRadius: 2,
+    width: spacing.xxs + 1,
+    height: spacing.xxs + 1,
+    borderRadius: spacing.xxs,
     backgroundColor: colors.textTertiary,
     marginHorizontal: spacing.sm,
   },
   cta: {
     color: colors.accent,
     fontFamily: fonts.semibold,
-    fontSize: 14,
+    ...typography.caption,
   },
 });

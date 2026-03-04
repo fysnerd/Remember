@@ -4,7 +4,7 @@
 
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Text } from '../ui';
-import { colors, spacing, borderRadius } from '../../theme';
+import { colors, spacing, borderRadius, feedback, typography } from '../../theme';
 
 interface Option {
   id: string;
@@ -30,11 +30,11 @@ const cleanOptionText = (text: string) => {
 
 const getOptionStyle = (isCorrect: boolean, isWrong: boolean, isSelected: boolean, hasResult: boolean) => ({
   backgroundColor: isCorrect && hasResult
-    ? 'rgba(34, 197, 94, 0.12)'
+    ? feedback.correct.background
     : isWrong
-    ? 'rgba(239, 68, 68, 0.12)'
+    ? feedback.incorrect.background
     : isSelected
-    ? 'rgba(181, 165, 254, 0.08)'
+    ? feedback.selected.background
     : colors.surface,
   borderColor: isCorrect && hasResult
     ? colors.success
@@ -120,12 +120,12 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   options: {
-    gap: spacing.sm + 2,
+    gap: spacing.md,
   },
   option: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.md + 2,
+    paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
     borderRadius: borderRadius.lg,
     borderWidth: 1.5,
@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
   },
   synthesisBadge: {
     backgroundColor: colors.accent,
-    paddingHorizontal: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.md,
     alignSelf: 'flex-start',
@@ -164,6 +164,6 @@ const styles = StyleSheet.create({
   },
   synthesisBadgeText: {
     color: colors.background,
-    fontSize: 12,
+    ...typography.label,
   },
 });

@@ -8,7 +8,7 @@
 import { useState, useRef } from 'react';
 import { View, TextInput, Pressable, StyleSheet } from 'react-native';
 import { Text } from './ui';
-import { colors, spacing, borderRadius, shadows } from '../theme';
+import { colors, spacing, borderRadius, shadows, fonts, typography, layout } from '../theme';
 
 interface DiscoveryThemeCardProps {
   id: string;
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     ...shadows.sm,
   },
   colorBar: {
-    width: 4,
+    width: spacing.xs,
   },
   mainContent: {
     flex: 1,
@@ -125,20 +125,20 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   emoji: {
-    fontSize: 24,
+    fontSize: typography.h2.fontSize,
     marginRight: spacing.sm,
   },
   nameContainer: {
     flex: 1,
   },
   nameInput: {
-    fontSize: 15,
-    fontWeight: '500',
+    ...typography.bodySmall,
+    fontFamily: fonts.medium,
     color: colors.text,
     borderBottomWidth: 1,
     borderBottomColor: colors.accent,
-    paddingVertical: 2,
-    marginBottom: 2,
+    paddingVertical: spacing.xxs,
+    marginBottom: spacing.xxs,
   },
   actionsRow: {
     flexDirection: 'row',
@@ -157,16 +157,16 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   dismissButton: {
-    width: 32,
-    height: 32,
+    width: layout.iconSizeLg,
+    height: layout.iconSizeLg,
     borderRadius: borderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceElevated,
   },
   dismissText: {
-    fontSize: 14,
-    fontWeight: '600',
+    ...typography.caption,
+    fontFamily: fonts.semibold,
     color: colors.error,
   },
   buttonPressed: {
