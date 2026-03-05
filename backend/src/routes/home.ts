@@ -11,7 +11,7 @@ homeRouter.use(authenticateToken);
 // Types
 // ============================================================================
 
-type Recommendation = {
+export type Recommendation = {
   id: string;
   type: 'content' | 'theme';
   title: string;
@@ -56,7 +56,7 @@ const formatSubtitle = (platform: string, channelName: string | null): string =>
   return channelName ? `${pName} - ${channelName}` : pName;
 };
 
-async function generateRecommendations(userId: string): Promise<Recommendation[]> {
+export async function generateRecommendations(userId: string): Promise<Recommendation[]> {
   // Step 0: Exclude content/themes already COMPLETED in the last 3 days
   // Non-completed recs can reappear so users get another chance
   const recentAll = await prisma.$queryRaw<{ targetType: string; targetId: string }[]>`

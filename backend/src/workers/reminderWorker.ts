@@ -1,24 +1,21 @@
-// Daily Review Reminder Worker (S010)
-// Sends email + push reminders for due cards, and inactivity win-back (J+3)
+// Daily Review Reminder Worker
+// Sends ONE push notification per day about the user's daily subjects (not raw card counts)
 import { logger } from '../config/logger.js';
 import { prisma } from '../config/database.js';
-import { sendDailyReminder } from '../services/email.js';
 import { sendPushToUser } from '../services/pushNotifications.js';
+import { generateRecommendations } from '../routes/home.js';
 
 const log = logger.child({ job: 'reminder' });
-
-// Minimum cards due to trigger a push notification
-const MIN_CARDS_FOR_PUSH = 5;
 
 // Days of inactivity before sending win-back notification
 const INACTIVITY_DAYS = 3;
 
 /**
- * Check if it's time to send a reminder for a user based on their settings
+ * Check if it's time to send a reminder for a user based on their settings.
+ * Tight ±2 minute window to avoid duplicate sends across cron cycles.
  */
 function isReminderTime(reminderTime: string, timezone: string): boolean {
   try {
-    // Get current time in user's timezone
     const now = new Date();
     const formatter = new Intl.DateTimeFormat('en-US', {
       timeZone: timezone,
@@ -28,36 +25,154 @@ function isReminderTime(reminderTime: string, timezone: string): boolean {
     });
     const currentTime = formatter.format(now);
 
-    // Check if current time matches reminder time (within 5 minute window)
     const [reminderHour, reminderMinute] = reminderTime.split(':').map(Number);
     const [currentHour, currentMinute] = currentTime.split(':').map(Number);
 
-    // Allow a 5-minute window for the cron job
     const reminderMinutes = reminderHour * 60 + reminderMinute;
     const currentMinutes = currentHour * 60 + currentMinute;
 
-    return Math.abs(currentMinutes - reminderMinutes) <= 5;
+    return Math.abs(currentMinutes - reminderMinutes) <= 2;
   } catch {
-    // Invalid timezone, default to false
     return false;
   }
 }
 
 /**
- * Run the daily reminder worker
- * This should be called every 5 minutes by the scheduler
- * Handles: daily review reminders (email + push) and inactivity J+3 win-back (push)
+ * Get today's date string in user's timezone (YYYY-MM-DD)
+ */
+function getUserTodayDate(timezone: string): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date());
+  } catch {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC' }).format(new Date());
+  }
+}
+
+/**
+ * Check if a push was already sent today for this user (dedup)
+ */
+function alreadySentToday(lastPushSentAt: Date | null, timezone: string): boolean {
+  if (!lastPushSentAt) return false;
+  const todayStr = getUserTodayDate(timezone);
+  let sentStr: string;
+  try {
+    sentStr = new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(lastPushSentAt);
+  } catch {
+    sentStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC' }).format(lastPushSentAt);
+  }
+  return sentStr === todayStr;
+}
+
+/**
+ * Build a notification message from the user's daily recommendations.
+ * Returns { title, body } or null if nothing to notify about.
+ */
+async function buildSubjectNotification(
+  userId: string,
+  timezone: string,
+  streak: number,
+): Promise<{ title: string; body: string } | null> {
+  const todayStr = getUserTodayDate(timezone);
+  const todayDate = new Date(todayStr + 'T00:00:00Z');
+
+  // Check for existing daily recommendations
+  let dailyRecs = await prisma.dailyRecommendation.findMany({
+    where: { userId, date: todayDate },
+    orderBy: { slot: 'asc' },
+  });
+
+  // Generate if they don't exist yet (worker may run before user opens app)
+  if (dailyRecs.length === 0) {
+    const freshRecs = await generateRecommendations(userId);
+    if (freshRecs.length > 0) {
+      const toCreate = freshRecs.map((rec, index) => ({
+        userId,
+        date: todayDate,
+        slot: index,
+        targetType: rec.type,
+        targetId: rec.id,
+      }));
+      await prisma.dailyRecommendation.createMany({
+        data: toCreate,
+        skipDuplicates: true,
+      });
+      dailyRecs = await prisma.dailyRecommendation.findMany({
+        where: { userId, date: todayDate },
+        orderBy: { slot: 'asc' },
+      });
+    }
+  }
+
+  if (dailyRecs.length === 0) return null;
+
+  // Check how many are already completed
+  const remaining = dailyRecs.filter(r => !r.completedAt);
+  if (remaining.length === 0) return null; // All done today
+
+  // Fetch subject names for the notification
+  const subjectNames: string[] = [];
+  for (const rec of remaining.slice(0, 3)) {
+    if (rec.targetType === 'content') {
+      const content = await prisma.content.findUnique({
+        where: { id: rec.targetId },
+        select: { title: true },
+      });
+      if (content) {
+        // Truncate long titles
+        const name = content.title.length > 40
+          ? content.title.substring(0, 37) + '...'
+          : content.title;
+        subjectNames.push(name);
+      }
+    } else {
+      const theme = await prisma.theme.findUnique({
+        where: { id: rec.targetId },
+        select: { name: true, emoji: true },
+      });
+      if (theme) {
+        subjectNames.push(theme.emoji ? `${theme.emoji} ${theme.name}` : theme.name);
+      }
+    }
+  }
+
+  if (subjectNames.length === 0) return null;
+
+  const streakSuffix = streak > 1 ? ` | ${streak}j` : '';
+  const count = remaining.length;
+
+  // Build engaging message
+  let title: string;
+  let body: string;
+
+  if (count === 1) {
+    title = 'Un sujet t\'attend aujourd\'hui';
+    body = `${subjectNames[0]}${streakSuffix}`;
+  } else {
+    title = `${count} sujets a reviser aujourd'hui`;
+    if (subjectNames.length <= 2) {
+      body = `${subjectNames.join(' et ')}${streakSuffix}`;
+    } else {
+      body = `${subjectNames.slice(0, 2).join(', ')} et +${count - 2}${streakSuffix}`;
+    }
+  }
+
+  return { title, body };
+}
+
+/**
+ * Run the daily reminder worker.
+ * Called every 5 minutes by the scheduler.
+ * Handles: daily subject notifications (push) and inactivity J+3 win-back (push).
  */
 export async function runReminderWorker(): Promise<void> {
   log.info('Starting');
 
   try {
-    let emailSentCount = 0;
     let pushSentCount = 0;
     let inactivitySentCount = 0;
 
     // ========================================
-    // Part 1: Daily review reminders (email + push)
+    // Part 1: Daily subject notifications (ONE per day)
     // ========================================
 
     const usersWithSettings = await prisma.userSettings.findMany({
@@ -78,80 +193,44 @@ export async function runReminderWorker(): Promise<void> {
     log.info({ userCount: usersWithSettings.length }, 'Found users with reminders enabled');
 
     for (const settings of usersWithSettings) {
-      // Check if it's the right time for this user
+      // Check if it's the right time for this user (±2 min window)
       if (!isReminderTime(settings.dailyReminderTime, settings.timezone)) {
         continue;
       }
 
-      // Check if user has already reviewed today (skip if so)
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const lastReminder = await prisma.$queryRaw<{ count: bigint }[]>`
-        SELECT COUNT(*) as count FROM "Review"
-        WHERE "userId" = ${settings.userId}
-        AND "createdAt" >= ${today}
-      `;
-
-      if (lastReminder[0]?.count > 0) {
+      // Dedup: skip if already sent a push today
+      if (alreadySentToday(settings.lastPushSentAt, settings.timezone)) {
         continue;
       }
 
-      // Get user's due cards count and streak
-      const [dueCount, streak] = await Promise.all([
-        prisma.card.count({
-          where: {
-            userId: settings.userId,
-            nextReviewAt: { lte: new Date() },
-          },
-        }),
-        prisma.streak.findUnique({
+      // Check streak
+      const streak = await prisma.streak.findUnique({
+        where: { userId: settings.userId },
+      });
+
+      // Build notification from actual daily subjects
+      const notification = await buildSubjectNotification(
+        settings.userId,
+        settings.timezone,
+        streak?.currentStreak || 0,
+      );
+
+      if (!notification) continue;
+
+      const pushResult = await sendPushToUser(
+        settings.userId,
+        notification.title,
+        notification.body,
+        { screen: '/(tabs)' }
+      );
+
+      if (pushResult.sent > 0) {
+        pushSentCount++;
+        // Mark as sent today (dedup)
+        await prisma.userSettings.update({
           where: { userId: settings.userId },
-        }),
-      ]);
-
-      // Send email reminder
-      const emailSuccess = await sendDailyReminder({
-        email: settings.user.email,
-        userName: settings.user.name || '',
-        dueCount,
-        currentStreak: streak?.currentStreak || 0,
-      });
-
-      if (emailSuccess) {
-        emailSentCount++;
-      }
-
-      // Send merged push notification (daily quiz + review cards)
-      const hasReadyContent = await prisma.content.count({
-        where: { userId: settings.userId, status: 'READY' },
-      });
-
-      if (hasReadyContent > 0 || dueCount >= MIN_CARDS_FOR_PUSH) {
-        const streakSuffix = streak?.currentStreak ? ` \uD83D\uDD25 ${streak.currentStreak}j` : '';
-        let pushTitle: string;
-        let pushBody: string;
-
-        if (hasReadyContent > 0 && dueCount >= MIN_CARDS_FOR_PUSH) {
-          pushTitle = 'Tes quiz du jour sont prets !';
-          pushBody = `+ ${dueCount} cartes a reviser${streakSuffix}`;
-        } else if (hasReadyContent > 0) {
-          pushTitle = 'Tes quiz du jour sont prets !';
-          pushBody = `3 quiz t'attendent${streakSuffix}`;
-        } else {
-          pushTitle = 'Tes connaissances t\'attendent !';
-          pushBody = `${dueCount} cartes a reviser aujourd'hui${streakSuffix}`;
-        }
-
-        const pushResult = await sendPushToUser(
-          settings.userId,
-          pushTitle,
-          pushBody,
-          { screen: '/(tabs)' }
-        );
-        if (pushResult.sent > 0) {
-          pushSentCount++;
-        }
+          data: { lastPushSentAt: new Date() },
+        });
       }
     }
 
@@ -162,16 +241,12 @@ export async function runReminderWorker(): Promise<void> {
     const inactivityThreshold = new Date();
     inactivityThreshold.setDate(inactivityThreshold.getDate() - INACTIVITY_DAYS);
 
-    // Find users who have push tokens but haven't reviewed in 3+ days
-    // Only send once per inactivity period (check last review is between 3-4 days ago
-    // to avoid re-sending every 5 minutes)
     const inactivityWindowStart = new Date();
     inactivityWindowStart.setDate(inactivityWindowStart.getDate() - (INACTIVITY_DAYS + 1));
 
-    const inactiveUsers = await prisma.$queryRaw<{ userId: string; dueCount: bigint; lastReview: Date }[]>`
+    const inactiveUsers = await prisma.$queryRaw<{ userId: string; lastReview: Date }[]>`
       SELECT
         u."id" as "userId",
-        (SELECT COUNT(*) FROM "Card" c WHERE c."userId" = u."id" AND c."nextReviewAt" <= NOW()) as "dueCount",
         (SELECT MAX(r."createdAt") FROM "Review" r WHERE r."userId" = u."id") as "lastReview"
       FROM "User" u
       WHERE EXISTS (SELECT 1 FROM "PushToken" pt WHERE pt."userId" = u."id")
@@ -180,75 +255,37 @@ export async function runReminderWorker(): Promise<void> {
       ) BETWEEN ${inactivityWindowStart} AND ${inactivityThreshold}
     `;
 
-    for (const { userId, dueCount } of inactiveUsers) {
-      const cardCount = Number(dueCount);
-      const body = cardCount > 0
-        ? `${cardCount} cartes t'attendent. Reprends la ou tu t'es arrete !`
-        : 'Tes connaissances ont besoin de toi. Une petite session ?';
+    for (const { userId } of inactiveUsers) {
+      // Check dedup for inactivity too (uses same lastPushSentAt)
+      const userSettings = await prisma.userSettings.findUnique({
+        where: { userId },
+      });
+      if (userSettings && alreadySentToday(userSettings.lastPushSentAt, userSettings.timezone || 'UTC')) {
+        continue;
+      }
 
       const pushResult = await sendPushToUser(
         userId,
         'Ca fait un moment !',
-        body,
-        { screen: '/(tabs)/reviews' }
+        'Tes sujets t\'attendent. Une petite session ?',
+        { screen: '/(tabs)' }
       );
       if (pushResult.sent > 0) {
         inactivitySentCount++;
+        if (userSettings) {
+          await prisma.userSettings.update({
+            where: { userId },
+            data: { lastPushSentAt: new Date() },
+          });
+        }
       }
     }
 
     log.info({
-      emailSent: emailSentCount,
       pushSent: pushSentCount,
       inactivitySent: inactivitySentCount,
     }, 'Reminders completed');
   } catch (error) {
     log.error({ err: error }, 'Worker error');
   }
-}
-
-/**
- * Send a test reminder to a specific user (for testing)
- */
-export async function sendTestReminder(userId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: {
-      settings: true,
-    },
-  });
-
-  if (!user) {
-    log.error({ userId }, 'User not found');
-    return false;
-  }
-
-  const [dueCount, streak] = await Promise.all([
-    prisma.card.count({
-      where: {
-        userId,
-        nextReviewAt: { lte: new Date() },
-      },
-    }),
-    prisma.streak.findUnique({
-      where: { userId },
-    }),
-  ]);
-
-  // Send both email and push for test
-  const emailResult = await sendDailyReminder({
-    email: user.email,
-    userName: user.name || '',
-    dueCount,
-    currentStreak: streak?.currentStreak || 0,
-  });
-
-  const pushResult = await sendPushToUser(
-    userId,
-    'Test notification Ankora',
-    `${dueCount} cartes a reviser. Streak: ${streak?.currentStreak || 0} jours`,
-    { screen: '/(tabs)/reviews' }
-  );
-
-  return emailResult || pushResult.sent > 0;
 }

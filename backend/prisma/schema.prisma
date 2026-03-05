@@ -73,6 +73,7 @@ model UserSettings {
 
   // Notifications
   emailReminders    Boolean @default(true)
+  lastPushSentAt    DateTime? // Dedup: only one push notification per day
 
   // Onboarding preferences (synced from onboarding flow)
   interests         String[]  @default([])
@@ -418,6 +419,7 @@ model Theme {
   slug          String
   color         String         @default("#6366F1")
   emoji         String         @default("")
+  imageUrl      String?        @map("image_url")
   description   String?
   memo          String?
   memoGeneratedAt DateTime?
