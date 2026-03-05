@@ -225,6 +225,7 @@ export default function ReviewsScreen() {
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarHeight + spacing.lg }]}
         showsVerticalScrollIndicator={false}
+        contentInsetAdjustmentBehavior="never"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
