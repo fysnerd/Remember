@@ -22,9 +22,9 @@ const PROVIDER_CONFIG = {
   apple: {
     label: 'Continuer avec Apple',
     icon: '\uF8FF',
-    bg: colors.white,
-    textColor: colors.black,
-    borderColor: colors.white,
+    bg: 'transparent',
+    textColor: colors.text,
+    borderColor: colors.borderLight,
   },
   google: {
     label: 'Continuer avec Google',
