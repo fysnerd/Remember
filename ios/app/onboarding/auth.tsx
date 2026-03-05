@@ -164,7 +164,6 @@ export default function AuthScreen() {
             <Button
               variant="primary"
               fullWidth
-              size="lg"
               onPress={handleEmailContinue}
             >
               Continuer

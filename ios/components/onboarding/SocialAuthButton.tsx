@@ -86,8 +86,8 @@ export function SocialAuthButton({ provider, onPress, loading, disabled }: Socia
 
 const styles = StyleSheet.create({
   button: {
-    height: layout.buttonHeightLg,
-    borderRadius: borderRadius.md,
+    height: layout.buttonHeight,
+    borderRadius: borderRadius.full,
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
