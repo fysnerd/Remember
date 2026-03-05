@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
     ...typography.h3,
     fontFamily: fonts.regular,
     color: colors.textSecondary,
-    marginBottom: spacing.md,
+    marginBottom: spacing.xs,
   },
   tagline: {
     ...typography.jumbo,

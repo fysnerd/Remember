@@ -6,6 +6,7 @@
  */
 
 import { Pressable, StyleSheet, View, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Text } from '../ui';
 import { haptics } from '../../lib/haptics';
 import { colors, spacing, borderRadius, layout, typography } from '../../theme';
@@ -58,13 +59,17 @@ export function SocialAuthButton({ provider, onPress, loading, disabled }: Socia
         <ActivityIndicator size="small" color={config.textColor} />
       ) : (
         <View style={styles.content}>
-          <Text
-            variant="body"
-            weight="semibold"
-            style={[styles.icon, { color: config.textColor }]}
-          >
-            {config.icon}
-          </Text>
+          {provider === 'apple' ? (
+            <Ionicons name="logo-apple" size={20} color={config.textColor} />
+          ) : (
+            <Text
+              variant="body"
+              weight="semibold"
+              style={[styles.icon, { color: config.textColor }]}
+            >
+              {config.icon}
+            </Text>
+          )}
           <Text
             variant="body"
             weight="medium"
@@ -96,6 +101,7 @@ const styles = StyleSheet.create({
     ...typography.h3,
     width: layout.iconSize,
     textAlign: 'center',
+    fontFamily: undefined,
   },
   disabled: {
     opacity: 0.5,
