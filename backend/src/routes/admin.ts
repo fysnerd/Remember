@@ -4,6 +4,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { triggerJob, getSchedulerStatus, runAllSyncsNow } from '../workers/scheduler.js';
 import { prisma } from '../config/database.js';
 import { logger } from '../config/logger.js';
+import { backfillThemeImages } from '../services/themeImageMatching.js';
 
 const log = logger.child({ route: 'admin' });
 
@@ -201,6 +202,16 @@ adminRouter.get('/embeddings/status', async (_req: Request, res: Response, next:
       withoutEmbedding,
       coveragePercent: total > 0 ? Math.round((withEmbedding / total) * 100) : 0,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/sync/theme-images-backfill - Backfill theme images for existing themes
+adminRouter.post('/sync/theme-images-backfill', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const updated = await backfillThemeImages();
+    res.json({ success: true, updated });
   } catch (error) {
     next(error);
   }

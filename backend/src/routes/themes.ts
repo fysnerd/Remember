@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { generateSlug } from '../utils/slug.js';
 import { generateText, getLLMClient } from '../services/llm.js';
 import { llmLimiter } from '../utils/rateLimiter.js';
+import { findBestImageForTheme } from '../services/themeImageMatching.js';
 
 const log = logger.child({ route: 'themes' });
 export const themeRouter = Router();
@@ -597,11 +598,15 @@ themeRouter.post('/', async (req: Request, res: Response, next: NextFunction) =>
       });
     }
 
+    // Find best matching pre-generated image for this theme
+    const imageUrl = await findBestImageForTheme(data.name, []);
+
     const theme = await prisma.theme.create({
       data: {
         userId,
         name: data.name,
         slug,
+        imageUrl,
         discoveredAt: new Date(), // User-created themes are immediately discovered
         ...(data.color && { color: data.color }),
         ...(data.emoji && { emoji: data.emoji }),

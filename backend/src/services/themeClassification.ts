@@ -6,6 +6,7 @@ import pLimit from 'p-limit';
 import { llmLimiter } from '../utils/rateLimiter.js';
 import { logger } from '../config/logger.js';
 import { generateSlug } from '../utils/slug.js';
+import { findBestImageForTheme } from './themeImageMatching.js';
 
 const log = logger.child({ service: 'theme-classification' });
 
@@ -208,6 +209,9 @@ export async function generateThemesForUser(userId: string): Promise<void> {
 
       const emoji = generated.emoji || '\u{1F4DA}'; // Default: books emoji
 
+      // Find best matching pre-generated image
+      const imageUrl = await findBestImageForTheme(generated.name, generated.tags || []);
+
       // Create the theme
       const theme = await tx.theme.create({
         data: {
@@ -216,6 +220,7 @@ export async function generateThemesForUser(userId: string): Promise<void> {
           slug,
           color,
           emoji,
+          imageUrl,
           description: generated.description || null,
           discoveredAt: new Date(),
         },
@@ -668,8 +673,10 @@ export async function evolveThemesForUser(userId: string): Promise<void> {
 
         const emoji = generated.emoji || '\u{1F4DA}';
 
+        const evolveImageUrl = await findBestImageForTheme(generated.name, generated.tags || []);
+
         const theme = await tx.theme.create({
-          data: { userId, name: generated.name, slug, color, emoji, description: generated.description || null, discoveredAt: new Date() },
+          data: { userId, name: generated.name, slug, color, emoji, imageUrl: evolveImageUrl, description: generated.description || null, discoveredAt: new Date() },
         });
 
         if (generated.tags?.length > 0) {
