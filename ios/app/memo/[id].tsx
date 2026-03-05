@@ -308,23 +308,17 @@ export default function MemoScreen() {
     router.push({ pathname: '/quiz/[id]' as any, params: { id: id! } });
   };
 
-  if (memoLoading) return <LoadingScreen />;
+  const headerOptions = { title: '', headerBackTitle: 'Retour', headerShadowVisible: false, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text };
+
+  if (memoLoading) return (<><Stack.Screen options={headerOptions} /><LoadingScreen /></>);
 
   if (memoError || !memo) {
-    return <ErrorState message="Mémo introuvable" onRetry={refetch} hasHeader />;
+    return (<><Stack.Screen options={headerOptions} /><ErrorState message="Mémo introuvable" onRetry={refetch} hasHeader /></>);
   }
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          title: '',
-          headerBackTitle: 'Retour',
-          headerShadowVisible: false,
-          headerStyle: { backgroundColor: colors.background },
-          headerTintColor: colors.text,
-        }}
-      />
+      <Stack.Screen options={headerOptions} />
       <View style={[styles.container, { paddingBottom: insets.bottom + spacing.sm }]}>
         {/* Header — centered title, themes hidden for now */}
         {content && (

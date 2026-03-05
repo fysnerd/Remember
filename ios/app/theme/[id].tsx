@@ -125,7 +125,12 @@ export default function ThemeDetailScreen() {
   };
 
   if (isLoading) {
-    return <LoadingScreen />;
+    return (
+      <>
+        <Stack.Screen options={{ title: '', headerBackTitle: 'Home', headerShadowVisible: false, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text }} />
+        <LoadingScreen />
+      </>
+    );
   }
 
   const theme = data?.theme;

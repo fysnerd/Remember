@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Text, Button } from '../../components/ui';
 import { GlassButton } from '../../components/glass/GlassButton';
 import { QuestionCard, AnswerFeedback, QuizSummary } from '../../components/quiz';
@@ -86,12 +86,14 @@ export default function QuizScreen() {
   }, [quiz, id, isMulti]);
 
 
+  const headerOptions = { title: '', headerBackTitle: 'Retour', headerShadowVisible: false, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text };
+
   if (isLoading) {
-    return <LoadingScreen />;
+    return (<><Stack.Screen options={headerOptions} /><LoadingScreen /></>);
   }
 
   if (!quiz || !quiz.questions.length) {
-    return <ErrorState message="Quiz introuvable" onRetry={refetch} />;
+    return (<><Stack.Screen options={headerOptions} /><ErrorState message="Quiz introuvable" onRetry={refetch} /></>);
   }
 
   const questions = quiz.questions;

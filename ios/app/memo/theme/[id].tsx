@@ -90,12 +90,14 @@ export default function ThemeMemoScreen() {
     router.back();
   };
 
+  const headerOptions = { title: '', headerBackTitle: 'Retour', headerShadowVisible: false, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text };
+
   if (isLoading) {
-    return <LoadingScreen />;
+    return (<><Stack.Screen options={headerOptions} /><LoadingScreen /></>);
   }
 
   if (error || !memo) {
-    return <ErrorState message="Mémo introuvable ou aucun contenu disponible" onRetry={refetch} hasHeader />;
+    return (<><Stack.Screen options={headerOptions} /><ErrorState message="Mémo introuvable ou aucun contenu disponible" onRetry={refetch} hasHeader /></>);
   }
 
   return (

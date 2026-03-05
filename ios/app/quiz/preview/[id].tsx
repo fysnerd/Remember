@@ -38,7 +38,12 @@ export default function QuizPreviewScreen() {
   const isLoading = themeLoading || themeQuizLoading;
 
   if (isLoading) {
-    return <LoadingScreen />;
+    return (
+      <>
+        <Stack.Screen options={{ title: '', headerBackTitle: 'Retour', headerShadowVisible: false, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text }} />
+        <LoadingScreen />
+      </>
+    );
   }
 
   const theme = themeData?.theme;

@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated, ScrollView } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Text, Button } from '../../../components/ui';
 import { GlassButton } from '../../../components/glass/GlassButton';
 import { QuestionCard, AnswerFeedback, QuizSummary } from '../../../components/quiz';
@@ -59,12 +59,14 @@ export default function ThemeQuizScreen() {
     }).start();
   }, [answeredCount, quiz?.questions.length]);
 
+  const headerOptions = { title: '', headerBackTitle: 'Retour', headerShadowVisible: false, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text };
+
   if (isLoading) {
-    return <LoadingScreen />;
+    return (<><Stack.Screen options={headerOptions} /><LoadingScreen /></>);
   }
 
   if (!quiz || !quiz.questions.length) {
-    return <ErrorState message="Aucun quiz pour ce thème" onRetry={refetch} />;
+    return (<><Stack.Screen options={headerOptions} /><ErrorState message="Aucun quiz pour ce thème" onRetry={refetch} /></>);
   }
 
   const questions = quiz.questions;

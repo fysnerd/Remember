@@ -93,8 +93,10 @@ export default function SessionMemoScreen() {
 
   const memo = memoMutation.data?.memo ?? session?.aiMemo;
 
-  if (isLoading) return <LoadingScreen />;
-  if (!session) return <ErrorState message="Session introuvable" onRetry={refetch} hasHeader />;
+  const headerOptions = { title: 'Memo', headerBackTitle: 'Retour', headerShadowVisible: false, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text };
+
+  if (isLoading) return (<><Stack.Screen options={headerOptions} /><LoadingScreen /></>);
+  if (!session) return (<><Stack.Screen options={headerOptions} /><ErrorState message="Session introuvable" onRetry={refetch} hasHeader /></>);
 
   // Extract unique contents from reviews
   const contentMap = new Map<string, { id: string; title: string; platform: string; thumbnailUrl?: string }>();
