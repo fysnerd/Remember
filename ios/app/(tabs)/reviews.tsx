@@ -19,7 +19,7 @@ import type { QuizSessionTheme, QuizSessionItem } from '../../hooks';
 import { colors, spacing, borderRadius, fonts, glass, depth } from '../../theme';
 import { STAGGER_DELAY, STAGGER_CAP } from '../../lib/animations';
 
-const HEADER_HEIGHT = 124;
+const HEADER_HEIGHT = 104;
 
 /** One entry per unique content (deduplicated from sessions) */
 interface MemoItem {
@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 100,
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.xs,
   },
   searchContainer: {
     paddingHorizontal: spacing.md,
