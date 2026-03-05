@@ -32,7 +32,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_GAP = spacing.md;
 const GRID_PADDING = spacing.md;
 const COLUMN_WIDTH = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP) / 2;
-const HEADER_HEIGHT = 60;
+const HEADER_HEIGHT = 104;
 
 export default function LibraryScreen() {
   const router = useRouter();
