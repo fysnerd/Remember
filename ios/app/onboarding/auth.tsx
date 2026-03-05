@@ -123,8 +123,7 @@ export default function AuthScreen() {
               Bienvenue sur Ankora
             </Text>
             <Text style={styles.tagline}>
-              Transforme ce que tu regardes en connaissances{' '}
-              <Text style={styles.taglineAccent}>durables.</Text>
+              Transforme ce que tu regardes en connaissances durables.
             </Text>
           </View>
 
@@ -164,7 +163,6 @@ export default function AuthScreen() {
 
             <Button
               variant="primary"
-              size="lg"
               fullWidth
               onPress={handleEmailContinue}
             >
@@ -235,10 +233,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     letterSpacing: -1.2,
   },
-  taglineAccent: {
-    color: colors.accent,
-  },
-
   // Auth section
   authSection: {
     gap: spacing.md,
