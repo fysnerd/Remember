@@ -197,7 +197,8 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: spacing.lg,
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: 60,
   },
 
   // Logo
