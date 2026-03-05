@@ -19,7 +19,7 @@ import type { QuizSessionTheme, QuizSessionItem } from '../../hooks';
 import { colors, spacing, borderRadius, fonts, glass, depth } from '../../theme';
 import { STAGGER_DELAY, STAGGER_CAP } from '../../lib/animations';
 
-const HEADER_HEIGHT = 104;
+const HEADER_HEIGHT = 108;
 
 /** One entry per unique content (deduplicated from sessions) */
 interface MemoItem {
