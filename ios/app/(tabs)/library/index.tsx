@@ -323,109 +323,129 @@ export default function LibraryScreen() {
   // Check if all items are selected
   const allSelected = libraryItems && libraryItems.length > 0 && selectedIds.size === libraryItems.length;
 
-  // --- List header (selection only) ---
+  // --- List header ---
   const renderBrowseListHeader = useCallback(() => (
-    <>
-      {/* Spacer for unified header */}
-      <View style={{ height: totalHeaderHeight }} />
+    <View style={{ height: totalHeaderHeight }} />
+  ), [totalHeaderHeight]);
 
-      {/* Selection header - just count indicator */}
-      {selectionMode && (
-        <View style={styles.selectionHeader}>
-          <Text variant="h3" weight="semibold" style={styles.selectionCount}>
-            {selectedIds.size} sélectionné{selectedIds.size > 1 ? 's' : ''}
-          </Text>
-        </View>
-      )}
-    </>
-  ), [selectionMode, selectedIds.size, totalHeaderHeight]);
-
-  // --- Unified header with search + filters ---
+  // --- Unified header with search + filters (or selection header) ---
   const renderUnifiedHeader = () => (
     <View style={[styles.unifiedHeader, { paddingTop: topInset }]}>
-      {/* Solid background */}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
 
-      {/* Search bar */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchInputWrapper}>
-          <Search size={18} color={colors.textSecondary} strokeWidth={1.5} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Rechercher..."
-            placeholderTextColor={colors.textSecondary}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            keyboardAppearance="dark"
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="search"
-          />
-          {searchQuery.length > 0 && (
-            <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
-              <X size={18} color={colors.textSecondary} strokeWidth={1.5} />
-            </Pressable>
-          )}
-        </View>
-      </View>
-
-      {/* Filter pills */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterRow}
-      >
-        <Pressable
-          style={[styles.sourcesDropdown, styles.sourcesDropdownActive]}
-          onPress={() => setShowFilterDrawer(true)}
-        >
-          <Text
-            variant="caption"
-            weight="medium"
-            style={[styles.sourcesLabel, styles.sourcesLabelActive]}
-          >
-            Sources ({sourceFilters.length > 0 ? sourceFilters.length : (availableSources?.length ?? 0)})
-          </Text>
-          <ChevronDown size={14} color={colors.background} strokeWidth={2} />
-        </Pressable>
-
-        {themeOptions.length > 0 && <View style={styles.filterDivider} />}
-
-        {themeOptions.length > 0 && (
-          <Pressable
-            style={[styles.themePill, themeFilters.length === 0 && styles.themePillActive]}
-            onPress={clearThemeFilters}
-          >
-            <Text
-              variant="caption"
-              weight={themeFilters.length === 0 ? 'medium' : 'regular'}
-              style={[styles.themePillLabel, themeFilters.length === 0 && styles.themePillLabelActive]}
-            >
-              Tout
-            </Text>
-          </Pressable>
-        )}
-        {themeOptions.map((theme) => {
-          const isActive = themeFilters.includes(theme.id);
-          return (
+      {selectionMode ? (
+        <>
+          {/* Selection mode header */}
+          <View style={styles.selectionHeaderBar}>
             <Pressable
-              key={theme.id}
-              style={[styles.themePill, isActive && styles.themePillActive]}
-              onPress={() => toggleThemeFilter(theme.id)}
+              onPress={handleCancelSelection}
+              hitSlop={8}
+              style={({ pressed }) => pressed && { opacity: 0.7 }}
+            >
+              <Text variant="body" weight="medium" style={{ color: colors.accent }}>
+                Annuler
+              </Text>
+            </Pressable>
+
+            <Text variant="body" weight="semibold" style={{ color: colors.text }}>
+              {selectedIds.size} sélectionné{selectedIds.size > 1 ? 's' : ''}
+            </Text>
+
+            <Pressable
+              onPress={allSelected ? handleCancelSelection : handleSelectAll}
+              hitSlop={8}
+              style={({ pressed }) => pressed && { opacity: 0.7 }}
+            >
+              <Text variant="body" weight="medium" style={{ color: colors.accent }}>
+                {allSelected ? 'Aucun' : 'Tout'}
+              </Text>
+            </Pressable>
+          </View>
+        </>
+      ) : (
+        <>
+          {/* Search bar */}
+          <View style={styles.searchContainer}>
+            <View style={styles.searchInputWrapper}>
+              <Search size={18} color={colors.textSecondary} strokeWidth={1.5} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Rechercher..."
+                placeholderTextColor={colors.textSecondary}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                keyboardAppearance="dark"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="search"
+              />
+              {searchQuery.length > 0 && (
+                <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
+                  <X size={18} color={colors.textSecondary} strokeWidth={1.5} />
+                </Pressable>
+              )}
+            </View>
+          </View>
+
+          {/* Filter pills */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterRow}
+          >
+            <Pressable
+              style={[styles.sourcesDropdown, styles.sourcesDropdownActive]}
+              onPress={() => setShowFilterDrawer(true)}
             >
               <Text
                 variant="caption"
-                weight={isActive ? 'medium' : 'regular'}
-                style={[styles.themePillLabel, isActive && styles.themePillLabelActive]}
-                numberOfLines={1}
+                weight="medium"
+                style={[styles.sourcesLabel, styles.sourcesLabelActive]}
               >
-                {theme.name}
+                Sources ({sourceFilters.length > 0 ? sourceFilters.length : (availableSources?.length ?? 0)})
               </Text>
-              {isActive && <Check size={12} color={colors.background} strokeWidth={3} />}
+              <ChevronDown size={14} color={colors.background} strokeWidth={2} />
             </Pressable>
-          );
-        })}
-      </ScrollView>
+
+            {themeOptions.length > 0 && <View style={styles.filterDivider} />}
+
+            {themeOptions.length > 0 && (
+              <Pressable
+                style={[styles.themePill, themeFilters.length === 0 && styles.themePillActive]}
+                onPress={clearThemeFilters}
+              >
+                <Text
+                  variant="caption"
+                  weight={themeFilters.length === 0 ? 'medium' : 'regular'}
+                  style={[styles.themePillLabel, themeFilters.length === 0 && styles.themePillLabelActive]}
+                >
+                  Tout
+                </Text>
+              </Pressable>
+            )}
+            {themeOptions.map((theme) => {
+              const isActive = themeFilters.includes(theme.id);
+              return (
+                <Pressable
+                  key={theme.id}
+                  style={[styles.themePill, isActive && styles.themePillActive]}
+                  onPress={() => toggleThemeFilter(theme.id)}
+                >
+                  <Text
+                    variant="caption"
+                    weight={isActive ? 'medium' : 'regular'}
+                    style={[styles.themePillLabel, isActive && styles.themePillLabelActive]}
+                    numberOfLines={1}
+                  >
+                    {theme.name}
+                  </Text>
+                  {isActive && <Check size={12} color={colors.background} strokeWidth={3} />}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </>
+      )}
     </View>
   );
 
@@ -593,21 +613,7 @@ export default function LibraryScreen() {
           style={[styles.selectionBar, { paddingBottom: bottomInset + spacing.md }]}
         >
           <View style={styles.selectionBarContent}>
-            {/* Delete button (round, red) */}
-            <Pressable
-              style={({ pressed }) => [styles.roundButton, styles.deleteButton, pressed && styles.roundButtonPressed]}
-              onPress={handleDeleteSelected}
-              disabled={deletingSelected}
-              hitSlop={8}
-            >
-              {deletingSelected ? (
-                <ActivityIndicator size="small" color="#FF4444" />
-              ) : (
-                <Trash2 size={20} color="#FF4444" strokeWidth={2} />
-              )}
-            </Pressable>
-
-            {/* Quiz launch button */}
+            {/* Quiz launch button — main CTA */}
             <Pressable
               style={({ pressed }) => [
                 styles.quizLaunchButton,
@@ -618,9 +624,9 @@ export default function LibraryScreen() {
               disabled={selectedReadyCount === 0}
             >
               <View style={styles.quizButtonContent}>
-                <Play size={16} color={colors.background} fill={colors.background} />
-                <Text weight="semibold" style={styles.quizButtonText}>
-                  {selectedReadyCount > 0 ? 'Quiz' : 'Aucun quiz'}
+                <Play size={16} color={selectedReadyCount > 0 ? colors.background : colors.textTertiary} fill={selectedReadyCount > 0 ? colors.background : colors.textTertiary} />
+                <Text weight="semibold" style={[styles.quizButtonText, selectedReadyCount === 0 && { color: colors.textTertiary }]}>
+                  Lancer le quiz
                 </Text>
                 {selectedReadyCount > 0 && (
                   <View style={styles.quizCountBadge}>
@@ -630,13 +636,18 @@ export default function LibraryScreen() {
               </View>
             </Pressable>
 
-            {/* Select all button (round) */}
+            {/* Delete button — secondary, less prominent */}
             <Pressable
-              style={({ pressed }) => [styles.roundButton, pressed && styles.roundButtonPressed]}
-              onPress={allSelected ? handleCancelSelection : handleSelectAll}
+              style={({ pressed }) => [styles.deleteButtonCompact, pressed && { opacity: 0.7 }]}
+              onPress={handleDeleteSelected}
+              disabled={deletingSelected}
               hitSlop={8}
             >
-              <Check size={20} color={allSelected ? colors.accent : colors.text} strokeWidth={2} />
+              {deletingSelected ? (
+                <ActivityIndicator size="small" color={colors.error} />
+              ) : (
+                <Trash2 size={20} color={colors.textSecondary} strokeWidth={1.5} />
+              )}
             </Pressable>
           </View>
         </Animated.View>
@@ -817,13 +828,13 @@ const styles = StyleSheet.create({
     color: colors.background,
   },
 
-  // --- Selection header (in list header) ---
-  selectionHeader: {
+  // --- Selection header bar (replaces search + filters) ---
+  selectionHeaderBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  selectionCount: {
-    color: colors.text,
+    height: HEADER_HEIGHT,
   },
 
   // --- Floating triage button ---
@@ -942,32 +953,20 @@ const styles = StyleSheet.create({
   selectionBarContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     gap: spacing.md,
   },
-  roundButton: {
+  deleteButtonCompact: {
     width: 48,
     height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  roundButtonPressed: {
-    opacity: 0.7,
-    transform: [{ scale: 0.95 }],
-  },
-  deleteButton: {
-    borderColor: 'rgba(255, 68, 68, 0.3)',
   },
   quizLaunchButton: {
     flex: 1,
     backgroundColor: colors.accent,
     borderRadius: borderRadius.full,
-    paddingVertical: 14,
-    paddingHorizontal: spacing.lg,
+    height: 48,
+    justifyContent: 'center',
   },
   quizLaunchButtonDisabled: {
     backgroundColor: colors.surface,
