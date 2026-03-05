@@ -12,7 +12,7 @@ import { useRouter } from 'expo-router';
 import { Text, Input, Button, useToast } from '../../components/ui';
 import { SocialAuthButton } from '../../components/onboarding/SocialAuthButton';
 import { useAuthStore } from '../../stores/authStore';
-import { colors, spacing, fonts, typography } from '../../theme';
+import { colors, spacing, fonts, typography, borderRadius } from '../../theme';
 
 export default function AuthScreen() {
   const router = useRouter();
@@ -117,13 +117,13 @@ export default function AuthScreen() {
             />
           </View>
 
-          {/* Tagline - same style as home */}
+          {/* Tagline */}
           <View style={styles.taglineContainer}>
             <Text style={styles.taglineSmall}>
-              Bienvenue sur Ankora
+              BIENVENUE SUR ANKORA
             </Text>
             <Text style={styles.tagline}>
-              Transforme ce que tu regardes en connaissances durables.
+              Transforme ce que tu{'\n'}regardes en connaissances{'\n'}durables.
             </Text>
           </View>
 
@@ -164,6 +164,7 @@ export default function AuthScreen() {
             <Button
               variant="primary"
               fullWidth
+              size="lg"
               onPress={handleEmailContinue}
             >
               Continuer
@@ -196,8 +197,8 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    justifyContent: 'center',
     paddingHorizontal: spacing.lg,
-    paddingTop: 0,
   },
 
   // Logo
@@ -205,40 +206,40 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginBottom: spacing.xl,
+    marginBottom: spacing.xxl,
   },
   logoSymbol: {
-    width: 44,
-    height: 44,
+    width: 36,
+    height: 36,
   },
   logoWordmark: {
-    width: 100,
-    height: 24,
+    width: 90,
+    height: 20,
   },
 
-  // Tagline - matches GreetingHeader pattern
+  // Tagline
   taglineContainer: {
-    marginBottom: spacing.xxl,
-    paddingRight: spacing.lg,
+    marginBottom: spacing.xl,
   },
   taglineSmall: {
-    ...typography.h3,
-    fontFamily: fonts.regular,
+    ...typography.caption,
+    fontFamily: fonts.medium,
     color: colors.textSecondary,
-    marginBottom: spacing.xs,
+    letterSpacing: 1.5,
+    marginBottom: spacing.sm,
   },
   tagline: {
-    ...typography.jumbo,
-    fontFamily: fonts.semibold,
+    ...typography.h1,
+    fontFamily: fonts.bold,
     color: colors.text,
-    letterSpacing: -1.2,
+    letterSpacing: -0.5,
   },
   // Auth section
   authSection: {
-    gap: spacing.md,
+    gap: spacing.md + 4,
   },
   socialButtons: {
-    gap: spacing.sm,
+    gap: spacing.md,
   },
 
   // Separator
@@ -246,7 +247,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingVertical: spacing.xs,
+    paddingVertical: spacing.sm,
   },
   separatorLine: {
     flex: 1,
@@ -254,8 +255,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
   },
   separatorText: {
-    ...typography.caption,
+    ...typography.label,
     fontFamily: fonts.regular,
-    color: colors.textSecondary,
+    color: colors.textTertiary,
   },
 });

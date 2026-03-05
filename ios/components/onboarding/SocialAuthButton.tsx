@@ -9,7 +9,7 @@ import { Pressable, StyleSheet, View, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '../ui';
 import { haptics } from '../../lib/haptics';
-import { colors, spacing, borderRadius, layout, typography } from '../../theme';
+import { colors, spacing, borderRadius, layout, typography, fonts } from '../../theme';
 
 interface SocialAuthButtonProps {
   provider: 'apple' | 'google';
@@ -24,14 +24,14 @@ const PROVIDER_CONFIG = {
     icon: '\uF8FF',
     bg: 'transparent',
     textColor: colors.text,
-    borderColor: colors.borderLight,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   google: {
     label: 'Continuer avec Google',
     icon: 'G',
     bg: 'transparent',
     textColor: colors.text,
-    borderColor: colors.borderLight,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
 };
 
@@ -53,6 +53,7 @@ export function SocialAuthButton({ provider, onPress, loading, disabled }: Socia
         },
         (disabled || loading) && styles.disabled,
         pressed && styles.pressed,
+        pressed && { transform: [{ scale: 0.98 }] },
       ]}
     >
       {loading ? (
@@ -73,7 +74,7 @@ export function SocialAuthButton({ provider, onPress, loading, disabled }: Socia
           <Text
             variant="body"
             weight="medium"
-            style={{ color: config.textColor }}
+            style={{ color: config.textColor, fontFamily: fonts.medium }}
           >
             {config.label}
           </Text>
@@ -86,7 +87,7 @@ export function SocialAuthButton({ provider, onPress, loading, disabled }: Socia
 const styles = StyleSheet.create({
   button: {
     height: layout.buttonHeightLg,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
@@ -95,7 +96,7 @@ const styles = StyleSheet.create({
   content: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   icon: {
     ...typography.h3,
