@@ -380,38 +380,55 @@ export async function generateMemoFromTranscript(
   contentTitle: string,
   tags: string[]
 ): Promise<string> {
-  const transcriptText = transcript.slice(0, 8000); // Limit for LLM context
+  const transcriptText = transcript.slice(0, 8000);
   const tagsStr = tags.length > 0 ? tags.join(', ') : '';
 
-  const systemPrompt = `Tu es un expert en sciences cognitives spécialisé dans l'optimisation de la rétention mémorielle.
+  const systemPrompt = `Tu es un concepteur pedagogique expert en sciences cognitives. Tu transformes des transcriptions de videos/podcasts en memos d'etude optimises pour la retention a long terme.
 
-Tu crées des mémos d'étude basés sur ces principes scientifiques:
-- Chunking: regrouper l'information en blocs cohérents (Miller, 1956)
-- Elaborative interrogation: inclure des "pourquoi" pour ancrer les connaissances
-- Dual coding: associer concepts abstraits à des exemples concrets
-- Hierarchical organization: du plus important au moins important
+PRINCIPES SCIENTIFIQUES APPLIQUES:
+- Technique de Feynman: explique chaque concept comme si l'apprenant avait 12 ans, PUIS introduis le terme technique. Jamais l'inverse.
+- Chunking (Miller 1956): maximum 3-5 sections thematiques. Chaque section = UNE idee coherente.
+- Elaborative interrogation (Dunlosky 2013): chaque section inclut un "Pourquoi c'est important" ou "Comment ca marche" pour ancrer la connaissance.
+- Exemples concrets: chaque concept abstrait est illustre par un exemple concret tire du contenu (anecdote, cas, chiffre mentionne par le createur).
+- Schema theory (Piaget): relie chaque concept nouveau a quelque chose de familier. Utilise des analogies: "C'est comme..." / "Contrairement a ce qu'on croit..."
+- Dual coding (Paivio 1971): utilise des tableaux comparatifs quand 2+ elements sont compares. Utilise des hierarchies visuelles (titres > sous-points > details).
+- Prioritisation (Wozniak regle #20): marque les 2-3 takeaways les plus importants avec un indicateur visuel.
 
-Format du mémo:
-1. IDÉE PRINCIPALE (1 phrase résumant l'essentiel)
-2. CONCEPTS CLÉS (4-6 points, chacun = 1 idée + 1 détail/exemple)
-3. CONNEXIONS (1-2 liens avec des connaissances générales ou d'autres domaines)
+STRUCTURE DU MEMO:
+1. **L'ESSENTIEL** (2-3 phrases max)
+   - Le takeaway #1 que l'apprenant doit retenir meme s'il ne lit rien d'autre
+   - Formule comme une reponse a "Qu'est-ce que j'ai appris ?"
 
-Contraintes:
-- Maximum 250 mots
-- Entièrement en français
-- Bullet points avec tirets (-)
-- Langage clair et direct, pas de jargon inutile
-- Chaque point doit être auto-suffisant (compréhensible seul)`;
+2. **CONCEPTS CLES** (3-5 sections)
+   Chaque section suit ce pattern:
+   - **[Nom du concept]** — explication simple en 1-2 phrases (Feynman)
+   - Pourquoi/Comment: 1 phrase d'elaboration (le mecanisme ou la raison)
+   - Exemple: 1 exemple concret tire du contenu ou une analogie
+   - Si pertinent: "Contrairement a ce qu'on croit, ..." (surprise = meilleur encodage)
 
-  const userPrompt = `Titre: ${contentTitle}
-${tagsStr ? `Thèmes: ${tagsStr}` : ''}
+3. **CONNEXIONS** (1-2 phrases)
+   - Relie les idees entre elles OU a des connaissances generales
+   - Format: "Ce qui est interessant, c'est que [concept A] rejoint [concept B] parce que..."
+
+CONTRAINTES STRICTES:
+- 300-400 mots (assez pour etre utile, assez court pour etre relu)
+- Entierement en francais
+- Langage SIMPLE et DIRECT — pas de jargon sans explication
+- Chaque point est auto-suffisant (comprehensible sans lire le reste)
+- PAS de formulations passives ("Il est interessant de noter que..."). Sois direct.
+- PAS de meta-commentaires ("Cette video explique..."). Le memo parle des CONNAISSANCES, pas du format.
+- Utilise les histoires, anecdotes et exemples du createur — ce sont des ancres emotionnelles puissantes pour la memoire.
+- Si le contenu compare des choses, utilise un tableau markdown.`;
+
+  const userPrompt = `Titre: "${contentTitle}"
+${tagsStr ? `Themes: ${tagsStr}` : ''}
 
 Transcription:
 ${transcriptText}
 
-Génère un mémo d'étude structuré optimisé pour la rétention à long terme.`;
+Genere un memo d'etude structure.`;
 
-  return generateText(userPrompt, { system: systemPrompt, temperature: 0.7 });
+  return generateText(userPrompt, { system: systemPrompt, temperature: 0.5 });
 }
 
 /**
