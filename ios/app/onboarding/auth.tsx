@@ -12,7 +12,7 @@ import { useRouter } from 'expo-router';
 import { Text, Input, Button, useToast } from '../../components/ui';
 import { SocialAuthButton } from '../../components/onboarding/SocialAuthButton';
 import { useAuthStore } from '../../stores/authStore';
-import { colors, spacing, fonts, typography, borderRadius } from '../../theme';
+import { colors, spacing, fonts, typography } from '../../theme';
 
 export default function AuthScreen() {
   const router = useRouter();
@@ -120,10 +120,10 @@ export default function AuthScreen() {
           {/* Tagline */}
           <View style={styles.taglineContainer}>
             <Text style={styles.taglineSmall}>
-              BIENVENUE SUR ANKORA
+              Bienvenue sur Ankora
             </Text>
             <Text style={styles.tagline}>
-              Transforme ce que tu{'\n'}regardes en connaissances{'\n'}durables.
+              Transforme ce que tu regardes en connaissances durables.
             </Text>
           </View>
 
@@ -197,8 +197,8 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    justifyContent: 'center',
     paddingHorizontal: spacing.lg,
+    paddingTop: 0,
   },
 
   // Logo
@@ -206,40 +206,40 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginBottom: spacing.xxl,
+    marginBottom: spacing.xl,
   },
   logoSymbol: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
   },
   logoWordmark: {
-    width: 90,
-    height: 20,
+    width: 100,
+    height: 24,
   },
 
   // Tagline
   taglineContainer: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing.xxl,
+    paddingRight: spacing.lg,
   },
   taglineSmall: {
-    ...typography.caption,
-    fontFamily: fonts.medium,
+    ...typography.h3,
+    fontFamily: fonts.regular,
     color: colors.textSecondary,
-    letterSpacing: 1.5,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   tagline: {
-    ...typography.h1,
-    fontFamily: fonts.bold,
+    ...typography.jumbo,
+    fontFamily: fonts.semibold,
     color: colors.text,
-    letterSpacing: -0.5,
+    letterSpacing: -1.2,
   },
   // Auth section
   authSection: {
-    gap: spacing.md + 4,
+    gap: spacing.md,
   },
   socialButtons: {
-    gap: spacing.md,
+    gap: spacing.sm,
   },
 
   // Separator
@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   separatorLine: {
     flex: 1,
@@ -255,8 +255,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
   },
   separatorText: {
-    ...typography.label,
+    ...typography.caption,
     fontFamily: fonts.regular,
-    color: colors.textTertiary,
+    color: colors.textSecondary,
   },
 });

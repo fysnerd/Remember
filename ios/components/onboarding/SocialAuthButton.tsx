@@ -9,7 +9,7 @@ import { Pressable, StyleSheet, View, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '../ui';
 import { haptics } from '../../lib/haptics';
-import { colors, spacing, borderRadius, layout, typography, fonts } from '../../theme';
+import { colors, spacing, borderRadius, layout, typography } from '../../theme';
 
 interface SocialAuthButtonProps {
   provider: 'apple' | 'google';
@@ -24,14 +24,14 @@ const PROVIDER_CONFIG = {
     icon: '\uF8FF',
     bg: 'transparent',
     textColor: colors.text,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: colors.borderLight,
   },
   google: {
     label: 'Continuer avec Google',
     icon: 'G',
     bg: 'transparent',
     textColor: colors.text,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: colors.borderLight,
   },
 };
 
@@ -74,7 +74,7 @@ export function SocialAuthButton({ provider, onPress, loading, disabled }: Socia
           <Text
             variant="body"
             weight="medium"
-            style={{ color: config.textColor, fontFamily: fonts.medium }}
+            style={{ color: config.textColor }}
           >
             {config.label}
           </Text>
@@ -87,7 +87,7 @@ export function SocialAuthButton({ provider, onPress, loading, disabled }: Socia
 const styles = StyleSheet.create({
   button: {
     height: layout.buttonHeightLg,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.md,
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
   content: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   icon: {
     ...typography.h3,
