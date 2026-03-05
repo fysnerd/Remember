@@ -60,17 +60,11 @@ export function SocialAuthButton({ provider, onPress, loading, disabled }: Socia
         <ActivityIndicator size="small" color={config.textColor} />
       ) : (
         <View style={styles.content}>
-          {provider === 'apple' ? (
-            <Ionicons name="logo-apple" size={20} color={config.textColor} />
-          ) : (
-            <Text
-              variant="body"
-              weight="semibold"
-              style={[styles.icon, { color: config.textColor }]}
-            >
-              {config.icon}
-            </Text>
-          )}
+          <Ionicons
+            name={provider === 'apple' ? 'logo-apple' : 'logo-google'}
+            size={20}
+            color={config.textColor}
+          />
           <Text
             variant="body"
             weight="medium"

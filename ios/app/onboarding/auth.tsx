@@ -229,6 +229,7 @@ const styles = StyleSheet.create({
   },
   tagline: {
     ...typography.jumbo,
+    lineHeight: 40,
     fontFamily: fonts.semibold,
     color: colors.text,
     letterSpacing: -1.2,
