@@ -9,7 +9,7 @@
  */
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { View, FlatList, ScrollView, StyleSheet, RefreshControl, Dimensions, ActivityIndicator, Pressable, Modal, TextInput } from 'react-native';
+import { View, FlatList, ScrollView, StyleSheet, RefreshControl, Dimensions, ActivityIndicator, Pressable, Modal, TextInput, Alert } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,7 +20,7 @@ import { ContentCard, SourcePills, SwipeCardStack, TriageModeToggle, type SwipeC
 import { LoadingScreen } from '../../../components/LoadingScreen';
 import { EmptyState } from '../../../components/EmptyState';
 import { PlatformIcon } from '../../../components/icons';
-import { Search, PartyPopper, X, BookOpen, Play, Check, ChevronDown, Undo2 } from 'lucide-react-native';
+import { Search, PartyPopper, X, BookOpen, Play, Check, ChevronDown, Undo2, Trash2 } from 'lucide-react-native';
 import { useLibraryContent, useInbox, useInboxCount, useSwipeTriage, useDebouncedValue, useThemes, useAvailableSources } from '../../../hooks';
 import { useContentStore, type SourceKey } from '../../../stores/contentStore';
 import { haptics } from '../../../lib/haptics';
@@ -32,7 +32,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_GAP = spacing.md;
 const GRID_PADDING = spacing.md;
 const COLUMN_WIDTH = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP) / 2;
-const HEADER_HEIGHT = 124;
+const HEADER_HEIGHT = 60;
 
 export default function LibraryScreen() {
   const router = useRouter();
@@ -195,6 +195,39 @@ export default function LibraryScreen() {
   const handleCancelSelection = useCallback(() => {
     setSelectedIds(new Set());
   }, []);
+
+  const [deletingSelected, setDeletingSelected] = useState(false);
+  const handleDeleteSelected = useCallback(() => {
+    if (selectedIds.size === 0) return;
+    const count = selectedIds.size;
+    Alert.alert(
+      'Supprimer',
+      `Supprimer ${count} contenu${count > 1 ? 's' : ''} de ta library ?`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingSelected(true);
+            try {
+              await api.post('/content/triage/bulk', {
+                contentIds: Array.from(selectedIds),
+                action: 'delete',
+              });
+              setSelectedIds(new Set());
+              queryClient.invalidateQueries({ queryKey: ['content'] });
+              haptics.success();
+            } catch {
+              Alert.alert('Erreur', 'Impossible de supprimer les contenus.');
+            } finally {
+              setDeletingSelected(false);
+            }
+          },
+        },
+      ]
+    );
+  }, [selectedIds, queryClient]);
 
   const handleSelectAll = useCallback(() => {
     if (!libraryItems) return;
@@ -560,13 +593,18 @@ export default function LibraryScreen() {
           style={[styles.selectionBar, { paddingBottom: bottomInset + spacing.md }]}
         >
           <View style={styles.selectionBarContent}>
-            {/* Close button (round) */}
+            {/* Delete button (round, red) */}
             <Pressable
-              style={({ pressed }) => [styles.roundButton, pressed && styles.roundButtonPressed]}
-              onPress={handleCancelSelection}
+              style={({ pressed }) => [styles.roundButton, styles.deleteButton, pressed && styles.roundButtonPressed]}
+              onPress={handleDeleteSelected}
+              disabled={deletingSelected}
               hitSlop={8}
             >
-              <X size={20} color={colors.text} strokeWidth={2} />
+              {deletingSelected ? (
+                <ActivityIndicator size="small" color="#FF4444" />
+              ) : (
+                <Trash2 size={20} color="#FF4444" strokeWidth={2} />
+              )}
             </Pressable>
 
             {/* Quiz launch button */}
@@ -692,7 +730,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 100,
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.xs,
   },
   searchContainer: {
     paddingHorizontal: spacing.md,
@@ -920,6 +958,9 @@ const styles = StyleSheet.create({
   roundButtonPressed: {
     opacity: 0.7,
     transform: [{ scale: 0.95 }],
+  },
+  deleteButton: {
+    borderColor: 'rgba(255, 68, 68, 0.3)',
   },
   quizLaunchButton: {
     flex: 1,

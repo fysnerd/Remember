@@ -53,12 +53,24 @@ export default function ContentDetailScreen() {
     return () => clearInterval(interval);
   }, [content?.status, refetch]);
 
+  const headerOptions = { title: '', headerBackTitle: 'Retour', headerShadowVisible: false, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text };
+
   if (isLoading) {
-    return <LoadingScreen />;
+    return (
+      <>
+        <Stack.Screen options={headerOptions} />
+        <LoadingScreen />
+      </>
+    );
   }
 
   if (error || !content) {
-    return <ErrorState message="Contenu introuvable" onRetry={refetch} hasHeader />;
+    return (
+      <>
+        <Stack.Screen options={headerOptions} />
+        <ErrorState message="Contenu introuvable" onRetry={refetch} hasHeader />
+      </>
+    );
   }
 
   const handleStartQuiz = () => {
@@ -71,7 +83,7 @@ export default function ContentDetailScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: '', headerBackTitle: 'Retour', headerShadowVisible: false, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text }} />
+      <Stack.Screen options={headerOptions} />
       <View style={styles.container}>
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
           {/* Thumbnail */}
