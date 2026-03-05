@@ -6,43 +6,46 @@ import { View, ScrollView, StyleSheet } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Markdown from 'react-native-markdown-display';
-import { Text, Button, useToast } from '../../../components/ui';
+import { Text, Button } from '../../../components/ui';
 import { LoadingScreen } from '../../../components/LoadingScreen';
 import { ErrorState } from '../../../components/ErrorState';
-import { useThemeMemo, useRefreshThemeMemo } from '../../../hooks';
-import { colors, spacing, borderRadius } from '../../../theme';
+import { useThemeMemo } from '../../../hooks';
+import { colors, spacing, borderRadius, fonts } from '../../../theme';
 
-// Markdown styles (same as topic memo)
 const markdownStyles = {
   body: {
     color: colors.text,
+    fontFamily: fonts.regular,
     fontSize: 16,
-    lineHeight: 24,
+    lineHeight: 26,
   },
   heading1: {
     color: colors.text,
-    fontSize: 24,
-    fontWeight: '700' as const,
+    fontFamily: fonts.bold,
+    fontSize: 22,
+    lineHeight: 28,
     marginTop: spacing.lg,
     marginBottom: spacing.md,
   },
   heading2: {
     color: colors.text,
-    fontSize: 20,
-    fontWeight: '600' as const,
+    fontFamily: fonts.semibold,
+    fontSize: 18,
+    lineHeight: 24,
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
   heading3: {
     color: colors.text,
-    fontSize: 18,
-    fontWeight: '600' as const,
+    fontFamily: fonts.medium,
+    fontSize: 16,
+    lineHeight: 22,
     marginTop: spacing.md,
     marginBottom: spacing.sm,
   },
   paragraph: {
     marginBottom: spacing.md,
-    lineHeight: 24,
+    lineHeight: 26,
   },
   bullet_list: {
     marginBottom: spacing.md,
@@ -54,18 +57,20 @@ const markdownStyles = {
     marginBottom: spacing.xs,
   },
   strong: {
-    fontWeight: '600' as const,
+    fontFamily: fonts.semibold,
+    color: colors.text,
   },
   em: {
     fontStyle: 'italic' as const,
   },
   blockquote: {
     backgroundColor: colors.surface,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.border,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.accent,
     paddingLeft: spacing.md,
     paddingVertical: spacing.sm,
     marginVertical: spacing.md,
+    borderRadius: borderRadius.sm,
   },
 };
 
@@ -74,17 +79,6 @@ export default function ThemeMemoScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { data: memo, isLoading, error, refetch } = useThemeMemo(id!);
-  const refreshMutation = useRefreshThemeMemo();
-  const { show } = useToast();
-
-  const handleRefresh = () => {
-    if (!id) return;
-    refreshMutation.mutate(id, {
-      onError: () => {
-        show('Erreur lors du rafraîchissement', 'error');
-      },
-    });
-  };
 
   const handleDone = () => {
     router.back();
@@ -129,22 +123,10 @@ export default function ThemeMemoScreen() {
           </View>
         )}
 
-        {/* Refresh button */}
-        <View style={styles.refreshButton}>
-          <Button
-            variant="secondary"
-            fullWidth
-            onPress={handleRefresh}
-            disabled={refreshMutation.isPending}
-          >
-            {refreshMutation.isPending ? 'Rafraîchissement...' : 'Rafraîchir'}
-          </Button>
-        </View>
-
         {/* Done button */}
         <View style={styles.doneButton}>
           <Button variant="primary" fullWidth onPress={handleDone}>
-            OK
+            Retour au thème
           </Button>
         </View>
       </ScrollView>
@@ -157,6 +139,5 @@ const styles = StyleSheet.create({
   content: { padding: spacing.lg },
   label: { marginBottom: spacing.md, letterSpacing: 1 },
   footer: { alignItems: 'center', paddingTop: spacing.xl, marginTop: spacing.lg },
-  refreshButton: { marginTop: spacing.md },
-  doneButton: { marginTop: spacing.sm },
+  doneButton: { marginTop: spacing.lg },
 });

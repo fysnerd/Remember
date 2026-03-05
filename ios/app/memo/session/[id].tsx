@@ -13,38 +13,42 @@ import { LoadingScreen } from '../../../components/LoadingScreen';
 import { ErrorState } from '../../../components/ErrorState';
 import { PlatformIcon } from '../../../components/icons/PlatformIcon';
 import { useSessionDetail, useGenerateSessionMemo } from '../../../hooks';
-import { colors, spacing, borderRadius } from '../../../theme';
+import { colors, spacing, borderRadius, fonts } from '../../../theme';
 
 const markdownStyles = {
   body: {
     color: colors.text,
+    fontFamily: fonts.regular,
     fontSize: 16,
-    lineHeight: 24,
+    lineHeight: 26,
   },
   heading1: {
     color: colors.text,
-    fontSize: 24,
-    fontWeight: '700' as const,
+    fontFamily: fonts.bold,
+    fontSize: 22,
+    lineHeight: 28,
     marginTop: spacing.lg,
     marginBottom: spacing.md,
   },
   heading2: {
     color: colors.text,
-    fontSize: 20,
-    fontWeight: '600' as const,
+    fontFamily: fonts.semibold,
+    fontSize: 18,
+    lineHeight: 24,
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
   heading3: {
     color: colors.text,
-    fontSize: 18,
-    fontWeight: '600' as const,
+    fontFamily: fonts.medium,
+    fontSize: 16,
+    lineHeight: 22,
     marginTop: spacing.md,
     marginBottom: spacing.sm,
   },
   paragraph: {
     marginBottom: spacing.md,
-    lineHeight: 24,
+    lineHeight: 26,
   },
   bullet_list: {
     marginBottom: spacing.md,
@@ -56,18 +60,20 @@ const markdownStyles = {
     marginBottom: spacing.xs,
   },
   strong: {
-    fontWeight: '600' as const,
+    fontFamily: fonts.semibold,
+    color: colors.text,
   },
   em: {
     fontStyle: 'italic' as const,
   },
   blockquote: {
     backgroundColor: colors.surface,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.border,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.accent,
     paddingLeft: spacing.md,
     paddingVertical: spacing.sm,
     marginVertical: spacing.md,
+    borderRadius: borderRadius.sm,
   },
 };
 
@@ -161,7 +167,7 @@ export default function SessionMemoScreen() {
         {/* Memo content */}
         {memoMutation.isPending ? (
           <View style={styles.loadingMemo}>
-            <Text variant="body" color="secondary">Generation du memo...</Text>
+            <Text variant="body" color="secondary">Génération du mémo...</Text>
           </View>
         ) : memo ? (
           <Markdown style={markdownStyles}>{memo}</Markdown>

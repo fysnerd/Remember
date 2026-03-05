@@ -7,12 +7,12 @@ import { View, FlatList, ScrollView, Dimensions, StyleSheet, Linking } from 'rea
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Markdown from 'react-native-markdown-display';
-import { useCallback, useRef, useMemo as useReactMemo } from 'react';
+import { useCallback, useRef, useState, useMemo as useReactMemo } from 'react';
 import { Text, Button } from '../../components/ui';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { ErrorState } from '../../components/ErrorState';
 import { useMemo, useContent } from '../../hooks';
-import { colors, spacing, borderRadius, fonts } from '../../theme';
+import { colors, spacing, borderRadius, fonts, shadows } from '../../theme';
 import { haptics } from '../../lib/haptics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -30,6 +30,13 @@ interface IdeaCard {
   title: string;
   body: string;
 }
+
+const CARD_TYPE_CONFIG: Record<CardType, { label: string }> = {
+  essential: { label: 'Idée principale' },
+  concept: { label: 'Concept' },
+  connections: { label: 'Liens & applications' },
+  mnemonic: { label: 'Astuce mémo' },
+};
 
 // --- Markdown styles (body zone) ---
 
@@ -252,20 +259,38 @@ function parseMemoCards(markdown: string): IdeaCard[] {
 
 function CardView({ card }: { card: IdeaCard }) {
   const mdStyles = card.type === 'essential' ? essentialBodyStyles : bodyMarkdownStyles;
+  const typeConfig = CARD_TYPE_CONFIG[card.type];
 
   return (
-    <View style={styles.cardWrapper}>
+    <View style={[styles.cardWrapper, shadows.md]}>
       <ScrollView
         style={styles.card}
         contentContainerStyle={styles.cardContent}
         showsVerticalScrollIndicator={false}
         nestedScrollEnabled
       >
+        <Text style={styles.cardTypeLabel}>{typeConfig.label}</Text>
         <Text style={styles.cardTitle} numberOfLines={3}>
           {card.title}
         </Text>
         <Markdown style={mdStyles}>{card.body}</Markdown>
       </ScrollView>
+    </View>
+  );
+}
+
+function PaginationDots({ total, current }: { total: number; current: number }) {
+  return (
+    <View style={styles.dotsContainer}>
+      {Array.from({ length: total }).map((_, i) => (
+        <View
+          key={i}
+          style={[
+            styles.dot,
+            i === current && styles.dotActive,
+          ]}
+        />
+      ))}
     </View>
   );
 }
@@ -283,12 +308,14 @@ export default function MemoScreen() {
     [memo],
   );
 
+  const [currentIndex, setCurrentIndex] = useState(0);
   const lastIndex = useRef(-1);
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: Array<{ index: number | null }> }) => {
       const idx = viewableItems[0]?.index;
       if (idx != null && idx !== lastIndex.current) {
         lastIndex.current = idx;
+        setCurrentIndex(idx);
         haptics.selection();
       }
     },
@@ -341,6 +368,9 @@ export default function MemoScreen() {
             onViewableItemsChanged={onViewableItemsChanged}
             viewabilityConfig={viewabilityConfig}
           />
+          {cards.length > 1 && (
+            <PaginationDots total={cards.length} current={currentIndex} />
+          )}
         </View>
 
         {/* Actions */}
@@ -407,12 +437,15 @@ const styles = StyleSheet.create({
   // Carousel
   carouselZone: {
     flex: 1,
-    marginVertical: spacing.xl,
+    marginTop: spacing.lg,
+    marginBottom: spacing.md,
   },
   cardWrapper: {
     width: CARD_WIDTH,
     flex: 1,
     marginHorizontal: CARD_GAP / 2,
+    borderRadius: borderRadius.xl,
+    borderCurve: 'continuous',
   },
   card: {
     flex: 1,
@@ -422,14 +455,43 @@ const styles = StyleSheet.create({
   },
   cardContent: {
     padding: spacing.xl,
+    paddingTop: spacing.lg,
+  },
+  cardTypeLabel: {
+    fontFamily: fonts.medium,
+    fontSize: 12,
+    color: 'rgba(8, 8, 34, 0.45)',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: spacing.sm,
   },
   cardTitle: {
     fontFamily: fonts.bold,
-    fontSize: 28,
-    lineHeight: 34,
+    fontSize: 26,
+    lineHeight: 32,
     color: '#080822',
     letterSpacing: -0.5,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+
+  // Pagination dots
+  dotsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingTop: spacing.lg,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.borderLight,
+  },
+  dotActive: {
+    backgroundColor: colors.accent,
+    width: 20,
+    borderRadius: 3,
   },
 
   // Actions
