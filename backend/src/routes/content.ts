@@ -25,6 +25,30 @@ function asString(value: string | string[] | undefined): string {
   return value || '';
 }
 
+/** Build self-referential context string for memo/synopsis generation */
+function buildCreatorContextForMemo(
+  platform: string,
+  channelName: string | null,
+  authorUsername: string | null,
+  showName: string | null,
+  capturedAt: Date | null
+): string {
+  const platformRef =
+    platform === 'TIKTOK' ? 'video TikTok' :
+    platform === 'INSTAGRAM' ? 'reel Instagram' :
+    platform === 'YOUTUBE' ? 'video YouTube' :
+    'podcast Spotify';
+
+  const creatorName = channelName || authorUsername || showName || null;
+  const creatorRef = creatorName ? ` de ${creatorName}` : '';
+
+  const temporalRef = capturedAt
+    ? ` (contenu que tu as ${platform === 'SPOTIFY' ? 'ecoute' : 'regarde'} le ${capturedAt.toLocaleDateString('fr-FR')})`
+    : '';
+
+  return `cette ${platformRef}${creatorRef}${temporalRef}`;
+}
+
 export const contentRouter = Router();
 
 // All content routes require authentication
@@ -1362,9 +1386,23 @@ contentRouter.get('/:id/memo', async (req: Request, res: Response, next: NextFun
       });
     }
 
-    // Generate memo using shared scientific prompt
+    // Generate carousel memo with creator context for self-reference effect
     const tagNames = content.tags.map(t => t.name);
-    const memo = await generateMemoFromTranscript(content.transcript.text, content.title, tagNames);
+    const creatorContext = buildCreatorContextForMemo(
+      content.platform,
+      content.channelName,
+      content.authorUsername,
+      content.showName,
+      content.capturedAt
+    );
+    // Note: contextCues not available here (extracted during quiz generation only)
+    const memo = await generateMemoFromTranscript(
+      content.transcript.text,
+      content.title,
+      tagNames,
+      creatorContext,
+      [] // contextCues not stored in DB yet
+    );
 
     // Cache the memo on Content
     const now = new Date();
@@ -1403,9 +1441,23 @@ contentRouter.post('/:id/memo/regenerate', async (req: Request, res: Response, n
       return res.status(400).json({ error: 'Content has no transcript - cannot generate memo' });
     }
 
-    // Generate new memo using shared scientific prompt
+    // Generate new carousel memo with creator context for self-reference effect
     const tagNames = content.tags.map(t => t.name);
-    const memo = await generateMemoFromTranscript(content.transcript.text, content.title, tagNames);
+    const creatorContext = buildCreatorContextForMemo(
+      content.platform,
+      content.channelName,
+      content.authorUsername,
+      content.showName,
+      content.capturedAt
+    );
+    // Note: contextCues not available here (extracted during quiz generation only)
+    const memo = await generateMemoFromTranscript(
+      content.transcript.text,
+      content.title,
+      tagNames,
+      creatorContext,
+      [] // contextCues not stored in DB yet
+    );
 
     // Update cached memo on Content
     const now = new Date();

@@ -42,17 +42,17 @@ export default function PasswordScreen() {
 
   const handleSubmit = async () => {
     if (!password.trim()) {
-      show('Entre ton mot de passe', 'error');
+      show('Enter your password', 'error');
       return;
     }
 
     if (isNewUser) {
       if (password.length < 8) {
-        show('8 caracteres minimum', 'error');
+        show('8 characters minimum', 'error');
         return;
       }
       if (password !== confirmPassword) {
-        show('Les mots de passe ne correspondent pas', 'error');
+        show('Passwords do not match', 'error');
         return;
       }
       try {
@@ -60,7 +60,7 @@ export default function PasswordScreen() {
         await signup(email!, password);
         haptics.success();
       } catch {
-        show(error || 'Inscription echouee', 'error');
+        show(error || 'Signup failed', 'error');
       }
     } else {
       try {
@@ -68,7 +68,7 @@ export default function PasswordScreen() {
         await login(email!, password);
         haptics.success();
       } catch {
-        show(error || 'Connexion echouee', 'error');
+        show(error || 'Login failed', 'error');
       }
     }
   };
@@ -113,7 +113,7 @@ export default function PasswordScreen() {
           {/* Title - same style as auth */}
           <View style={styles.titleContainer}>
             <Text style={styles.titleSmall}>
-              {isNewUser ? 'Nouveau compte' : 'Content de te revoir'}
+              {isNewUser ? 'New account' : 'Welcome back'}
             </Text>
             <Text style={styles.title}>
               {email}
@@ -123,7 +123,7 @@ export default function PasswordScreen() {
           {/* Form */}
           <View style={styles.form}>
             <Input
-              label="Mot de passe"
+              label="Password"
               placeholder="********"
               value={password}
               onChangeText={setPassword}
@@ -132,7 +132,7 @@ export default function PasswordScreen() {
 
             {isNewUser && (
               <Input
-                label="Confirmer"
+                label="Confirm"
                 placeholder="********"
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
@@ -147,15 +147,15 @@ export default function PasswordScreen() {
               onPress={handleSubmit}
               loading={isLoading}
             >
-              {isNewUser ? "S'inscrire" : 'Se connecter'}
+              {isNewUser ? 'Sign up' : 'Log in'}
             </Button>
 
             <Pressable onPress={toggleMode} style={styles.toggleMode}>
               <Text variant="caption" color="secondary">
-                {isNewUser ? 'Deja un compte ? ' : 'Pas de compte ? '}
+                {isNewUser ? 'Already have an account? ' : 'No account? '}
               </Text>
               <Text variant="caption" style={{ color: colors.accent }}>
-                {isNewUser ? 'Se connecter' : "S'inscrire"}
+                {isNewUser ? 'Log in' : 'Sign up'}
               </Text>
             </Pressable>
           </View>

@@ -16,10 +16,10 @@ import { haptics } from '../../lib/haptics';
 
 const ATTRIBUTION_OPTIONS = [
   { label: 'TikTok / Instagram', value: 'social_media' },
-  { label: 'Ami / Bouche à oreille', value: 'friend' },
+  { label: 'Friend / Word of mouth', value: 'friend' },
   { label: 'App Store', value: 'appstore' },
   { label: 'Twitter / X', value: 'twitter' },
-  { label: 'Autre', value: 'other' },
+  { label: 'Other', value: 'other' },
 ];
 
 export default function AttributionScreen() {
@@ -44,9 +44,9 @@ export default function AttributionScreen() {
     <SafeAreaView style={styles.container}>
       <OnboardingProgressBar step={7} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text variant="h2">Comment tu as connu Ankora ?</Text>
-        <Text variant="body" color="secondary" style={{ marginTop: spacing.sm }}>
-          Ça nous aide à nous améliorer.
+        <Text variant="h2" style={styles.title}>How did you hear about Ankora?</Text>
+        <Text variant="body" color="secondary" style={styles.subtitle}>
+          This helps us improve.
         </Text>
 
         <View style={styles.chips}>
@@ -67,7 +67,7 @@ export default function AttributionScreen() {
           disabled={!selected}
           loading={isSaving}
         >
-          Continuer
+          Continue
         </Button>
       </ScrollView>
     </SafeAreaView>
@@ -88,6 +88,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
-    marginVertical: spacing.xl,
+    marginBottom: spacing.xl,
+  },
+  title: {
+    textAlign: 'left',
+  },
+  subtitle: {
+    textAlign: 'left',
+    marginTop: spacing.xs,
+    marginBottom: spacing.xl,
   },
 });

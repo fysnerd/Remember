@@ -3,61 +3,79 @@
  */
 
 import { useState } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Text, Button } from '../../components/ui';
 import { OnboardingProgressBar } from '../../components/onboarding/OnboardingProgressBar';
-import { SelectCard } from '../../components/onboarding/SelectCard';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useAuthStore } from '../../stores/authStore';
-import { colors, spacing } from '../../theme';
+import { colors, spacing, borderRadius, feedback } from '../../theme';
 import { haptics } from '../../lib/haptics';
 
 const FREQUENCY_OPTIONS = [
-  { value: 'relaxed', emoji: '🌿', label: '1-2 par semaine', description: 'Tranquille, à ton rythme' },
-  { value: 'regular', emoji: '⚡', label: '3-4 par semaine', description: 'Un bon rythme régulier' },
-  { value: 'daily', emoji: '🔥', label: 'Tous les jours', description: 'Mode intensif' },
+  { value: 'daily', label: 'Every day', description: 'Recommended' },
+  { value: 'regular', label: '3-4 times a week', description: 'A good steady pace' },
+  { value: 'relaxed', label: '1-2 times a week', description: 'Take it easy' },
 ];
 
 export default function FrequencyScreen() {
   const router = useRouter();
   const { saveStep, isSaving } = useOnboardingStore();
   const { updateUser } = useAuthStore();
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>('daily');
 
   const handleContinue = async () => {
     if (!selected) return;
     haptics.light();
     try {
       await saveStep(5, { quizFrequency: selected });
-      updateUser({ onboardingStep: 5 });
-      router.push('/onboarding/connect');
     } catch {
-      // Error handled in store
+      // Continue anyway if save fails
     }
+    updateUser({ onboardingStep: 5 });
+    router.push('/onboarding/connect');
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <OnboardingProgressBar step={5} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text variant="h2">À quel rythme ?</Text>
-        <Text variant="body" color="secondary" style={{ marginTop: spacing.sm }}>
-          Tu pourras changer ça plus tard.
+        <Text variant="h2" style={styles.title}>How often?</Text>
+        <Text variant="body" color="secondary" style={styles.subtitle}>
+          You can change this later.
         </Text>
 
-        <View style={styles.cards}>
-          {FREQUENCY_OPTIONS.map((freq) => (
-            <SelectCard
-              key={freq.value}
-              emoji={freq.emoji}
-              label={freq.label}
-              description={freq.description}
-              selected={selected === freq.value}
-              onPress={() => setSelected(freq.value)}
-            />
-          ))}
+        <View style={styles.options}>
+          {FREQUENCY_OPTIONS.map((freq) => {
+            const isSelected = selected === freq.value;
+            return (
+              <TouchableOpacity
+                key={freq.value}
+                onPress={() => {
+                  haptics.selection();
+                  setSelected(freq.value);
+                }}
+                activeOpacity={0.7}
+                style={[
+                  styles.option,
+                  isSelected && styles.optionSelected,
+                ]}
+              >
+                <View style={[styles.radio, isSelected && styles.radioSelected]}>
+                  {isSelected && <View style={styles.radioDot} />}
+                </View>
+                <View style={styles.optionContent}>
+                  <Text variant="body" weight="medium" style={isSelected && styles.labelSelected}>
+                    {freq.label}
+                  </Text>
+                  <Text variant="caption" color="secondary">
+                    {freq.description}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         <Button
@@ -67,7 +85,7 @@ export default function FrequencyScreen() {
           disabled={!selected}
           loading={isSaving}
         >
-          Continuer
+          Continue
         </Button>
       </ScrollView>
     </SafeAreaView>
@@ -84,8 +102,57 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xl,
     paddingBottom: spacing.xxl,
   },
-  cards: {
+  options: {
     gap: spacing.md,
-    marginVertical: spacing.xl,
+    marginBottom: spacing.xl,
+  },
+  option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    minHeight: 72,
+  },
+  optionSelected: {
+    borderColor: colors.accent,
+    backgroundColor: feedback.selected.background,
+  },
+  radio: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: colors.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  radioSelected: {
+    borderColor: colors.accent,
+  },
+  radioDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: colors.accent,
+  },
+  optionContent: {
+    flex: 1,
+    gap: spacing.xxs,
+  },
+  labelSelected: {
+    color: colors.accent,
+  },
+  title: {
+    textAlign: 'left',
+  },
+  subtitle: {
+    textAlign: 'left',
+    marginTop: spacing.xs,
+    marginBottom: spacing.xl,
   },
 });

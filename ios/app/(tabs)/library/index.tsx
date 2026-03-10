@@ -32,7 +32,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_GAP = spacing.md;
 const GRID_PADDING = spacing.md;
 const COLUMN_WIDTH = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP) / 2;
-const HEADER_HEIGHT = 104;
+const HEADER_HEIGHT = 108;
 
 export default function LibraryScreen() {
   const router = useRouter();
@@ -45,13 +45,13 @@ export default function LibraryScreen() {
   const [pendingSources, setPendingSources] = useState<SourceKey[]>([]);
   const swipeStackRef = useRef<SwipeCardStackRef>(null);
   const [canUndo, setCanUndo] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebouncedValue(searchQuery, 300);
 
   const selectionMode = selectedIds.size > 0;
 
   // Store state
   const {
-    searchQuery,
-    setSearchQuery,
     sourceFilters,
     setSourceFilters,
     themeFilters,
@@ -63,24 +63,23 @@ export default function LibraryScreen() {
     setShowFilterDrawer,
   } = useContentStore();
 
-  const debouncedSearch = useDebouncedValue(searchQuery, 300);
+
+  // Data fetching
+  const { data: inboxCount } = useInboxCount();
+  const { data: themes } = useThemes();
+  const { data: availableSources } = useAvailableSources();
 
   // Sync pendingSources when filter drawer opens (triggered from header button)
   // If no filters set (= all sources), initialize with all available sources checked
   useEffect(() => {
     if (showFilterDrawer) {
       if (sourceFilters.length === 0 && availableSources && availableSources.length > 0) {
-        setPendingSources([...availableSources]);
+        setPendingSources(availableSources as SourceKey[]);
       } else {
         setPendingSources([...sourceFilters]);
       }
     }
   }, [showFilterDrawer, sourceFilters, availableSources]);
-
-  // Data fetching
-  const { data: inboxCount } = useInboxCount();
-  const { data: themes } = useThemes();
-  const { data: availableSources } = useAvailableSources();
   const {
     data: libraryItems,
     isLoading: libraryLoading,
@@ -325,13 +324,13 @@ export default function LibraryScreen() {
 
   // --- List header ---
   const renderBrowseListHeader = useCallback(() => (
-    <View style={{ height: totalHeaderHeight }} />
+    <View style={{ height: totalHeaderHeight - spacing.xxl - spacing.lg }} />
   ), [totalHeaderHeight]);
 
   // --- Unified header with search + filters (or selection header) ---
   const renderUnifiedHeader = () => (
     <View style={[styles.unifiedHeader, { paddingTop: topInset }]}>
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} pointerEvents="none" />
 
       {selectionMode ? (
         <>
@@ -490,6 +489,7 @@ export default function LibraryScreen() {
           removeClippedSubviews={false}
           scrollsToTop={false}
           contentInsetAdjustmentBehavior="never"
+          keyboardShouldPersistTaps="handled"
           ListFooterComponent={
             libraryFetchingNextPage ? (
               <View style={styles.loadingMore}>

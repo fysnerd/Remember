@@ -41,5 +41,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semibold,
     color: colors.text,
     letterSpacing: -1.2,
+    lineHeight: 38,
   },
 });

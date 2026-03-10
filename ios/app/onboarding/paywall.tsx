@@ -88,10 +88,10 @@ export default function PaywallScreen() {
         <Animated.View entering={FadeIn.duration(500)}>
           <Text style={styles.emoji}>🎁</Text>
           <Text variant="h2" style={styles.title}>
-            Profite de ton essai{'\n'}gratuit de 14 jours
+            Start your free{'\n'}14-day trial
           </Text>
           <Text variant="body" color="secondary" style={styles.subtitle}>
-            Accès complet à toutes les fonctionnalités. Aucun engagement.
+            Full access to all features. No commitment.
           </Text>
         </Animated.View>
 
@@ -102,7 +102,7 @@ export default function PaywallScreen() {
             onPress={handleContinuePlaceholder}
             loading={isSaving || completing}
           >
-            C'est parti !
+            Let's go!
           </Button>
         </View>
       </View>

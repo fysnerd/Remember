@@ -39,14 +39,14 @@ export default function NameScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={styles.content}>
-          <Text variant="h2">Comment tu t'appelles ?</Text>
-          <Text variant="body" color="secondary" style={{ marginTop: spacing.sm }}>
-            On personnalisera ton expérience.
+          <Text variant="h2" style={styles.title}>What's your name?</Text>
+          <Text variant="body" color="secondary" style={styles.subtitle}>
+            We'll personalize your experience.
           </Text>
 
           <View style={styles.inputWrapper}>
             <Input
-              placeholder="Ton prénom"
+              placeholder="Your first name"
               value={name}
               onChangeText={setName}
               autoCapitalize="words"
@@ -60,7 +60,7 @@ export default function NameScreen() {
             disabled={name.trim().length < 2}
             loading={isSaving}
           >
-            Continuer
+            Continue
           </Button>
         </View>
       </KeyboardAvoidingView>
@@ -82,6 +82,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   inputWrapper: {
-    marginVertical: spacing.xl,
+    marginBottom: spacing.xl,
+  },
+  title: {
+    textAlign: 'left',
+  },
+  subtitle: {
+    textAlign: 'left',
+    marginTop: spacing.xs,
+    marginBottom: spacing.xl,
   },
 });

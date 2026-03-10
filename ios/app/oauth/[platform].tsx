@@ -10,7 +10,6 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useQueryClient } from '@tanstack/react-query';
 import { Text, Button } from '../../components/ui';
-import { PlatformIcon } from '../../components/icons';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import api from '../../lib/api';
 import { colors, spacing } from '../../theme';
@@ -87,9 +86,6 @@ export default function OAuthWebViewScreen() {
         <Stack.Screen options={{ title: `Connexion ${config.name}` }} />
         <SafeAreaView style={styles.container}>
           <View style={styles.errorContainer}>
-            <View style={styles.errorIcon}>
-              <PlatformIcon platform={platformKey} size={48} colored />
-            </View>
             <Text variant="h3" style={styles.errorTitle}>
               Development Build requis
             </Text>
@@ -168,12 +164,9 @@ export default function OAuthWebViewScreen() {
       />
       <SafeAreaView style={styles.container}>
         <View style={styles.instructions}>
-          <View style={styles.instructionRow}>
-            <PlatformIcon platform={platformKey} size={16} colored />
-            <Text variant="body" color="secondary">
-              Connectez-vous à {config.name}, puis appuyez sur le bouton ci-dessous.
-            </Text>
-          </View>
+          <Text variant="body" color="secondary">
+            Connectez-vous à {config.name}, puis appuyez sur le bouton ci-dessous.
+          </Text>
         </View>
 
         <View style={styles.webviewContainer}>
@@ -226,9 +219,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.xl,
   },
-  errorIcon: {
-    marginBottom: spacing.md,
-  },
   errorTitle: {
     marginBottom: spacing.sm,
     textAlign: 'center',
@@ -246,11 +236,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-  },
-  instructionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
   },
   webviewContainer: {
     flex: 1,

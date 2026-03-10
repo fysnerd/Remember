@@ -15,10 +15,10 @@ import { colors, spacing } from '../../theme';
 import { haptics } from '../../lib/haptics';
 
 const INTEREST_OPTIONS = [
-  'Science', 'Technologie', 'Business', 'Philosophie',
-  'Histoire', 'Psychologie', 'Santé', 'Finance',
-  'Art & Design', 'Politique', 'Dev personnel', 'Sport',
-  'Musique', 'Cinéma', 'Cuisine', 'Langues',
+  'Science', 'Technology', 'Business', 'Philosophy',
+  'History', 'Psychology', 'Health', 'Finance',
+  'Art & Design', 'Politics', 'Self-improvement', 'Sports',
+  'Music', 'Movies', 'Cooking', 'Languages',
 ];
 
 export default function InterestsScreen() {
@@ -49,9 +49,9 @@ export default function InterestsScreen() {
     <SafeAreaView style={styles.container}>
       <OnboardingProgressBar step={3} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text variant="h2">Qu'est-ce qui t'intéresse ?</Text>
-        <Text variant="body" color="secondary" style={{ marginTop: spacing.sm }}>
-          Choisis au moins 2 sujets.
+        <Text variant="h2" style={styles.title}>What are you interested in?</Text>
+        <Text variant="body" color="secondary" style={styles.subtitle}>
+          Pick at least 2 topics.
         </Text>
 
         <View style={styles.chips}>
@@ -72,7 +72,7 @@ export default function InterestsScreen() {
           disabled={selected.length < 2}
           loading={isSaving}
         >
-          Continuer ({selected.length} sélectionné{selected.length > 1 ? 's' : ''})
+          Continue ({selected.length} selected)
         </Button>
       </ScrollView>
     </SafeAreaView>
@@ -93,6 +93,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
-    marginVertical: spacing.xl,
+    marginBottom: spacing.xl,
+  },
+  title: {
+    textAlign: 'left',
+  },
+  subtitle: {
+    textAlign: 'left',
+    marginTop: spacing.xs,
+    marginBottom: spacing.xl,
   },
 });

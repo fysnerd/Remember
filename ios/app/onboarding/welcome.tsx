@@ -46,10 +46,10 @@ export default function WelcomeScreen() {
 
         <Animated.View entering={FadeIn.delay(300).duration(600)}>
           <Text variant="h1" style={styles.title}>
-            {firstName}, bienvenue{'\n'}dans Ankora !
+            {firstName}, welcome{'\n'}to Ankora!
           </Text>
           <Text variant="body" color="secondary" style={styles.subtitle}>
-            Tout est prêt. On va transformer ce que tu regardes en connaissances durables.
+            All set. Let's turn what you watch into lasting knowledge.
           </Text>
         </Animated.View>
 
@@ -60,7 +60,7 @@ export default function WelcomeScreen() {
             onPress={handleContinue}
             loading={isSaving}
           >
-            Continuer
+            Continue
           </Button>
         </View>
       </View>

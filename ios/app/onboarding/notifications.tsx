@@ -53,10 +53,10 @@ export default function NotificationsScreen() {
         </Animated.View>
 
         <Text variant="h2" style={styles.title}>
-          Reste dans le rythme
+          Stay on track
         </Text>
         <Text variant="body" color="secondary" style={styles.subtitle}>
-          On te rappellera quand c'est le bon moment pour réviser.
+          We'll remind you when it's time to review.
         </Text>
 
         <View style={styles.buttons}>
@@ -66,14 +66,14 @@ export default function NotificationsScreen() {
             onPress={handleEnable}
             loading={isSaving}
           >
-            Activer les notifications
+            Enable notifications
           </Button>
           <Button
             variant="ghost"
             fullWidth
             onPress={handleSkip}
           >
-            Plus tard
+            Later
           </Button>
         </View>
       </View>

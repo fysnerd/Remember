@@ -10,13 +10,14 @@ import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useQueryClient } from '@tanstack/react-query';
 import { Text, Button } from '../../components/ui';
+import { GlassCard } from '../../components/glass/GlassCard';
 import { PlatformIcon } from '../../components/icons';
 import { OnboardingProgressBar } from '../../components/onboarding/OnboardingProgressBar';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useOAuthStatus } from '../../hooks';
 import api from '../../lib/api';
-import { colors, spacing, borderRadius, glass } from '../../theme';
+import { colors, spacing, glass } from '../../theme';
 import { haptics } from '../../lib/haptics';
 
 const platformConfig = [
@@ -75,11 +76,11 @@ export default function ConnectScreen() {
     haptics.light();
     try {
       await saveStep(6);
-      updateUser({ onboardingStep: 6 });
-      router.push('/onboarding/attribution');
     } catch {
-      // Error handled in store
+      // Continue anyway if save fails
     }
+    updateUser({ onboardingStep: 6 });
+    router.push('/onboarding/attribution');
   };
 
   const platforms = platformConfig.map((p) => ({
@@ -93,12 +94,12 @@ export default function ConnectScreen() {
     <SafeAreaView style={styles.container}>
       <OnboardingProgressBar step={6} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text variant="h2">Connecte tes sources</Text>
-        <Text variant="body" color="secondary" style={{ marginTop: spacing.sm }}>
-          On importera le contenu que tu regardes pour créer des quiz.
+        <Text variant="h2" style={styles.title}>Connect your sources</Text>
+        <Text variant="body" color="secondary" style={styles.subtitle}>
+          We'll import content you watch to create quizzes.
         </Text>
 
-        <View style={styles.platforms}>
+        <GlassCard padding="none" style={styles.platforms}>
           {platforms.map((platform, index) => {
             const isConnected = platform.status !== null;
             const isPlatformLoading = loadingPlatform === platform.id;
@@ -111,7 +112,6 @@ export default function ConnectScreen() {
                 style={[
                   styles.platformRow,
                   index < platforms.length - 1 && styles.platformBorder,
-                  isConnected && styles.platformConnected,
                 ]}
               >
                 <View style={styles.platformIcon}>
@@ -122,19 +122,15 @@ export default function ConnectScreen() {
                 </Text>
                 {isPlatformLoading ? (
                   <Text variant="caption" color="secondary">...</Text>
-                ) : isConnected ? (
-                  <Text variant="caption" weight="medium" style={{ color: colors.success }}>
-                    Connecté
-                  </Text>
                 ) : (
-                  <Text variant="caption" color="secondary">
-                    Connecter
-                  </Text>
+                  <View style={styles.statusBadge}>
+                    <View style={isConnected ? styles.connectedDot : styles.disconnectedDot} />
+                  </View>
                 )}
               </Pressable>
             );
           })}
-        </View>
+        </GlassCard>
 
         <Button
           variant="primary"
@@ -142,16 +138,9 @@ export default function ConnectScreen() {
           onPress={handleContinue}
           loading={isSaving}
         >
-          Continuer
+          Continue
         </Button>
 
-        {connectedCount === 0 && (
-          <Pressable onPress={handleContinue} style={{ marginTop: spacing.md }}>
-            <Text variant="caption" color="secondary" style={{ textAlign: 'center' }}>
-              Passer cette étape
-            </Text>
-          </Pressable>
-        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -168,12 +157,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxl,
   },
   platforms: {
-    marginVertical: spacing.xl,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
+    marginBottom: spacing.xl,
   },
   platformRow: {
     flexDirection: 'row',
@@ -184,13 +168,40 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: glass.border,
   },
-  platformConnected: {
-    backgroundColor: 'rgba(34, 197, 94, 0.05)',
-  },
   platformIcon: {
+    width: 24,
     marginRight: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   platformName: {
     flex: 1,
+  },
+  statusBadge: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  connectedDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.success,
+  },
+  disconnectedDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.textTertiary,
+  },
+  title: {
+    textAlign: 'left',
+  },
+  subtitle: {
+    textAlign: 'left',
+    marginTop: spacing.xs,
+    marginBottom: spacing.xl,
   },
 });

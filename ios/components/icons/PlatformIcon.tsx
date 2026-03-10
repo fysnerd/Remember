@@ -1,31 +1,48 @@
 /**
  * Platform source icon mapper (YouTube, Spotify, TikTok, Instagram)
  *
- * Uses generic concept icons since Lucide has no brand icons.
+ * Uses real brand icons from @expo/vector-icons
  */
 
-import { Play, Headphones, Music, Camera, LucideIcon } from 'lucide-react-native';
+import { FontAwesome5, FontAwesome6, Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme';
 
-const PLATFORM_ICONS: Record<string, LucideIcon> = {
-  youtube: Play,
-  spotify: Headphones,
-  tiktok: Music,
-  instagram: Camera,
-};
+type IconSet = 'fa5' | 'fa6' | 'ionicons';
 
-const PLATFORM_COLORS: Record<string, string> = {
-  youtube: '#FF0000',
-  spotify: '#1DB954',
-  tiktok: '#00F2EA',
-  instagram: '#E4405F',
+interface PlatformConfig {
+  iconSet: IconSet;
+  iconName: string;
+  color: string;
+}
+
+const PLATFORM_CONFIG: Record<string, PlatformConfig> = {
+  youtube: {
+    iconSet: 'fa5',
+    iconName: 'youtube',
+    color: '#FF0000',
+  },
+  spotify: {
+    iconSet: 'fa5',
+    iconName: 'spotify',
+    color: '#1DB954',
+  },
+  tiktok: {
+    iconSet: 'fa6',
+    iconName: 'tiktok',
+    color: '#000000',
+  },
+  instagram: {
+    iconSet: 'fa5',
+    iconName: 'instagram',
+    color: '#E4405F',
+  },
 };
 
 interface PlatformIconProps {
   platform: string;
   size?: number;
   color?: string;
-  colored?: boolean; // Use platform brand color instead of default
+  colored?: boolean;
 }
 
 export function PlatformIcon({
@@ -34,9 +51,19 @@ export function PlatformIcon({
   color,
   colored = false,
 }: PlatformIconProps) {
-  const IconComponent = PLATFORM_ICONS[platform];
-  if (!IconComponent) return null;
+  const config = PLATFORM_CONFIG[platform];
+  if (!config) return null;
 
-  const iconColor = color || (colored ? PLATFORM_COLORS[platform] : colors.textSecondary);
-  return <IconComponent size={size} color={iconColor} strokeWidth={1.75} />;
+  const iconColor = color || (colored ? config.color : colors.textSecondary);
+
+  switch (config.iconSet) {
+    case 'fa5':
+      return <FontAwesome5 name={config.iconName} size={size} color={iconColor} />;
+    case 'fa6':
+      return <FontAwesome6 name={config.iconName} size={size} color={iconColor} />;
+    case 'ionicons':
+      return <Ionicons name={config.iconName as any} size={size} color={iconColor} />;
+    default:
+      return null;
+  }
 }

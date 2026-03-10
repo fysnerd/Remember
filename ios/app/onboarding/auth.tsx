@@ -6,10 +6,11 @@
  */
 
 import { useState } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, Image } from 'react-native';
+import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Text, Input, Button, useToast } from '../../components/ui';
+import { AnkoraLogo } from '../../components/icons';
 import { SocialAuthButton } from '../../components/onboarding/SocialAuthButton';
 import { useAuthStore } from '../../stores/authStore';
 import { colors, spacing, fonts, typography } from '../../theme';
@@ -44,7 +45,7 @@ export default function AuthScreen() {
       }
     } catch (error: any) {
       if (error.code !== 'ERR_REQUEST_CANCELED') {
-        show('Apple Sign-In indisponible', 'error');
+        show('Apple Sign-In unavailable', 'error');
       }
     } finally {
       setAppleLoading(false);
@@ -64,7 +65,7 @@ export default function AuthScreen() {
       }
     } catch (error: any) {
       if (error.code !== 'SIGN_IN_CANCELLED') {
-        show('Google Sign-In indisponible', 'error');
+        show('Google Sign-In unavailable', 'error');
       }
     } finally {
       setGoogleLoading(false);
@@ -73,7 +74,7 @@ export default function AuthScreen() {
 
   const handleEmailContinue = () => {
     if (!email.trim()) {
-      show('Entre ton email', 'error');
+      show('Enter your email', 'error');
       return;
     }
     router.push({
@@ -95,35 +96,29 @@ export default function AuthScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={20}
       >
         <ToastComponent />
 
-        <View style={styles.content}>
-          {/* Logo horizontal: symbol + wordmark */}
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Logo */}
           <View style={styles.logoContainer}>
-            <Image
-              source={require('../../assets/images/ankora-symbol.png')}
-              style={styles.logoSymbol}
-              resizeMode="contain"
-            />
-            <Image
-              source={require('../../assets/images/ankora-wordmark.png')}
-              style={styles.logoWordmark}
-              resizeMode="contain"
-            />
+            <AnkoraLogo width={140} />
           </View>
 
           {/* Tagline */}
           <View style={styles.taglineContainer}>
-            <Text style={styles.taglineSmall}>
-              Bienvenue sur Ankora
-            </Text>
             <Text style={styles.tagline}>
-              Transforme ce que tu regardes en connaissances durables.
+              Turn what you watch into lasting knowledge.
             </Text>
           </View>
 
@@ -148,13 +143,13 @@ export default function AuthScreen() {
             {/* Separator */}
             <View style={styles.separator}>
               <View style={styles.separatorLine} />
-              <Text style={styles.separatorText}>ou</Text>
+              <Text style={styles.separatorText}>or</Text>
               <View style={styles.separatorLine} />
             </View>
 
             {/* Email */}
             <Input
-              placeholder="ton@email.com"
+              placeholder="your@email.com"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
@@ -166,7 +161,7 @@ export default function AuthScreen() {
               fullWidth
               onPress={handleEmailContinue}
             >
-              Continuer
+              Continue
             </Button>
 
             {Platform.OS === 'web' && (
@@ -180,7 +175,7 @@ export default function AuthScreen() {
               </Button>
             )}
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -195,37 +190,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: spacing.lg,
     paddingTop: 0,
+    paddingBottom: spacing.xxl * 2,
   },
 
   // Logo
   logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.xl,
-  },
-  logoSymbol: {
-    width: 44,
-    height: 44,
-  },
-  logoWordmark: {
-    width: 100,
-    height: 24,
+    alignItems: 'flex-start',
+    marginTop: spacing.xxl,
+    marginBottom: spacing.xxl * 1.25,
   },
 
   // Tagline
   taglineContainer: {
     marginBottom: spacing.xxl,
     paddingRight: spacing.lg,
-  },
-  taglineSmall: {
-    ...typography.h3,
-    fontFamily: fonts.regular,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
   },
   tagline: {
     ...typography.jumbo,

@@ -3,22 +3,21 @@
  */
 
 import { useState } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Text, Button } from '../../components/ui';
 import { OnboardingProgressBar } from '../../components/onboarding/OnboardingProgressBar';
-import { SelectCard } from '../../components/onboarding/SelectCard';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useAuthStore } from '../../stores/authStore';
-import { colors, spacing } from '../../theme';
+import { colors, spacing, borderRadius, feedback } from '../../theme';
 import { haptics } from '../../lib/haptics';
 
 const GOAL_OPTIONS = [
-  { value: 'culture', emoji: '🌍', label: 'Élargir ma culture générale' },
-  { value: 'exam', emoji: '📝', label: 'Préparer un examen / concours' },
-  { value: 'skills', emoji: '🚀', label: 'Apprendre de nouvelles compétences' },
-  { value: 'curiosity', emoji: '🔍', label: 'Simple curiosité' },
+  { value: 'remember', emoji: '🧠', label: 'Remember what I watch' },
+  { value: 'learn', emoji: '📚', label: 'Learn continuously' },
+  { value: 'grow', emoji: '💡', label: 'Grow as a person' },
+  { value: 'productive', emoji: '⚡', label: 'Be more productive' },
 ];
 
 export default function GoalsScreen() {
@@ -32,31 +31,41 @@ export default function GoalsScreen() {
     haptics.light();
     try {
       await saveStep(4, { goal: selected });
-      updateUser({ onboardingStep: 4 });
-      router.push('/onboarding/frequency');
     } catch {
-      // Error handled in store
+      // Continue anyway if save fails
     }
+    updateUser({ onboardingStep: 4 });
+    router.push('/onboarding/frequency');
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <OnboardingProgressBar step={4} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text variant="h2">Quel est ton objectif ?</Text>
-        <Text variant="body" color="secondary" style={{ marginTop: spacing.sm }}>
-          On adaptera les quiz pour toi.
+        <Text variant="h2" style={styles.title}>What's your goal?</Text>
+        <Text variant="body" color="secondary" style={styles.subtitle}>
+          We'll tailor quizzes for you.
         </Text>
 
-        <View style={styles.cards}>
+        <View style={styles.grid}>
           {GOAL_OPTIONS.map((goal) => (
-            <SelectCard
+            <Pressable
               key={goal.value}
-              emoji={goal.emoji}
-              label={goal.label}
-              selected={selected === goal.value}
-              onPress={() => setSelected(goal.value)}
-            />
+              onPress={() => {
+                haptics.selection();
+                setSelected(goal.value);
+              }}
+              style={[styles.gridCard, selected === goal.value && styles.gridCardSelected]}
+            >
+              <Text style={styles.emoji}>{goal.emoji}</Text>
+              <Text
+                variant="body"
+                weight="medium"
+                style={[styles.label, selected === goal.value && styles.labelSelected]}
+              >
+                {goal.label}
+              </Text>
+            </Pressable>
           ))}
         </View>
 
@@ -67,7 +76,7 @@ export default function GoalsScreen() {
           disabled={!selected}
           loading={isSaving}
         >
-          Continuer
+          Continue
         </Button>
       </ScrollView>
     </SafeAreaView>
@@ -84,8 +93,44 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xl,
     paddingBottom: spacing.xxl,
   },
-  cards: {
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.md,
-    marginVertical: spacing.xl,
+    marginBottom: spacing.xl,
+  },
+  gridCard: {
+    width: '47%',
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  gridCardSelected: {
+    borderColor: colors.accent,
+    backgroundColor: feedback.selected.background,
+  },
+  emoji: {
+    fontSize: 40,
+    lineHeight: 50,
+  },
+  label: {
+    textAlign: 'center',
+  },
+  labelSelected: {
+    color: colors.accent,
+  },
+  title: {
+    textAlign: 'left',
+  },
+  subtitle: {
+    textAlign: 'left',
+    marginTop: spacing.xs,
+    marginBottom: spacing.xl,
   },
 });

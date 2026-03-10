@@ -19,6 +19,8 @@ interface QuizGenerationResult {
   questions: GeneratedQuestion[];
   isEducational: boolean;
   rejectionReason?: string;
+  creatorContext?: string;
+  contextCues?: string[];
 }
 
 // Maximum tokens to send to LLM (roughly 4 chars per token)
@@ -168,8 +170,8 @@ export async function generateQuizFromTranscript(
   // Use first chunk for quality assessment, all chunks for questions
   const assessmentChunk = chunks[0];
 
-  // Assess content topics (very permissive - almost all content can have quiz questions)
-  const assessmentPrompt = `Analyse cette transcription de ${creatorContext} et identifie les sujets principaux abordés.
+  // Assess content topics and filter doomscrolling content
+  const assessmentPrompt = `Analyse cette transcription de ${creatorContext} et évalue sa pertinence pédagogique.
 
 Titre: "${contentTitle}"
 
@@ -178,17 +180,23 @@ Extrait de la transcription:
 ${assessmentChunk.substring(0, 3000)}
 """
 
-Sois TRÈS permissif. TOUT contenu contenant des idées, concepts, histoires, opinions, conseils ou informations peut servir à générer des questions de quiz.
+RÈGLES D'ÉVALUATION (isEducational) :
+1. Accepte le contenu s'il contient des idées, concepts, histoires, opinions argumentées, conseils ou informations constructives.
+2. REJETTE le contenu (isEducational: false) s'il s'agit de musique pure, de silence, ou de contenu inintelligible.
+3. REJETTE le contenu (isEducational: false) s'il s'agit de pur "doomscrolling" : contenu exclusivement anxiogène, sensationnaliste, ou polémique sans aucune valeur d'apprentissage ou de réflexion constructive.
 
-Rejette UNIQUEMENT si le contenu est de la musique pure, du silence, ou complètement inintelligible.
+EXTRACTION DU CONTEXTE (contextCues) :
+Identifie 1 à 3 éléments de contexte spécifiques à cet extrait (une anecdote marquante, un détail visuel décrit, le ton du créateur, ou un exemple précis). Cela servira à réactiver la mémoire contextuelle de l'utilisateur.
 
 Pour chaque sujet identifié, précise le niveau de complexité (basique, intermédiaire, avancé).
 
-Réponds en JSON uniquement:
+Réponds en JSON uniquement selon cette structure :
 {
-  "isEducational": true,
-  "reason": "Brève description du contenu",
+  "isEducational": true/false,
+  "isDoomscrolling": true/false,
+  "reason": "Brève description justifiant le choix éducatif et le rejet si doomscrolling",
   "mainTopics": ["sujet1", "sujet2", "sujet3"],
+  "contextCues": ["indice contextuel 1", "indice contextuel 2"],
   "complexity": "basique|intermédiaire|avancé",
   "contentStyle": "explicatif|narratif|conversationnel|argumentatif"
 }`;
@@ -197,7 +205,7 @@ Réponds en JSON uniquement:
     messages: [
       {
         role: 'system',
-        content: 'Tu es un analyste de contenu pédagogique. Sois très permissif - la plupart des contenus peuvent générer des questions de quiz intéressantes. Identifie précisément les sujets et le niveau de complexité. Réponds uniquement en JSON valide.',
+        content: 'Tu es un analyste de contenu cognitif et pédagogique. Ton but est d\'évaluer le potentiel d\'apprentissage d\'un contenu, tout en protégeant la charge cognitive de l\'utilisateur. Identifie les sujets, le niveau de complexité, et extrais le contexte spécifique. Réponds uniquement en JSON valide.',
       },
       {
         role: 'user',
@@ -208,14 +216,16 @@ Réponds en JSON uniquement:
     jsonMode: true,
   }));
 
-  const assessment = JSON.parse(assessmentResponse.content || '{ "isEducational": true, "mainTopics": [] }');
+  const assessment = JSON.parse(assessmentResponse.content || '{ "isEducational": true, "isDoomscrolling": false, "mainTopics": [], "contextCues": [] }');
 
-  // Almost never reject - only if explicitly marked as not educational AND has a strong reason
-  if (assessment.isEducational === false && assessment.reason?.toLowerCase().includes('unintelligible')) {
+  // Reject if not educational OR if pure doomscrolling content
+  if (assessment.isEducational === false || assessment.isDoomscrolling === true) {
     return {
       questions: [],
       isEducational: false,
       rejectionReason: assessment.reason || 'Content not suitable for quiz',
+      creatorContext,
+      contextCues: assessment.contextCues || [],
     };
   }
 
@@ -234,9 +244,16 @@ Réponds en JSON uniquement:
   // Accumulate all question texts (existing + newly generated) for inter-chunk anti-repetition
   const allGeneratedQuestionTexts: string[] = [...existingQuestions];
 
+  // Extract context cues for self-reference effect
+  const contextCues = assessment.contextCues || [];
+  const contextCuesStr = contextCues.length > 0 ? contextCues.join(', ') : 'aucun indice contextuel disponible';
+
   for (let i = 0; i < distribution.length; i++) {
     const chunk = chunks[i];
     const questionsNeeded = distribution[i];
+
+    // Track if this is the first question batch (for anchoring vs fluidity)
+    const isFirstBatch = allQuestions.length === 0;
 
     // Build anti-repetition block dynamically (includes questions from previous chunks)
     const dynamicAntiRepetitionBlock = allGeneratedQuestionTexts.length > 0
@@ -248,58 +265,21 @@ Réponds en JSON uniquement:
 Titre: "${contentTitle}"
 Sujets principaux: ${assessment.mainTopics?.join(', ') || 'Culture generale'}
 Style du contenu: ${assessment.contentStyle || 'explicatif'}
+${isFirstBatch ? `\nCONTEXTE DE L'ANCRAGE (pour la question 1) : C'est le PREMIER lot de questions. La question 1 doit utiliser l'ancrage fort.` : `\nCONTEXTE DE FLUIDITE : Ce n'est PAS le premier lot. Toutes les questions doivent etre directes et fluides (pas d'ancrage).`}
 
 Contenu source:
 """
 ${chunk}
 """
 ${dynamicAntiRepetitionBlock}
-OBJECTIF PEDAGOGIQUE:
-Les questions doivent tester les CONNAISSANCES ACQUISES par l'utilisateur (concepts, faits, mecanismes, applications).
-L'utilisateur doit pouvoir repondre grace a ce qu'il a APPRIS, pas en se souvenant des mots exacts du contenu.
-
-FORMULATION DES QUESTIONS - CONTEXTUALISATION OBLIGATOIRE:
-- Chaque question DOIT mentionner la source: "${creatorContext}"
-- CORRECT: "Dans ${creatorContext}, quel concept est explique concernant [sujet] ?"
-- CORRECT: "Selon ${creatorContext}, pourquoi [phenomene] se produit-il ?"
-- CORRECT: "D'apres ${creatorContext}, comment fonctionne [mecanisme] ?"
-- CORRECT: "Quelle est la difference entre X et Y, telle que presentee dans ${creatorContext} ?"
-- INTERDIT: "Quel terme est utilise pour...", "Quelle expression est employee..."
-- INTERDIT: Toute reference a la transcription en tant que telle
-- La question doit rester une question de CONNAISSANCE, pas de memorisation de mots
-
-PRINCIPES PEDAGOGIQUES (taxonomie de Bloom) - Varie les niveaux cognitifs:
-- Comprendre: "Qu'est-ce que [concept] ?" / "Quel est le lien entre X et Y ?"
-- Appliquer: "Dans quelle situation utiliserait-on [concept] ?" / "Comment appliquer [idee] a [contexte] ?"
-- Analyser: "Pourquoi [fait] est-il important ?" / "Quelle est la cause principale de [phenomene] ?"
-
-VARIATION OBLIGATOIRE:
-- Chaque question doit aborder un ANGLE DIFFERENT (pas deux questions sur le meme sous-concept)
-- Varier les niveaux de difficulte (au moins 2 niveaux differents)
-- Varier les types: definition, mecanisme, application, comparaison, cause-effet
-
-REGLES POUR LES DISTRACTEURS (options incorrectes):
-- Chaque distracteur doit etre PLAUSIBLE (pas absurde ni evident)
-- Utiliser des erreurs de comprehension courantes comme distracteurs
-- Les distracteurs ne doivent PAS etre partiellement corrects
-- Eviter les patterns previsibles (option la plus longue = correcte, etc.)
-- Varier la position de la bonne reponse (pas toujours A ou B)
-
-REGLES POUR LES QUESTIONS:
-1. Chaque question teste UN concept precis
-2. La question doit etre impossible a repondre correctement sans avoir compris le sujet
-3. 4 options exactement (A, B, C, D), une seule correcte
-4. L'explication doit dire POURQUOI la bonne reponse est correcte ET pourquoi les autres ne le sont pas (1-2 phrases)
-5. Tout en FRANCAIS
-
 Reponds uniquement en JSON:
 {
   "questions": [
     {
-      "question": "Question claire et specifique ?",
+      "question": "Question (voir regles de contextualisation dans le system prompt)",
       "options": ["A) Option", "B) Option", "C) Option", "D) Option"],
       "correctAnswer": "A",
-      "explanation": "Explication: pourquoi c'est correct et pourquoi les autres options ne le sont pas.",
+      "explanation": "Explication avec tutoiement...",
       "bloomLevel": "comprendre|appliquer|analyser"
     }
   ]
@@ -310,17 +290,48 @@ Reponds uniquement en JSON:
         messages: [
           {
             role: 'system',
-            content: `Tu es un concepteur pedagogique expert en creation de quiz. Tu crees des questions qui testent les CONNAISSANCES REELLES acquises, comme dans un examen universitaire ou un manuel scolaire.
+            content: `Tu es un concepteur pedagogique expert en neurosciences cognitives. Ton objectif est de generer des questions a choix multiples (QCM) qui forcent le "rappel actif" en utilisant l'Effet de Reference a Soi.
 
-REGLE DE CONTEXTUALISATION: Chaque question DOIT mentionner le createur et la plateforme source pour creer un effet auto-referentiel. Utilise "${creatorContext}" comme reference dans chaque question. Les questions testent des CONNAISSANCES REELLES mais ancrees dans le contexte de consommation de l'utilisateur.
+Tu as acces aux elements suivants :
+- La source : ${creatorContext}
+- Les indices contextuels (anecdotes, visuels, ton) : ${contextCuesStr}
+- La transcription du contenu.
 
-Principes scientifiques:
-- Testing effect: les questions renforcent la memorisation mieux que la relecture
-- Desirable difficulties: un niveau de difficulte optimal stimule l'apprentissage
-- Elaborative interrogation: demander "pourquoi" et "comment" ancre les connaissances
-- Transfer learning: les questions doivent permettre d'appliquer les connaissances dans d'autres contextes
+REGLE D'OR : CONTEXTUALISATION EVOLUTIVE (ANTI-SPAM)
+Pour eviter la lourdeur et la surcharge cognitive, la formulation de tes questions doit evoluer :
 
-Genere des questions en FRANCAIS qui testent la comprehension profonde et l'acquisition de connaissances. Reponds uniquement en JSON valide.`,
+- POUR LA QUESTION 1 UNIQUEMENT (L'Ancrage) :
+  Tu dois faire un ancrage fort. Utilise le tutoiement ("tu"), mentionne la source, et integre un element des indices contextuels.
+  -> Modele exige Q1 : "Dans le contenu de ${creatorContext} que tu as enregistre, au moment ou [inserer un element des indices contextuels], quel concept etait explique concernant [sujet] ?"
+
+- POUR LES QUESTIONS SUIVANTES (Fluidite) :
+  Ne mentionne PLUS JAMAIS le createur, la video, ou le fait que l'utilisateur l'a enregistre. Garde UNIQUEMENT le tutoiement ("tu", "ton") pour maintenir l'engagement personnel, mais pose la question de maniere directe et naturelle.
+  -> Modele exige Q2 et suivantes : "Toujours sur ce sujet, pourquoi [phenomene] se produit-il ?" ou "Comment appliquerais-tu ce concept a..."
+
+- INTERDIT POUR TOUTES LES QUESTIONS: Toute reference a la transcription en tant que telle ("Dans la transcription...").
+
+PRINCIPES PEDAGOGIQUES (Taxonomie de Bloom) - Varie les niveaux cognitifs:
+- Comprendre: "Qu'est-ce que [concept] ?" / "Quel est le lien entre X et Y ?"
+- Appliquer: "Dans quelle situation utiliserais-tu [concept] ?"
+- Analyser: "Pourquoi [fait] est-il important ?"
+
+VARIATION OBLIGATOIRE:
+- Chaque question doit aborder un ANGLE DIFFERENT (pas deux questions sur le meme sous-concept).
+- Varier les niveaux de difficulte (au moins 2 niveaux differents).
+
+REGLES POUR LES DISTRACTEURS (options incorrectes):
+- Chaque distracteur doit etre PLAUSIBLE (pas absurde ni evident).
+- Utiliser des erreurs de comprehension courantes comme distracteurs.
+- Les distracteurs ne doivent PAS etre partiellement corrects.
+- Varier la position de la bonne reponse.
+
+REGLES FINALES POUR LES QUESTIONS:
+1. La question doit etre impossible a repondre correctement sans avoir compris le sujet.
+2. 4 options exactement (A, B, C, D), une seule correcte.
+3. L'explication doit dire POURQUOI la bonne reponse est correcte ET pourquoi les autres ne le sont pas (1-2 phrases). L'explication doit utiliser le tutoiement.
+4. Tout en FRANCAIS.
+
+Reponds uniquement en JSON valide.`,
           },
           {
             role: 'user',
@@ -369,89 +380,109 @@ Genere des questions en FRANCAIS qui testent la comprehension profonde et l'acqu
   return {
     questions: finalQuestions,
     isEducational: true,
+    creatorContext,
+    contextCues: assessment.contextCues || [],
   };
 }
 
 /**
- * Generate study memo from transcript
+ * Generate study carousel from transcript (carousel format for mobile)
  */
 export async function generateMemoFromTranscript(
   transcript: string,
   contentTitle: string,
-  tags: string[]
+  tags: string[],
+  creatorContext?: string,
+  contextCues?: string[]
 ): Promise<string> {
   const transcriptText = transcript.slice(0, 8000);
   const tagsStr = tags.length > 0 ? tags.join(', ') : '';
+  const contextCuesStr = contextCues && contextCues.length > 0 ? contextCues.join(', ') : 'aucun indice contextuel disponible';
+  const creatorCtx = creatorContext || 'ce contenu';
 
-  const systemPrompt = `Tu es un concepteur pedagogique expert en sciences cognitives. Tu transformes des transcriptions de videos/podcasts en memos d'etude optimises pour la retention a long terme.
+  const systemPrompt = `Tu es un concepteur pedagogique expert en neurosciences cognitives. Tu transformes des transcriptions de videos/podcasts en CARROUSELS D'ETUDE optimises pour la retention a long terme sur mobile.
 
 PRINCIPES SCIENTIFIQUES APPLIQUES:
-- Technique de Feynman: explique chaque concept comme si l'apprenant avait 12 ans, PUIS introduis le terme technique. Jamais l'inverse.
-- Chunking (Miller 1956): maximum 3-5 sections thematiques. Chaque section = UNE idee coherente.
-- Elaborative interrogation (Dunlosky 2013): chaque section inclut un "Pourquoi c'est important" ou "Comment ca marche" pour ancrer la connaissance.
-- Exemples concrets: chaque concept abstrait est illustre par un exemple concret tire du contenu (anecdote, cas, chiffre mentionne par le createur).
-- Schema theory (Piaget): relie chaque concept nouveau a quelque chose de familier. Utilise des analogies: "C'est comme..." / "Contrairement a ce qu'on croit..."
-- Dual coding (Paivio 1971): utilise des tableaux comparatifs quand 2+ elements sont compares. Utilise des hierarchies visuelles (titres > sous-points > details).
-- Prioritisation (Wozniak regle #20): marque les 2-3 takeaways les plus importants avec un indicateur visuel.
+- Effet de Reference a Soi (Rogers, 1977) : L'information doit etre liee a l'utilisateur. Utilise le tutoiement ("tu", "ton"). Rappelle-lui pourquoi IL a trouve ce contenu interessant.
+- Microlearning & Charge Cognitive (Sweller, 1988) : Puisque le format est un CARROUSEL, la regle absolue est : 1 Slide = 1 Idee = 40 mots maximum. Ne surcharge jamais une slide.
+- Technique de Feynman : Explique chaque concept comme si tu parlais a un adolescent, PUIS introduis le terme technique.
+- Meaningfulness (Ebbinghaus, 1885) : Relie les concepts abstraits a la vie quotidienne d'un jeune adulte (18-25 ans) ou a l'anecdote de la video.
 
-STRUCTURE DU MEMO:
-1. **L'ESSENTIEL** (2-3 phrases max)
-   - Le takeaway #1 que l'apprenant doit retenir meme s'il ne lit rien d'autre
-   - Formule comme une reponse a "Qu'est-ce que j'ai appris ?"
+STRUCTURE DU CARROUSEL (Format de sortie exige) :
+Tu dois structurer ta reponse exactement selon ces Slides :
 
-2. **CONCEPTS CLES** (3-5 sections)
-   Chaque section suit ce pattern:
-   - **[Nom du concept]** — explication simple en 1-2 phrases (Feynman)
-   - Pourquoi/Comment: 1 phrase d'elaboration (le mecanisme ou la raison)
-   - Exemple: 1 exemple concret tire du contenu ou une analogie
-   - Si pertinent: "Contrairement a ce qu'on croit, ..." (surprise = meilleur encodage)
+[SLIDE 1 : LE DECLIC]
+- Objectif : Le "Takeaway" principal combine au contexte de l'utilisateur.
+- Format : "Dans ce contenu de ${creatorCtx} ou [inserer un element des indices contextuels], voici ce que tu as voulu retenir :" + 1 phrase choc resumant l'essentiel.
 
-3. **CONNEXIONS** (1-2 phrases)
-   - Relie les idees entre elles OU a des connaissances generales
-   - Format: "Ce qui est interessant, c'est que [concept A] rejoint [concept B] parce que..."
+[SLIDE 2 a 4 : LES CONCEPTS CLES] (Genere 2 a 3 slides maximum ici)
+- Objectif : 1 Slide = 1 Concept (Chunking).
+- Format :
+  * [Emoji] **[Nom du Concept]**
+  * Explication simple (Feynman) en 1 phrase.
+  * "En pratique :" ou "C'est comme :" suivi d'une analogie ou d'un exemple tire du contenu.
 
-CONTRAINTES STRICTES:
-- 300-400 mots (assez pour etre utile, assez court pour etre relu)
-- Entierement en francais
-- Langage SIMPLE et DIRECT — pas de jargon sans explication
-- Chaque point est auto-suffisant (comprehensible sans lire le reste)
-- PAS de formulations passives ("Il est interessant de noter que..."). Sois direct.
-- PAS de meta-commentaires ("Cette video explique..."). Le memo parle des CONNAISSANCES, pas du format.
-- Utilise les histoires, anecdotes et exemples du createur — ce sont des ancres emotionnelles puissantes pour la memoire.
-- Si le contenu compare des choses, utilise un tableau markdown.`;
+[SLIDE 5 : LA CONNEXION]
+- Objectif : Relier ce savoir a la vie de l'utilisateur (Schema theory).
+- Format : "Pourquoi c'est important pour toi :" + 1 phrase expliquant comment utiliser cette information dans sa vie quotidienne, ses etudes ou sa culture generale.
 
-  const userPrompt = `Titre: "${contentTitle}"
-${tagsStr ? `Themes: ${tagsStr}` : ''}
+CONTRAINTES STRICTES :
+- Langage SIMPLE, DIRECT et CONVERSATIONNEL.
+- PAS de jargon sans explication.
+- PAS de formulations scolaires ou passives ("Il est interessant de noter que..."). Sois percutant.
+- Genere UNIQUEMENT le texte des slides, separe par des balises claires (ex: --- SLIDE 1 ---).
+- Tout en FRANCAIS.`;
 
-Transcription:
+  const userPrompt = `Titre original : "${contentTitle}"
+Source : ${creatorCtx}
+Indices contextuels (Context Cues) : ${contextCuesStr}
+Themes : ${tagsStr ? tagsStr : 'Culture generale'}
+
+Transcription :
+"""
 ${transcriptText}
+"""
 
-Genere un memo d'etude structure.`;
+Genere le carrousel d'etude selon les regles strictes.`;
 
   return generateText(userPrompt, { system: systemPrompt, temperature: 0.5 });
 }
 
 /**
- * Generate a concise synopsis from transcription + description
+ * Generate a cognitive synopsis from transcription + description (curiosity gap trigger)
  */
 export async function generateSynopsis(
   transcript: string,
   description: string | null,
-  contentTitle: string
+  contentTitle: string,
+  creatorContext?: string,
+  contextCues?: string[]
 ): Promise<string> {
   const transcriptText = transcript.slice(0, 6000);
   const descriptionText = description?.slice(0, 500) || '';
+  const creatorCtx = creatorContext || 'ce contenu';
+  const contextCuesStr = contextCues && contextCues.length > 0 ? contextCues.join(', ') : 'aucun indice contextuel disponible';
 
-  const systemPrompt = `Tu es un rédacteur expert. Tu génères des synopsis très concis (1-2 phrases courtes) qui résument ce qu'un utilisateur va apprendre.
+  const systemPrompt = `Tu es un expert en neuro-pedagogie et en copywriting pour l'application Ankora. Tu generes des synopsis ultra-concis (2 phrases) qui agissent comme des declencheurs cognitifs pour motiver l'utilisateur a reviser.
 
-Règles:
-- Maximum 2 phrases COURTES (40 mots max au total)
-- Parle du CONTENU et des CONNAISSANCES, pas de l'auteur ni du format
-- Pas de "Cette vidéo parle de...", "Découvrez...", "L'auteur explique..."
-- Style direct et factuel
-- Entièrement en français`;
+Regles et Principes Scientifiques :
+- Effet de Reference a Soi : Utilise obligatoirement le tutoiement ("tu", "ton"). Parle directement a l'utilisateur de *son* choix d'avoir sauvegarde ce contenu.
+- Ecart de Curiosite (Curiosity Gap) : Ne donne JAMAIS la reponse factuelle finale. Tease le concept, le "pourquoi" ou le mecanisme que l'utilisateur va devoir maitriser.
+- Utilite (Meaningfulness) : Fais comprendre en quoi cette connaissance lui est utile dans sa vie ou pour sa culture.
+
+Structure Exigee (Exactement 2 phrases) :
+- Phrase 1 (L'Ancrage) : Rappelle son interaction en integrant la source (${creatorCtx}) et un indice visuel ou contextuel.
+- Phrase 2 (Le Hook) : Formule la promesse de connaissance sans la devoiler.
+
+Contraintes STRICTES :
+- Maximum 2 phrases COURTES (40 mots max au total).
+- AUCUN emoji (interdiction absolue).
+- Pas de formulations passives comme "Cette video parle de...", "Decouvrez...", "L'auteur explique...".
+- Entierement en francais.`;
 
   const userPrompt = `Titre: "${contentTitle}"
+Source : ${creatorCtx}
+Indices contextuels (Context Cues) : ${contextCuesStr}
 ${descriptionText ? `Description originale: "${descriptionText}"` : ''}
 
 Transcription (extrait):
@@ -459,7 +490,7 @@ Transcription (extrait):
 ${transcriptText}
 """
 
-Génère un synopsis de 1-2 phrases courtes (40 mots max) résumant les connaissances clés.`;
+Genere le synopsis cognitif (2 phrases courtes, 40 mots max, 0 emoji) selon les regles exigees.`;
 
   return generateText(userPrompt, { system: systemPrompt, temperature: 0.5 });
 }
@@ -496,34 +527,46 @@ export async function generateSynthesisQuestions(
       .map((cm, i) => `[Source ${i + 1}: "${cm.title}"]\n${cm.memo.substring(0, 2000)}`)
       .join('\n\n---\n\n');
 
-    const systemPrompt = `Tu es un concepteur pedagogique expert specialise dans les questions de SYNTHESE inter-contenus.
+    const systemPrompt = `Tu es un expert en neuro-pedagogie specialise dans la theorie des schemas cognitifs (Schema Theory) pour l'application Ankora. Ton role est de creer des questions de SYNTHESE inter-contenus qui forcent l'utilisateur a connecter differentes informations qu'IL a lui-meme selectionnees, creant ainsi des reseaux neuronaux durables.
 
-Regles:
-- Chaque question DOIT necessiter la comprehension d'AU MOINS 2 sources differentes
-- Les questions doivent relier, comparer ou connecter des idees provenant de sources distinctes
-- Types de synthese: comparaison, cause-effet, generalisation, contradiction, complementarite
-- 4 options (A-D), une seule correcte
-- Les distracteurs doivent etre plausibles -- ils pourraient etre vrais si on ne connait qu'UNE seule source
-- L'explication doit nommer les sources concernees
-- Tout en FRANCAIS
-- Reponds UNIQUEMENT en JSON valide`;
+REGLES DE CONTEXTUALISATION (Effet de Reference a Soi) :
+- Utilise obligatoirement le tutoiement ("tu", "tes contenus").
+- Rappelle a l'utilisateur que ce sont SES interets qui se croisent.
+- Exemple de formulation : "En reliant ce que tu as appris dans [Source 1] et dans [Source 2], quelle conclusion peux-tu tirer sur..." ou "Si tu combines le concept vu dans [Source 1] avec le mecanisme de [Source 2]..."
+
+REGLES PEDAGOGIQUES ET COGNITIVES :
+- Chaque question DOIT necessiter la comprehension d'AU MOINS 2 sources differentes parmi celles fournies.
+- Les questions doivent relier, comparer ou connecter des idees (comparaison, cause-effet, generalisation, contradiction, complementarite).
+- 4 options (A-D), une seule correcte.
+- Difficulte Desirable : Les distracteurs (mauvaises reponses) doivent etre tres plausibles -- ils doivent sembler parfaitement logiques si l'utilisateur ne se souvient que d'UNE seule des deux sources.
+
+REGLE POUR L'EXPLICATION :
+- L'explication doit etre formulee comme un feedback de coach ("Exactement !", "Et non, car...").
+- Elle doit obligatoirement nommer les sources concernees et expliquer clairement la mecanique qui les relie.
+- PAS d'emoji. Tout en FRANCAIS.
+- Style direct, clair, evitant la surcharge cognitive.
+
+Reponds UNIQUEMENT en JSON valide.`;
 
     const userPrompt = `Theme: "${themeName}"
 Nombre de sources: ${contentMemos.length}
 
+Contenus (Memos) :
+"""
 ${memosText}
+"""
 
-Genere ${maxQuestions} questions de synthese qui connectent les idees de plusieurs sources.
+Genere EXACTEMENT ${maxQuestions} questions de synthese (0 emoji) qui connectent les idees de plusieurs sources selon les regles exigees. Reponds UNIQUEMENT en JSON valide.
 
 Format JSON attendu:
 {
   "questions": [
     {
-      "question": "Question de synthese claire ?",
+      "question": "Question de synthese claire, tutoyant l'utilisateur et nommant les sources ?",
       "options": ["A) Option", "B) Option", "C) Option", "D) Option"],
-      "correctAnswer": "B",
-      "explanation": "Explication mentionnant les sources...",
-      "sourceIndices": [1, 3]
+      "correctAnswer": "A",
+      "explanation": "Explication directe et valorisante, mentionnant explicitement comment les sources se completent...",
+      "sourceIndices": [1, 2]
     }
   ]
 }`;
@@ -676,29 +719,31 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
     // Generate memo + synopsis in parallel (non-blocking, after quiz creation)
     const postProcessing: Promise<void>[] = [];
 
-    // Memo generation (stored on Content, not in transcript segments)
+    // Memo (carousel) generation with context cues for self-reference effect
     postProcessing.push(
       (async () => {
-        log.debug({ contentId, title: content.title }, 'Generating memo');
+        log.debug({ contentId, title: content.title }, 'Generating carousel memo');
         try {
           const tagNames = content.tags.map(t => t.name);
           const memo = await generateMemoFromTranscript(
             content.transcript!.text,
             content.title,
-            tagNames
+            tagNames,
+            result.creatorContext,
+            result.contextCues || []
           );
           await prisma.content.update({
             where: { id: contentId },
             data: { memo, memoGeneratedAt: new Date() },
           });
-          log.info({ contentId }, 'Memo generated and cached');
+          log.info({ contentId }, 'Carousel memo generated and cached');
         } catch (memoError) {
-          log.error({ err: memoError, contentId }, 'Memo generation failed');
+          log.error({ err: memoError, contentId }, 'Carousel memo generation failed');
         }
       })()
     );
 
-    // Synopsis generation
+    // Synopsis (cognitive trigger) generation with context cues
     if (!content.synopsis) {
       postProcessing.push(
         (async () => {
@@ -706,13 +751,15 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
             const synopsis = await generateSynopsis(
               content.transcript!.text,
               content.description,
-              content.title
+              content.title,
+              result.creatorContext,
+              result.contextCues || []
             );
             await prisma.content.update({
               where: { id: contentId },
               data: { synopsis },
             });
-            log.info({ contentId }, 'Synopsis generated');
+            log.info({ contentId }, 'Cognitive synopsis generated');
           } catch (synopsisError) {
             log.error({ err: synopsisError, contentId }, 'Synopsis generation failed');
           }

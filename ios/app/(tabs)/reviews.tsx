@@ -135,7 +135,7 @@ export default function ReviewsScreen() {
   const renderUnifiedHeader = () => (
     <View style={[styles.unifiedHeader, { paddingTop: topInset }]}>
       {/* Solid background */}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} pointerEvents="none" />
 
       {/* Search bar */}
       <View style={styles.searchContainer}>

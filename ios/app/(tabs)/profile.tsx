@@ -2,14 +2,15 @@
  * Profile Tab - User info, OAuth platforms, Settings
  */
 
-import { useState } from 'react';
-import { View, ScrollView, StyleSheet, Pressable, Alert } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import { useState, useRef } from 'react';
+import { View, ScrollView, StyleSheet, Pressable, Alert, TextInput, Modal, KeyboardAvoidingView, Platform } from 'react-native';
+import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronRight, Crown, Wrench } from 'lucide-react-native';
+import { ChevronRight, Crown, Wrench, LogOut, CreditCard, RotateCcw, Info } from 'lucide-react-native';
+import Constants from 'expo-constants';
 import { Text } from '../../components/ui';
 import { GlassCard } from '../../components/glass/GlassCard';
 import { PlatformIcon } from '../../components/icons';
@@ -47,10 +48,51 @@ export default function ProfileScreen() {
   const [loadingPlatform, setLoadingPlatform] = useState<string | null>(null);
   const [restoringPurchases, setRestoringPurchases] = useState(false);
 
+  // Name editing drawer state
+  const [showNameDrawer, setShowNameDrawer] = useState(false);
+  const [editedName, setEditedName] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  const nameInputRef = useRef<TextInput>(null);
+
   // Dev tools state (only in __DEV__)
   const [switchingPlan, setSwitchingPlan] = useState(false);
   const plans = ['FREE', 'PRO', 'LIFETIME'] as const;
   const currentPlan = user?.plan || 'FREE';
+
+  const handleOpenNameDrawer = () => {
+    haptics.light();
+    setEditedName(user?.name || '');
+    setShowNameDrawer(true);
+    setTimeout(() => nameInputRef.current?.focus(), 100);
+  };
+
+  const handleCloseNameDrawer = () => {
+    setShowNameDrawer(false);
+    setEditedName('');
+  };
+
+  const handleSaveName = async () => {
+    const trimmedName = editedName.trim();
+    if (!trimmedName || trimmedName === user?.name) {
+      handleCloseNameDrawer();
+      return;
+    }
+
+    setSavingName(true);
+    try {
+      const { data } = await api.patch('/users/profile', { name: trimmedName });
+      useAuthStore.setState((state) => ({
+        user: state.user ? { ...state.user, name: data.name } : null,
+      }));
+      haptics.success();
+      handleCloseNameDrawer();
+    } catch (error) {
+      haptics.error();
+      Alert.alert('Erreur', 'Impossible de modifier le nom');
+    } finally {
+      setSavingName(false);
+    }
+  };
 
   const handleSwitchPlan = async (plan: string) => {
     if (plan === currentPlan || switchingPlan) return;
@@ -214,116 +256,128 @@ export default function ProfileScreen() {
   const displayName = user?.name || user?.email?.split('@')[0] || 'Utilisateur';
   const initials = displayName.slice(0, 2).toUpperCase();
 
+  const appVersion = Constants.expoConfig?.version || '1.0.0';
+
   return (
     <Animated.View entering={FadeIn.duration(200)} style={{ flex: 1, paddingTop: topInset, backgroundColor: colors.background }}>
     <ScrollView style={styles.scrollView} contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.lg }]} showsVerticalScrollIndicator={false}>
-      {/* User Info */}
-      <GlassCard padding="lg" style={styles.userCard}>
-        <View style={styles.userRow}>
+
+      {/* User Header - Avatar, Name, Email */}
+      <View style={styles.userHeader}>
+        <Pressable onPress={handleOpenNameDrawer}>
           <View style={styles.avatar}>
-            <Text variant="h3" style={styles.avatarText}>{initials}</Text>
+            <Text variant="h2" style={styles.avatarText}>{initials}</Text>
           </View>
-          <View style={styles.userInfo}>
-            <Text variant="body" weight="medium">
-              {displayName}
-            </Text>
-            <Text variant="caption" color="secondary">
-              {user?.email || ''}
-            </Text>
-            <View style={styles.planBadgeRow}>
-              {isProUser && <Crown size={12} color={colors.accent} strokeWidth={2} />}
-              <Text variant="label" color={isProUser ? undefined : 'secondary'} style={isProUser ? styles.planBadgePro : styles.planBadge}>
-                {isProUser ? 'PRO' : 'FREE'}
-              </Text>
-            </View>
+        </Pressable>
+
+        <Pressable onPress={handleOpenNameDrawer}>
+          <Text variant="h3" weight="semibold" style={styles.userName}>
+            {displayName}
+          </Text>
+        </Pressable>
+
+        <Text variant="caption" color="secondary" style={styles.userEmail}>
+          {user?.email || ''}
+        </Text>
+      </View>
+
+      {/* Plan Card */}
+      <GlassCard padding="md" style={styles.planCard}>
+        <Pressable style={styles.planCardContent} onPress={isProUser ? handleManageSubscription : handleShowPaywall}>
+          <View style={styles.planIconContainer}>
+            <Crown size={20} color={isProUser ? colors.accent : colors.textSecondary} strokeWidth={2} />
           </View>
-          {!isProUser && (
-            <Pressable style={styles.upgradeButton} onPress={handleShowPaywall}>
-              <Text variant="caption" weight="medium" style={styles.upgradeText}>
-                Upgrade
-              </Text>
-            </Pressable>
-          )}
-        </View>
+          <Text variant="body" weight="medium" style={styles.planCardText}>
+            {isProUser ? 'Pro' : 'Gratuit'}
+          </Text>
+          <ChevronRight size={18} color={colors.textSecondary} strokeWidth={1.75} />
+        </Pressable>
       </GlassCard>
 
       {/* Connected Platforms */}
-      <View style={styles.section}>
-        <Text variant="h3" style={styles.sectionTitle}>
-          Plateformes connectées
-        </Text>
-        <GlassCard padding="none">
-          {platforms.map((platform, index) => {
-            const isConnected = platform.status !== null;
-            const isPlatformLoading = loadingPlatform === platform.id;
-            return (
-              <Pressable
-                key={platform.id}
-                style={[styles.platformRow, index < platforms.length - 1 && styles.platformBorder]}
-                onPress={() => handlePlatformPress(platform.id, platform.name, isConnected)}
-                disabled={isPlatformLoading}
-              >
-                <View style={styles.platformIcon}>
-                  <PlatformIcon platform={platform.id} size={20} colored />
+      <GlassCard padding="none" style={styles.card}>
+        {platforms.map((platform, index) => {
+          const isConnected = platform.status !== null;
+          const isPlatformLoading = loadingPlatform === platform.id;
+          return (
+            <Pressable
+              key={platform.id}
+              style={[styles.row, index < platforms.length - 1 && styles.rowBorder]}
+              onPress={() => handlePlatformPress(platform.id, platform.name, isConnected)}
+              disabled={isPlatformLoading}
+            >
+              <View style={styles.rowIcon}>
+                <PlatformIcon platform={platform.id} size={20} colored />
+              </View>
+              <Text variant="body" style={styles.rowLabel}>
+                {platform.name}
+              </Text>
+              {isPlatformLoading ? (
+                <Text variant="caption" style={{ color: colors.text }}>...</Text>
+              ) : isConnected ? (
+                <View style={styles.connectedBadge}>
+                  <View style={styles.connectedDot} />
                 </View>
-                <Text variant="body" style={styles.platformName}>
-                  {platform.name}
-                </Text>
-                {isPlatformLoading ? (
-                  <Text variant="caption" color="secondary">
-                    ...
-                  </Text>
-                ) : isConnected ? (
-                  <Text variant="caption" weight="medium" style={styles.disconnectText}>
-                    Déconnecter
-                  </Text>
-                ) : (
-                  <Text variant="caption" color="secondary">
-                    Connecter
-                  </Text>
-                )}
-              </Pressable>
-            );
-          })}
-        </GlassCard>
-      </View>
+              ) : (
+                <View style={styles.connectedBadge}>
+                  <View style={styles.disconnectedDot} />
+                </View>
+              )}
+            </Pressable>
+          );
+        })}
+      </GlassCard>
 
       {/* Settings */}
-      <View style={styles.section}>
-        <Text variant="h3" style={styles.sectionTitle}>
-          Paramètres
+      <GlassCard padding="none" style={styles.card}>
+        <Pressable style={[styles.row, styles.rowBorder]} onPress={handleManageSubscription}>
+          <View style={styles.rowIcon}>
+            <CreditCard size={20} color={colors.textSecondary} strokeWidth={1.75} />
+          </View>
+          <Text variant="body" style={styles.rowLabel}>Abonnement</Text>
+          <ChevronRight size={18} color={colors.textSecondary} strokeWidth={1.75} />
+        </Pressable>
+        <Pressable
+          style={[styles.row, styles.rowBorder]}
+          onPress={handleRestorePurchases}
+          disabled={restoringPurchases}
+        >
+          <View style={styles.rowIcon}>
+            <RotateCcw size={20} color={colors.textSecondary} strokeWidth={1.75} />
+          </View>
+          <Text variant="body" style={styles.rowLabel}>
+            {restoringPurchases ? 'Restauration...' : 'Restaurer les achats'}
+          </Text>
+          <ChevronRight size={18} color={colors.textSecondary} strokeWidth={1.75} />
+        </Pressable>
+        <Pressable style={styles.row}>
+          <View style={styles.rowIcon}>
+            <Info size={20} color={colors.textSecondary} strokeWidth={1.75} />
+          </View>
+          <Text variant="body" style={styles.rowLabel}>À propos</Text>
+          <ChevronRight size={18} color={colors.textSecondary} strokeWidth={1.75} />
+        </Pressable>
+      </GlassCard>
+
+      {/* Logout */}
+      <Pressable style={styles.logoutButton} onPress={handleLogout}>
+        <LogOut size={20} color={colors.textSecondary} strokeWidth={1.75} />
+        <Text variant="body" color="secondary" style={styles.logoutLabel}>
+          Déconnexion
         </Text>
-        <GlassCard padding="none">
-          <Pressable style={[styles.settingsRow, styles.platformBorder]} onPress={handleManageSubscription}>
-            <Text variant="body">Abonnement</Text>
-            <ChevronRight size={16} color={colors.textSecondary} strokeWidth={1.75} />
-          </Pressable>
-          <Pressable
-            style={[styles.settingsRow, styles.platformBorder]}
-            onPress={handleRestorePurchases}
-            disabled={restoringPurchases}
-          >
-            <Text variant="body">{restoringPurchases ? 'Restauration...' : 'Restaurer les achats'}</Text>
-            <ChevronRight size={16} color={colors.textSecondary} strokeWidth={1.75} />
-          </Pressable>
-          <Pressable style={[styles.settingsRow, styles.platformBorder]}>
-            <Text variant="body">À propos</Text>
-            <ChevronRight size={16} color={colors.textSecondary} strokeWidth={1.75} />
-          </Pressable>
-          <Pressable style={styles.settingsRow} onPress={handleLogout}>
-            <Text variant="body" style={styles.logoutText}>
-              Déconnexion
-            </Text>
-          </Pressable>
-        </GlassCard>
-      </View>
+      </Pressable>
+
+      {/* Version */}
+      <Text variant="caption" color="secondary" style={styles.version}>
+        Version {appVersion}
+      </Text>
 
       {/* Dev Tools — only in development */}
       {__DEV__ && (
-        <View style={styles.section}>
+        <View style={styles.devSection}>
           <View style={styles.devHeader}>
             <Wrench size={14} color={colors.textSecondary} strokeWidth={2} />
-            <Text variant="h3" color="secondary" style={styles.devTitle}>
+            <Text variant="caption" color="secondary" style={styles.devTitle}>
               Dev Tools
             </Text>
           </View>
@@ -331,13 +385,13 @@ export default function ProfileScreen() {
             <Text variant="caption" color="secondary" style={styles.devLabel}>
               Plan actif (backend)
             </Text>
-            <View style={styles.planRow}>
+            <View style={styles.devPlanRow}>
               {plans.map((plan) => (
                 <Pressable
                   key={plan}
                   style={[
-                    styles.planChip,
-                    currentPlan === plan && styles.planChipActive,
+                    styles.devPlanChip,
+                    currentPlan === plan && styles.devPlanChipActive,
                   ]}
                   onPress={() => handleSwitchPlan(plan)}
                   disabled={switchingPlan}
@@ -345,7 +399,7 @@ export default function ProfileScreen() {
                   <Text
                     variant="caption"
                     weight={currentPlan === plan ? 'medium' : 'regular'}
-                    style={currentPlan === plan ? styles.planChipTextActive : styles.planChipText}
+                    style={currentPlan === plan ? styles.devPlanChipTextActive : styles.devPlanChipText}
                   >
                     {plan}
                   </Text>
@@ -356,6 +410,67 @@ export default function ProfileScreen() {
         </View>
       )}
     </ScrollView>
+
+      {/* Name Edit Drawer */}
+      <Modal
+        visible={showNameDrawer}
+        transparent
+        animationType="slide"
+        onRequestClose={handleCloseNameDrawer}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.drawerContainer}
+          keyboardVerticalOffset={0}
+        >
+          {/* Backdrop */}
+          <Pressable style={styles.drawerBackdrop} onPress={handleCloseNameDrawer} />
+
+          {/* Sheet */}
+          <View style={[styles.drawerSheet, { paddingBottom: spacing.lg }]}>
+            {/* Handle bar */}
+            <Pressable onPress={handleCloseNameDrawer} hitSlop={20}>
+              <View style={styles.drawerHandle} />
+            </Pressable>
+
+            <Text variant="h3" weight="semibold" style={styles.drawerTitle}>
+              Modifier le nom
+            </Text>
+
+            {/* Name input */}
+            <TextInput
+              ref={nameInputRef}
+              style={styles.drawerInput}
+              value={editedName}
+              onChangeText={setEditedName}
+              placeholder="Ton nom"
+              placeholderTextColor="rgba(0, 0, 0, 0.4)"
+              autoCapitalize="words"
+              autoCorrect={false}
+              maxLength={50}
+              editable={!savingName}
+              onSubmitEditing={handleSaveName}
+              returnKeyType="done"
+              selectionColor={colors.accent}
+            />
+
+            {/* Save button */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.drawerSaveButton,
+                (!editedName.trim() || savingName) && styles.drawerSaveButtonDisabled,
+                pressed && editedName.trim() && !savingName && styles.drawerSaveButtonPressed,
+              ]}
+              onPress={handleSaveName}
+              disabled={!editedName.trim() || savingName}
+            >
+              <Text variant="body" weight="semibold" style={styles.drawerSaveText}>
+                {savingName ? 'Enregistrement...' : 'Enregistrer'}
+              </Text>
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </Animated.View>
   );
 }
@@ -363,52 +478,195 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   scrollView: { flex: 1 },
   content: { padding: spacing.md },
-  userCard: { marginBottom: spacing.xl },
-  userRow: { flexDirection: 'row', alignItems: 'center' },
+
+  // User Header
+  userHeader: {
+    alignItems: 'center',
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.lg,
+  },
   avatar: {
-    width: 56,
-    height: 56,
+    width: 88,
+    height: 88,
     borderRadius: borderRadius.full,
     backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.md,
+    marginBottom: spacing.md,
   },
   avatarText: {
     color: '#FFFFFF',
   },
-  userInfo: { flex: 1 },
-  planBadge: { marginTop: spacing.xs },
-  planBadgePro: { marginTop: spacing.xs, color: colors.accent },
-  planBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.xs },
-  upgradeButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    backgroundColor: 'rgba(212, 165, 116, 0.15)',
-    borderWidth: 1,
-    borderColor: colors.accent,
+  userName: {
+    textAlign: 'center',
+    marginBottom: spacing.xs,
   },
-  upgradeText: { color: colors.accent },
-  section: { marginBottom: spacing.xl },
-  sectionTitle: { marginBottom: spacing.md },
-  platformRow: { flexDirection: 'row', alignItems: 'center', padding: spacing.md },
-  platformBorder: { borderBottomWidth: 1, borderBottomColor: glass.border },
-  platformIcon: { marginRight: spacing.md },
-  platformName: { flex: 1 },
-  settingsRow: {
+  userEmail: {
+    textAlign: 'center',
+  },
+
+  // Name Edit Drawer
+  drawerContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  drawerBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  drawerSheet: {
+    backgroundColor: colors.accent,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+  },
+  drawerHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    alignSelf: 'center',
+    marginBottom: spacing.lg,
+  },
+  drawerTitle: {
+    color: colors.background,
+    marginBottom: spacing.md,
+  },
+  drawerInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 16,
+    fontSize: 17,
+    fontFamily: 'Geist_500Medium',
+    color: colors.textDark,
+    marginBottom: spacing.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  drawerSaveButton: {
+    backgroundColor: colors.background,
+    paddingVertical: 16,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  drawerSaveButtonPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.9,
+  },
+  drawerSaveButtonDisabled: {
+    opacity: 0.4,
+  },
+  drawerSaveText: {
+    color: '#FFFFFF',
+  },
+
+  // Plan Card
+  planCard: {
+    marginBottom: spacing.md,
+  },
+  planCardContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+  },
+  planIconContainer: {
+    width: 24,
+    marginRight: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  planCardText: {
+    flex: 1,
+  },
+
+  // Cards
+  card: {
+    marginBottom: spacing.md,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: spacing.md,
   },
-  logoutText: { color: colors.error },
-  disconnectText: { color: colors.error },
-  devHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.md },
-  devTitle: { fontSize: 15 },
-  devLabel: { marginBottom: spacing.sm },
-  planRow: { flexDirection: 'row', gap: spacing.sm },
-  planChip: {
+  rowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: glass.border,
+  },
+  rowIcon: {
+    width: 24,
+    marginRight: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowLabel: {
+    flex: 1,
+  },
+  connectedBadge: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  connectedDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.success,
+  },
+  disconnectedDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.textTertiary,
+  },
+
+  // Logout
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.lg,
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  logoutLabel: {},
+
+  // Version
+  version: {
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    marginBottom: spacing.xl,
+  },
+
+  // Dev Tools
+  devSection: {
+    marginTop: spacing.md,
+  },
+  devHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: spacing.md,
+  },
+  devTitle: {},
+  devLabel: {
+    marginBottom: spacing.sm,
+  },
+  devPlanRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  devPlanChip: {
     flex: 1,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.md,
@@ -417,10 +675,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderLight,
   },
-  planChipActive: {
-    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+  devPlanChipActive: {
+    backgroundColor: 'rgba(181, 165, 254, 0.15)',
     borderColor: colors.accent,
   },
-  planChipText: { color: colors.textSecondary },
-  planChipTextActive: { color: colors.accent },
+  devPlanChipText: {
+    color: colors.textSecondary,
+  },
+  devPlanChipTextActive: {
+    color: colors.accent,
+  },
 });
