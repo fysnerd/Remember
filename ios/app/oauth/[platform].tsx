@@ -146,8 +146,31 @@ export default function OAuthWebViewScreen() {
         return;
       }
 
+      // For Spotify: fetch bearer token client-side (open.spotify.com blocked from datacenter IPs)
+      let payload: Record<string, unknown> = formattedCookies;
+      if (platformKey === 'spotify' && formattedCookies.sp_dc) {
+        try {
+          const tokenRes = await fetch(
+            'https://open.spotify.com/get_access_token?reason=transport&productType=web_player',
+            { headers: { Cookie: `sp_dc=${formattedCookies.sp_dc}` } }
+          );
+          if (tokenRes.ok) {
+            const tokenData = await tokenRes.json();
+            if (tokenData.accessToken && !tokenData.isAnonymous) {
+              payload = {
+                sp_dc: formattedCookies.sp_dc,
+                bearer: tokenData.accessToken,
+                bearerExpiresMs: tokenData.accessTokenExpirationTimestampMs,
+              };
+            }
+          }
+        } catch (e) {
+          console.warn('Could not fetch Spotify bearer token:', e);
+        }
+      }
+
       // Send cookies to backend (send directly, not wrapped in { cookies: ... })
-      await api.post(`/oauth/${platformKey}/connect`, formattedCookies);
+      await api.post(`/oauth/${platformKey}/connect`, payload);
 
       // Refresh OAuth status
       queryClient.invalidateQueries({ queryKey: ['oauth', 'status'] });

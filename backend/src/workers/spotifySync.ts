@@ -17,6 +17,8 @@ const SPOTIFY_API_BASE = 'https://api.spotify.com/v1';
 
 interface SpotifyCookies {
   sp_dc: string;
+  bearer?: string;
+  bearerExpiresMs?: number;
 }
 
 interface SpotifyWebToken {
@@ -133,11 +135,28 @@ export async function syncUserSpotify(userId: string, connectionId: string, _use
   if (isCookieMode) {
     try {
       const cookies = JSON.parse(connection.accessToken) as SpotifyCookies;
-      if (!cookies.sp_dc) {
+
+      // Use cached bearer if available and not expired (with 1 min buffer)
+      if (cookies.bearer && cookies.bearerExpiresMs && cookies.bearerExpiresMs > Date.now() + 60_000) {
+        accessToken = cookies.bearer;
+        log.info({ userId, mode: 'cookie-cached' }, 'Using cached Spotify bearer token');
+      } else if (cookies.sp_dc) {
+        // Try to refresh bearer from sp_dc (may fail from datacenter IPs)
+        try {
+          accessToken = await getTokenFromCookie(cookies.sp_dc);
+          // Cache the new bearer token
+          const updated = { ...cookies, bearer: accessToken, bearerExpiresMs: Date.now() + 3_600_000 };
+          await prisma.connectedPlatform.update({
+            where: { id: connectionId },
+            data: { accessToken: JSON.stringify(updated) },
+          });
+          log.info({ userId, mode: 'cookie-refreshed' }, 'Refreshed Spotify bearer token');
+        } catch {
+          throw new Error('Bearer expired. Open the app to refresh.');
+        }
+      } else {
         throw new Error('Missing sp_dc cookie');
       }
-      accessToken = await getTokenFromCookie(cookies.sp_dc);
-      log.info({ userId, mode: 'cookie' }, 'Got Spotify token from cookie');
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Cookie auth failed';
       log.error({ err: error, userId }, 'Failed to get token from cookie');

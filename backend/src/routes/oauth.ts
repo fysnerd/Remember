@@ -325,7 +325,7 @@ oauthRouter.get('/spotify/callback', async (req: Request, res: Response, next: N
   }
 });
 
-// POST /api/oauth/spotify/connect - Cookie-based Spotify auth (sp_dc cookie from WebView)
+// POST /api/oauth/spotify/connect - Cookie-based Spotify auth (sp_dc + bearer from iOS)
 oauthRouter.post('/spotify/connect', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = req.body as Record<string, unknown>;
@@ -336,8 +336,15 @@ oauthRouter.post('/spotify/connect', authenticateToken, async (req: Request, res
       throw new AppError(400, 'Missing or invalid sp_dc cookie. Please log in to Spotify and try again.');
     }
 
-    // Store only sp_dc as JSON (same pattern as Instagram/TikTok)
-    const cookiesJson = JSON.stringify({ sp_dc: spDc });
+    // Bearer token fetched client-side (open.spotify.com blocked from datacenter IPs)
+    const bearer = typeof body?.bearer === 'string' ? body.bearer : undefined;
+    const bearerExpiresMs = typeof body?.bearerExpiresMs === 'number' ? body.bearerExpiresMs : undefined;
+
+    // Store sp_dc + bearer as JSON
+    const cookiesJson = JSON.stringify({
+      sp_dc: spDc,
+      ...(bearer && { bearer, bearerExpiresMs: bearerExpiresMs || Date.now() + 3_600_000 }),
+    });
 
     const connection = await prisma.connectedPlatform.upsert({
       where: {
@@ -367,6 +374,50 @@ oauthRouter.post('/spotify/connect', authenticateToken, async (req: Request, res
     });
 
     return res.json({ message: 'Spotify connected successfully' });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// POST /api/oauth/spotify/refresh-token - iOS sends a fresh bearer token
+oauthRouter.post('/spotify/refresh-token', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { bearer, bearerExpiresMs } = req.body as { bearer?: string; bearerExpiresMs?: number };
+    if (!bearer || typeof bearer !== 'string') {
+      throw new AppError(400, 'Missing bearer token');
+    }
+
+    const connection = await prisma.connectedPlatform.findUnique({
+      where: { userId_platform: { userId: req.user!.id, platform: Platform.SPOTIFY } },
+    });
+
+    if (!connection) {
+      throw new AppError(404, 'Spotify not connected');
+    }
+
+    // Update bearer in the stored JSON
+    let cookies: Record<string, unknown> = {};
+    try {
+      cookies = JSON.parse(connection.accessToken);
+    } catch { /* start fresh */ }
+
+    cookies.bearer = bearer;
+    cookies.bearerExpiresMs = bearerExpiresMs || Date.now() + 3_600_000;
+
+    await prisma.connectedPlatform.update({
+      where: { id: connection.id },
+      data: {
+        accessToken: JSON.stringify(cookies),
+        lastSyncError: null,
+      },
+    });
+
+    // Trigger sync with fresh token
+    syncUserSpotify(req.user!.id, connection.id).catch((error) => {
+      log.error({ err: error, userId: req.user!.id, platform: 'spotify' }, 'Sync failed after token refresh');
+    });
+
+    return res.json({ message: 'Token refreshed, sync started' });
   } catch (error) {
     return next(error);
   }
