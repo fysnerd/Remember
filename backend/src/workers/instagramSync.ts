@@ -9,6 +9,7 @@ import { prisma } from '../config/database.js';
 import { Platform, ContentStatus } from '@prisma/client';
 import { instagramLimiter } from '../utils/rateLimiter.js';
 import { shouldFilterContent, cleanTitle } from '../services/contentFilter.js';
+import https from 'node:https';
 
 const log = logger.child({ job: 'instagram-sync' });
 
@@ -38,15 +39,13 @@ function buildCookieHeader(cookies: InstagramCookies): string {
 }
 
 /**
- * Parse Set-Cookie headers and merge into existing cookies
+ * Parse Set-Cookie header strings and merge into existing cookies
  */
-function mergeSetCookies(existing: InstagramCookies, headers: Headers): InstagramCookies {
+function mergeSetCookiesRaw(existing: InstagramCookies, setCookieHeaders: string[]): InstagramCookies {
   const updated = { ...existing };
   const knownKeys = new Set(['sessionid', 'csrftoken', 'ds_user_id', 'mid', 'ig_did', 'ig_nrcb', 'rur', 'datr']);
 
-  // getSetCookie() returns an array of individual Set-Cookie values (Node 20+)
-  const setCookies = headers.getSetCookie?.() || [];
-  for (const header of setCookies) {
+  for (const header of setCookieHeaders) {
     const match = header.match(/^([^=]+)=([^;]*)/);
     if (match && knownKeys.has(match[1])) {
       (updated as Record<string, string>)[match[1]] = match[2];
@@ -99,37 +98,60 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
     await new Promise(resolve => setTimeout(resolve, jitterMs));
 
     // Fetch liked feed directly — no browser needed
+    // Using https.request to avoid Sec-Fetch-* headers that Node.js fetch adds automatically
     log.info({ userId }, 'Fetching liked feed');
 
-    const response = await fetch('https://www.instagram.com/api/v1/feed/liked/', {
-      method: 'GET',
-      headers: {
-        'User-Agent': INSTAGRAM_APP_UA,
-        'X-IG-App-ID': INSTAGRAM_APP_ID,
-        'X-CSRFToken': cookies.csrftoken || '',
-        'Cookie': buildCookieHeader(cookies),
-        'Accept': '*/*',
-      },
+    const { statusCode, body: responseBody, setCookieHeaders } = await new Promise<{
+      statusCode: number;
+      body: string;
+      setCookieHeaders: string[];
+    }>((resolve, reject) => {
+      const req = https.request('https://www.instagram.com/api/v1/feed/liked/', {
+        method: 'GET',
+        headers: {
+          'User-Agent': INSTAGRAM_APP_UA,
+          'X-IG-App-ID': INSTAGRAM_APP_ID,
+          'X-CSRFToken': cookies.csrftoken || '',
+          'Cookie': buildCookieHeader(cookies),
+          'Accept': '*/*',
+        },
+      }, (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk) => chunks.push(chunk));
+        res.on('end', () => {
+          const raw = res.headers['set-cookie'] || [];
+          resolve({
+            statusCode: res.statusCode || 0,
+            body: Buffer.concat(chunks).toString('utf-8'),
+            setCookieHeaders: Array.isArray(raw) ? raw : [raw],
+          });
+        });
+        res.on('error', reject);
+      });
+      req.on('error', reject);
+      req.setTimeout(15000, () => { req.destroy(); reject(new Error('Request timeout')); });
+      req.end();
     });
 
     // Refresh cookies from Set-Cookie response headers
-    const updatedCookies = mergeSetCookies(cookies, response.headers);
-    const newJson = JSON.stringify(updatedCookies);
-    if (newJson !== connection.accessToken) {
-      await prisma.connectedPlatform.update({
-        where: { id: connectionId },
-        data: { accessToken: newJson },
-      });
-      cookies = updatedCookies;
-      log.debug({ userId }, 'Refreshed Instagram cookies from response');
+    if (setCookieHeaders.length > 0) {
+      const updatedCookies = mergeSetCookiesRaw(cookies, setCookieHeaders);
+      const newJson = JSON.stringify(updatedCookies);
+      if (newJson !== connection.accessToken) {
+        await prisma.connectedPlatform.update({
+          where: { id: connectionId },
+          data: { accessToken: newJson },
+        });
+        cookies = updatedCookies;
+        log.debug({ userId }, 'Refreshed Instagram cookies from response');
+      }
     }
 
-    if (!response.ok) {
-      const body = await response.text().catch(() => '');
-      log.warn({ userId, status: response.status, body: body.substring(0, 300) }, 'Liked feed fetch failed');
+    if (statusCode < 200 || statusCode >= 300) {
+      log.warn({ userId, status: statusCode, body: responseBody.substring(0, 300) }, 'Liked feed fetch failed');
 
-      if (response.status === 401 || response.status === 403 ||
-          body.includes('login_required') || body.includes('checkpoint_required')) {
+      if (statusCode === 401 || statusCode === 403 ||
+          responseBody.includes('login_required') || responseBody.includes('checkpoint_required')) {
         await prisma.connectedPlatform.update({
           where: { id: connectionId },
           data: { lastSyncError: 'Session expired. Please reconnect.' },
@@ -137,7 +159,7 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
         return 0;
       }
 
-      if (response.status === 429) {
+      if (statusCode === 429) {
         await prisma.connectedPlatform.update({
           where: { id: connectionId },
           data: { lastSyncError: 'Rate limited. Will retry later.' },
@@ -147,12 +169,12 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
 
       await prisma.connectedPlatform.update({
         where: { id: connectionId },
-        data: { lastSyncError: `Fetch failed: ${response.status} - ${body.substring(0, 100)}` },
+        data: { lastSyncError: `Fetch failed: ${statusCode} - ${responseBody.substring(0, 100)}` },
       });
       return 0;
     }
 
-    const data = await response.json() as any;
+    const data = JSON.parse(responseBody) as any;
     const allItems: any[] = data.items || [];
 
     if (allItems.length === 0) {
