@@ -1,12 +1,10 @@
-// Instagram Sync Worker v1.2 - Pure browser fetch approach:
-// 1. Playwright browser with Safari UA matching cookie origin (no UA mismatch)
-// 2. Session validation before fetch (detect expired cookies early)
-// 3. Pure page.evaluate(fetch) with web X-IG-App-ID — no route interception
-// 4. Cookie refresh after sync (persist rotated csrftoken, rur, etc.)
-// 5. Optional residential proxy to avoid datacenter IP detection
-// → Consistent UA, real browser TLS fingerprint, correct app ID
+// Instagram Sync Worker v2 - Direct fetch approach:
+// 1. No browser needed — direct Node.js fetch with Instagram app UA
+// 2. /api/v1/feed/liked/ requires Instagram app UA (Barcelona), not browser UA
+// 3. Session cookies from iOS WebView work fine with app UA
+// 4. Cookie refresh from Set-Cookie response headers
+// → Lightweight, fast, no Playwright overhead
 import { logger } from '../config/logger.js';
-import { config } from '../config/env.js';
 import { prisma } from '../config/database.js';
 import { Platform, ContentStatus } from '@prisma/client';
 import { instagramLimiter } from '../utils/rateLimiter.js';
@@ -14,9 +12,9 @@ import { shouldFilterContent, cleanTitle } from '../services/contentFilter.js';
 
 const log = logger.child({ job: 'instagram-sync' });
 
-// Must match the exact UA used in ios/app/oauth/[platform].tsx WebView
-// Cookies were created with this UA — Instagram checks consistency
-const SAFARI_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+// Instagram private API requires an app UA — browser UAs get "useragent mismatch"
+const INSTAGRAM_APP_UA = 'Barcelona 289.0.0.77.109 Android';
+const INSTAGRAM_APP_ID = '1217981644879628'; // Android app ID
 
 interface InstagramCookies {
   sessionid: string;
@@ -29,11 +27,37 @@ interface InstagramCookies {
   datr?: string;
 }
 
+/**
+ * Build cookie header string from cookie object
+ */
+function buildCookieHeader(cookies: InstagramCookies): string {
+  return Object.entries(cookies)
+    .filter(([_, v]) => v !== undefined)
+    .map(([k, v]) => `${k}=${v}`)
+    .join('; ');
+}
 
 /**
- * Fetch LIKED reels from Instagram for a specific user
- * Uses passive interception: navigates to Instagram with Safari UA,
- * then fetches the liked feed from within the page context.
+ * Parse Set-Cookie headers and merge into existing cookies
+ */
+function mergeSetCookies(existing: InstagramCookies, headers: Headers): InstagramCookies {
+  const updated = { ...existing };
+  const knownKeys = new Set(['sessionid', 'csrftoken', 'ds_user_id', 'mid', 'ig_did', 'ig_nrcb', 'rur', 'datr']);
+
+  // getSetCookie() returns an array of individual Set-Cookie values (Node 20+)
+  const setCookies = headers.getSetCookie?.() || [];
+  for (const header of setCookies) {
+    const match = header.match(/^([^=]+)=([^;]*)/);
+    if (match && knownKeys.has(match[1])) {
+      (updated as Record<string, string>)[match[1]] = match[2];
+    }
+  }
+  return updated;
+}
+
+/**
+ * Fetch LIKED reels from Instagram for a specific user.
+ * Uses direct Node.js fetch with Instagram app UA (Barcelona).
  */
 async function syncUserInstagram(userId: string, connectionId: string): Promise<number> {
   const connection = await prisma.connectedPlatform.findUnique({
@@ -69,192 +93,43 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
   let newReelsCount = 0;
 
   try {
-    const { webkit } = await import('playwright');
-
-    const playwrightCookies = Object.entries(cookies)
-      .filter(([_, value]) => value !== undefined)
-      .map(([name, value]) => ({
-        name,
-        value: value as string,
-        domain: '.instagram.com',
-        path: '/',
-      }));
-
-    // Build launch options with optional proxy
-    // Using WebKit (Safari engine) — matches the Safari UA used in iOS cookie creation
-    // This ensures TLS fingerprint (JA3) consistency with the User-Agent header
-    const launchOptions: Record<string, any> = {
-      headless: true,
-    };
-
-    if (config.instagramProxy.url) {
-      launchOptions.proxy = {
-        server: config.instagramProxy.url,
-        ...(config.instagramProxy.user && { username: config.instagramProxy.user }),
-        ...(config.instagramProxy.pass && { password: config.instagramProxy.pass }),
-      };
-      log.info({ userId, proxy: config.instagramProxy.url }, 'Using residential proxy');
-    }
-
-    const browser = await webkit.launch(launchOptions);
-
-    const context = await browser.newContext({
-      viewport: { width: 390, height: 844 },
-      userAgent: SAFARI_UA,
-      locale: 'fr-FR',
-      timezoneId: 'Europe/Paris',
-      isMobile: true,
-      hasTouch: true,
-      javaScriptEnabled: true,
-    });
-
-    // Remove webdriver flag for anti-detection
-    await context.addInitScript(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-    });
-
-    await context.addCookies(playwrightCookies);
-
-    const page = await context.newPage();
-
-    // Set up response interceptor as fallback — captures any liked feed response
-    // Using object wrapper to avoid TS narrowing issues with closure mutation
-    const intercepted: { items: any[] | null } = { items: null };
-    page.on('response', async (response) => {
-      try {
-        const url = response.url();
-        if (url.includes('feed/liked') && response.status() === 200) {
-          const contentType = response.headers()['content-type'] || '';
-          if (contentType.includes('json')) {
-            const data = await response.json();
-            if (data.items && Array.isArray(data.items)) {
-              intercepted.items = data.items;
-              log.debug({ userId, count: data.items.length }, 'Intercepted liked feed response');
-            }
-          }
-        }
-      } catch { /* ignore parse errors on non-JSON responses */ }
-    });
-
-    // Anti-detection jitter: random 3-10s delay
-    const jitterMs = 3000 + Math.random() * 7000;
-    log.info({ userId, jitterMs: Math.round(jitterMs) }, 'Applying jitter before navigation');
+    // Anti-detection jitter: random 1-5s delay
+    const jitterMs = 1000 + Math.random() * 4000;
+    log.info({ userId, jitterMs: Math.round(jitterMs) }, 'Applying jitter');
     await new Promise(resolve => setTimeout(resolve, jitterMs));
 
-    // Step 1: Navigate to Instagram homepage (establish session)
-    log.info({ userId }, 'Navigating to Instagram homepage');
-    const navResponse = await page.goto('https://www.instagram.com/', {
-      waitUntil: 'domcontentloaded',
-      timeout: 30000,
+    // Fetch liked feed directly — no browser needed
+    log.info({ userId }, 'Fetching liked feed');
+
+    const response = await fetch('https://www.instagram.com/api/v1/feed/liked/', {
+      method: 'GET',
+      headers: {
+        'User-Agent': INSTAGRAM_APP_UA,
+        'X-IG-App-ID': INSTAGRAM_APP_ID,
+        'X-CSRFToken': cookies.csrftoken || '',
+        'Cookie': buildCookieHeader(cookies),
+        'Accept': '*/*',
+      },
     });
 
-    if (!navResponse || navResponse.status() >= 400) {
-      log.error({ userId, status: navResponse?.status() }, 'Failed to load Instagram homepage');
-      await browser.close();
+    // Refresh cookies from Set-Cookie response headers
+    const updatedCookies = mergeSetCookies(cookies, response.headers);
+    const newJson = JSON.stringify(updatedCookies);
+    if (newJson !== connection.accessToken) {
       await prisma.connectedPlatform.update({
         where: { id: connectionId },
-        data: { lastSyncError: 'Failed to load Instagram' },
+        data: { accessToken: newJson },
       });
-      return 0;
+      cookies = updatedCookies;
+      log.debug({ userId }, 'Refreshed Instagram cookies from response');
     }
 
-    // Small human-like delay after page load
-    await page.waitForTimeout(2000 + Math.random() * 2000);
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      log.warn({ userId, status: response.status, body: body.substring(0, 300) }, 'Liked feed fetch failed');
 
-    // Step 2: Validate session before fetching liked feed
-    // Quick check that we're logged in (avoids wasting a liked-feed request on an expired session)
-    const sessionCheck = await page.evaluate(async () => {
-      try {
-        const csrfToken = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
-        const resp = await fetch('/api/v1/accounts/current_user/?edit=true', {
-          method: 'GET',
-          credentials: 'include',
-          headers: {
-            'X-CSRFToken': csrfToken,
-            'X-IG-App-ID': '936619743392459',
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-ASBD-ID': '129477',
-            'Accept': '*/*',
-          },
-        });
-        if (!resp.ok) return { valid: false, status: resp.status };
-        const data = await resp.json();
-        return { valid: !!data.user, status: resp.status, username: data.user?.username };
-      } catch (e: any) {
-        return { valid: false, status: 0, error: e.message };
-      }
-    });
-
-    // Only block on definitive auth failures (401/403), not on 400 (could be missing params)
-    if (!sessionCheck.valid && (sessionCheck.status === 401 || sessionCheck.status === 403)) {
-      log.warn({ userId, status: sessionCheck.status }, 'Instagram session invalid — cookies expired');
-      await browser.close();
-      await prisma.connectedPlatform.update({
-        where: { id: connectionId },
-        data: { lastSyncError: 'Session expired. Please reconnect.' },
-      });
-      return 0;
-    }
-    if (sessionCheck.valid) {
-      log.info({ userId, username: sessionCheck.username }, 'Session validated');
-    } else {
-      log.warn({ userId, status: sessionCheck.status }, 'Session check inconclusive, proceeding anyway');
-    }
-
-    // Small delay between session check and liked feed (human-like)
-    await page.waitForTimeout(1000 + Math.random() * 2000);
-
-    // Step 3: Fetch liked feed from page context (pure browser fetch)
-    // NO route interception — browser sends its own Safari UA + real TLS fingerprint
-    // X-IG-App-ID must be the web app ID (936619743392459) to match Safari UA context
-    log.info({ userId }, 'Fetching liked feed via page.evaluate (pure browser fetch)');
-
-    const fetchResult = await page.evaluate(async () => {
-      try {
-        const csrfToken = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
-
-        const response = await fetch('/api/v1/feed/liked/', {
-          method: 'GET',
-          credentials: 'include',
-          headers: {
-            'X-CSRFToken': csrfToken,
-            'X-IG-App-ID': '936619743392459',
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-ASBD-ID': '129477',
-            'Accept': '*/*',
-          },
-        });
-
-        if (!response.ok) {
-          const text = await response.text().catch(() => '');
-          return { ok: false, status: response.status, body: text.substring(0, 500) };
-        }
-
-        const data = await response.json();
-        return { ok: true, status: response.status, data };
-      } catch (e: any) {
-        return { ok: false, status: 0, body: e.message || 'fetch error' };
-      }
-    });
-
-    let allItems: any[] = [];
-
-    if (fetchResult.ok && fetchResult.data?.items) {
-      allItems = fetchResult.data.items;
-      log.info({ userId, count: allItems.length }, 'Got items from page context fetch');
-    } else {
-      // Log what happened with the primary fetch
-      log.warn({ userId, status: fetchResult.status, body: (fetchResult as any).body?.substring?.(0, 200) }, 'Page context fetch failed');
-
-      // Check if we got data from the response interceptor (unlikely but possible)
-      if (intercepted.items && intercepted.items.length > 0) {
-        allItems = intercepted.items;
-        log.info({ userId, count: allItems.length }, 'Using intercepted response data');
-      }
-
-      // Handle auth errors
-      if (fetchResult.status === 401 || fetchResult.status === 403) {
-        await browser.close();
+      if (response.status === 401 || response.status === 403 ||
+          body.includes('login_required') || body.includes('checkpoint_required')) {
         await prisma.connectedPlatform.update({
           where: { id: connectionId },
           data: { lastSyncError: 'Session expired. Please reconnect.' },
@@ -262,9 +137,7 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
         return 0;
       }
 
-      // Handle rate limiting
-      if (fetchResult.status === 429) {
-        await browser.close();
+      if (response.status === 429) {
         await prisma.connectedPlatform.update({
           where: { id: connectionId },
           data: { lastSyncError: 'Rate limited. Will retry later.' },
@@ -272,42 +145,15 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
         return 0;
       }
 
-      // If still no data, record the error
-      if (allItems.length === 0) {
-        const errorMsg = `Fetch failed: status ${fetchResult.status}`;
-        await browser.close();
-        await prisma.connectedPlatform.update({
-          where: { id: connectionId },
-          data: { lastSyncError: errorMsg },
-        });
-        return 0;
-      }
+      await prisma.connectedPlatform.update({
+        where: { id: connectionId },
+        data: { lastSyncError: `Fetch failed: ${response.status} - ${body.substring(0, 100)}` },
+      });
+      return 0;
     }
 
-    // Step 4: Refresh cookies — Instagram rotates csrftoken, rur, mid on every session
-    // Persist updated cookies back to the DB so the next sync uses fresh values
-    try {
-      const browserCookies = await context.cookies('https://www.instagram.com');
-      const updatedCookies: Record<string, string> = { ...cookies };
-      for (const c of browserCookies) {
-        if (['sessionid', 'csrftoken', 'ds_user_id', 'mid', 'ig_did', 'ig_nrcb', 'rur', 'datr'].includes(c.name)) {
-          updatedCookies[c.name] = c.value;
-        }
-      }
-      // Only update DB if something actually changed
-      const newJson = JSON.stringify(updatedCookies);
-      if (newJson !== connection.accessToken) {
-        await prisma.connectedPlatform.update({
-          where: { id: connectionId },
-          data: { accessToken: newJson },
-        });
-        log.debug({ userId }, 'Refreshed Instagram cookies in DB');
-      }
-    } catch (cookieErr) {
-      log.warn({ userId, err: cookieErr }, 'Failed to refresh cookies (non-fatal)');
-    }
-
-    await browser.close();
+    const data = await response.json() as any;
+    const allItems: any[] = data.items || [];
 
     if (allItems.length === 0) {
       log.info({ userId }, 'No liked items returned');
@@ -318,7 +164,7 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       return 0;
     }
 
-    log.info({ userId, itemCount: allItems.length }, 'Got items from Instagram');
+    log.info({ userId, itemCount: allItems.length, moreAvailable: data.more_available }, 'Got items from Instagram');
 
     // Filter: only videos (media_type 2 = video, product_type 'clips' = reel)
     const videos = allItems.filter((item: any) =>
@@ -433,7 +279,7 @@ export async function runInstagramSync(): Promise<void> {
   let successCount = 0;
   let errorCount = 0;
 
-  const TIMEOUT_MS = 90000;
+  const TIMEOUT_MS = 30000; // Much lower — no browser startup overhead
 
   const results = await Promise.allSettled(
     connections.map(connection =>
