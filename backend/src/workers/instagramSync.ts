@@ -170,10 +170,17 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
     // Quick check that we're logged in (avoids wasting a liked-feed request on an expired session)
     const sessionCheck = await page.evaluate(async () => {
       try {
+        const csrfToken = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
         const resp = await fetch('/api/v1/accounts/current_user/?edit=true', {
           method: 'GET',
           credentials: 'include',
-          headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': '*/*' },
+          headers: {
+            'X-CSRFToken': csrfToken,
+            'X-IG-App-ID': '936619743392459',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-ASBD-ID': '129477',
+            'Accept': '*/*',
+          },
         });
         if (!resp.ok) return { valid: false, status: resp.status };
         const data = await resp.json();
@@ -183,7 +190,8 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       }
     });
 
-    if (!sessionCheck.valid) {
+    // Only block on definitive auth failures (401/403), not on 400 (could be missing params)
+    if (!sessionCheck.valid && (sessionCheck.status === 401 || sessionCheck.status === 403)) {
       log.warn({ userId, status: sessionCheck.status }, 'Instagram session invalid — cookies expired');
       await browser.close();
       await prisma.connectedPlatform.update({
@@ -192,7 +200,11 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       });
       return 0;
     }
-    log.info({ userId, username: sessionCheck.username }, 'Session validated');
+    if (sessionCheck.valid) {
+      log.info({ userId, username: sessionCheck.username }, 'Session validated');
+    } else {
+      log.warn({ userId, status: sessionCheck.status }, 'Session check inconclusive, proceeding anyway');
+    }
 
     // Small delay between session check and liked feed (human-like)
     await page.waitForTimeout(1000 + Math.random() * 2000);
