@@ -200,6 +200,9 @@ export default function ProfileScreen() {
 
         if (result.type === 'success') {
           refreshOAuthStatus();
+          queryClient.invalidateQueries({ queryKey: ['content'] });
+          queryClient.invalidateQueries({ queryKey: ['inbox'] });
+          queryClient.invalidateQueries({ queryKey: ['home'] });
         }
       }
     } catch (error) {

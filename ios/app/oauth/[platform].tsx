@@ -172,8 +172,11 @@ export default function OAuthWebViewScreen() {
       // Send cookies to backend (send directly, not wrapped in { cookies: ... })
       await api.post(`/oauth/${platformKey}/connect`, payload);
 
-      // Refresh OAuth status
+      // Refresh OAuth status + content queries so new items appear
       queryClient.invalidateQueries({ queryKey: ['oauth', 'status'] });
+      queryClient.invalidateQueries({ queryKey: ['content'] });
+      queryClient.invalidateQueries({ queryKey: ['inbox'] });
+      queryClient.invalidateQueries({ queryKey: ['home'] });
 
       Alert.alert('Succès', `${config.name} connecté avec succès !`, [
         { text: 'OK', onPress: () => router.back() },
