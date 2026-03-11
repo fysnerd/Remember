@@ -178,7 +178,8 @@ export default function ProfileScreen() {
   };
 
   const handleConnect = async (platformId: string) => {
-    if (platformId === 'tiktok' || platformId === 'instagram') {
+    // Cookie-based platforms use WebView login flow
+    if (platformId === 'tiktok' || platformId === 'instagram' || platformId === 'spotify') {
       router.push({ pathname: '/oauth/[platform]', params: { platform: platformId } });
       return;
     }

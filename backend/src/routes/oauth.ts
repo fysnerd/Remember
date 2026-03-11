@@ -325,6 +325,77 @@ oauthRouter.get('/spotify/callback', async (req: Request, res: Response, next: N
   }
 });
 
+// POST /api/oauth/spotify/connect - Cookie-based Spotify auth (sp_dc cookie from WebView)
+oauthRouter.post('/spotify/connect', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = req.body as Record<string, unknown>;
+
+    // Extract sp_dc cookie from the WebView cookie dump
+    const spDc = body?.sp_dc;
+    if (!spDc || typeof spDc !== 'string' || spDc.length < 10 || spDc.length > 500) {
+      throw new AppError(400, 'Missing or invalid sp_dc cookie. Please log in to Spotify and try again.');
+    }
+
+    // Store only sp_dc as JSON (same pattern as Instagram/TikTok)
+    const cookiesJson = JSON.stringify({ sp_dc: spDc });
+
+    const connection = await prisma.connectedPlatform.upsert({
+      where: {
+        userId_platform: {
+          userId: req.user!.id,
+          platform: Platform.SPOTIFY,
+        },
+      },
+      update: {
+        accessToken: cookiesJson,
+        refreshToken: null, // null = cookie mode
+        expiresAt: null,
+        lastSyncError: null,
+      },
+      create: {
+        userId: req.user!.id,
+        platform: Platform.SPOTIFY,
+        accessToken: cookiesJson,
+        refreshToken: null,
+        expiresAt: null,
+      },
+    });
+
+    // Trigger immediate sync in background (non-blocking)
+    syncUserSpotify(req.user!.id, connection.id).catch((error) => {
+      log.error({ err: error, userId: req.user!.id, platform: 'spotify' }, 'Background sync failed after cookie connect');
+    });
+
+    return res.json({ message: 'Spotify connected successfully' });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// POST /api/oauth/spotify/sync - Trigger manual Spotify sync
+oauthRouter.post('/spotify/sync', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const connection = await prisma.connectedPlatform.findUnique({
+      where: {
+        userId_platform: { userId: req.user!.id, platform: Platform.SPOTIFY },
+      },
+    });
+
+    if (!connection) {
+      throw new AppError(404, 'Spotify not connected');
+    }
+
+    const newEpisodes = await syncUserSpotify(req.user!.id, connection.id);
+
+    res.json({
+      message: 'Spotify sync completed',
+      newEpisodes,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // DELETE /api/oauth/spotify/disconnect
 oauthRouter.delete('/spotify/disconnect', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
   try {

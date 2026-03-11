@@ -1,5 +1,8 @@
 // Spotify Sync Worker - Fetches listened podcast episodes
 // Sources: recently-played (any episode listened) + saved episodes (bookmarked)
+// Supports two auth modes:
+//   1. OAuth (refreshToken present) — standard Spotify API with token refresh
+//   2. Cookie (sp_dc cookie, no refreshToken) — web player token endpoint, same API
 import { logger } from '../config/logger.js';
 import { prisma } from '../config/database.js';
 import { Platform, ContentStatus } from '@prisma/client';
@@ -9,6 +12,50 @@ import { spotifyLimiter } from '../utils/rateLimiter.js';
 const log = logger.child({ job: 'spotify-sync' });
 
 const SPOTIFY_API_BASE = 'https://api.spotify.com/v1';
+
+// --- Cookie-based auth ---
+
+interface SpotifyCookies {
+  sp_dc: string;
+}
+
+interface SpotifyWebToken {
+  clientId: string;
+  accessToken: string;
+  accessTokenExpirationTimestampMs: number;
+  isAnonymous: boolean;
+}
+
+/**
+ * Get bearer token from sp_dc cookie (cookie-based auth).
+ * Uses Spotify's web player token endpoint — returns a standard bearer token
+ * that works with api.spotify.com/v1/ endpoints.
+ */
+async function getTokenFromCookie(spDc: string): Promise<string> {
+  const response = await fetch(
+    'https://open.spotify.com/get_access_token?reason=transport&productType=web_player',
+    {
+      headers: {
+        'Cookie': `sp_dc=${spDc}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('Session expired. Please reconnect.');
+    }
+    throw new Error(`Token fetch failed: ${response.status}`);
+  }
+
+  const data = await response.json() as SpotifyWebToken;
+
+  if (!data.accessToken || data.isAnonymous) {
+    throw new Error('Session expired. Please reconnect.');
+  }
+
+  return data.accessToken;
+}
 
 interface SpotifyEpisode {
   id: string;
@@ -79,15 +126,38 @@ export async function syncUserSpotify(userId: string, connectionId: string, _use
   }
 
   let accessToken: string;
-  try {
-    accessToken = await getValidToken(connection);
-  } catch (error) {
-    log.error({ err: error, userId }, 'Failed to get valid token');
-    await prisma.connectedPlatform.update({
-      where: { id: connectionId },
-      data: { lastSyncError: 'Failed to refresh token' },
-    });
-    return 0;
+
+  // Detect auth mode: cookie-based (no refreshToken, accessToken is JSON with sp_dc) vs OAuth
+  const isCookieMode = !connection.refreshToken && connection.accessToken.startsWith('{');
+
+  if (isCookieMode) {
+    try {
+      const cookies = JSON.parse(connection.accessToken) as SpotifyCookies;
+      if (!cookies.sp_dc) {
+        throw new Error('Missing sp_dc cookie');
+      }
+      accessToken = await getTokenFromCookie(cookies.sp_dc);
+      log.info({ userId, mode: 'cookie' }, 'Got Spotify token from cookie');
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Cookie auth failed';
+      log.error({ err: error, userId }, 'Failed to get token from cookie');
+      await prisma.connectedPlatform.update({
+        where: { id: connectionId },
+        data: { lastSyncError: errorMsg },
+      });
+      return 0;
+    }
+  } else {
+    try {
+      accessToken = await getValidToken(connection);
+    } catch (error) {
+      log.error({ err: error, userId }, 'Failed to get valid token');
+      await prisma.connectedPlatform.update({
+        where: { id: connectionId },
+        data: { lastSyncError: 'Failed to refresh token' },
+      });
+      return 0;
+    }
   }
 
   const episodes = new Map<string, EpisodeData>();

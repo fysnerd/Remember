@@ -22,7 +22,7 @@ try {
   console.warn('CookieManager not available - requires development build');
 }
 
-type Platform = 'tiktok' | 'instagram';
+type Platform = 'tiktok' | 'instagram' | 'spotify';
 
 const PLATFORM_CONFIG: Record<Platform, { name: string; loginUrl: string; domain: string }> = {
   tiktok: {
@@ -34,6 +34,11 @@ const PLATFORM_CONFIG: Record<Platform, { name: string; loginUrl: string; domain
     name: 'Instagram',
     loginUrl: 'https://www.instagram.com/accounts/login/',
     domain: 'https://www.instagram.com',
+  },
+  spotify: {
+    name: 'Spotify',
+    loginUrl: 'https://accounts.spotify.com/login',
+    domain: 'https://accounts.spotify.com',
   },
 };
 
@@ -125,8 +130,12 @@ export default function OAuthWebViewScreen() {
         formattedCookies.sessionid || formattedCookies.msToken || formattedCookies.tt_webid;
       const hasInstagramSession =
         formattedCookies.sessionid || (formattedCookies.csrftoken && formattedCookies.ds_user_id);
+      const hasSpotifySession = !!formattedCookies.sp_dc;
 
-      const hasSession = platformKey === 'tiktok' ? hasTikTokSession : hasInstagramSession;
+      let hasSession: boolean;
+      if (platformKey === 'tiktok') hasSession = !!hasTikTokSession;
+      else if (platformKey === 'instagram') hasSession = !!hasInstagramSession;
+      else hasSession = hasSpotifySession;
 
       if (!hasSession) {
         Alert.alert(
