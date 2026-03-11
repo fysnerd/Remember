@@ -69,7 +69,7 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
   let newReelsCount = 0;
 
   try {
-    const { chromium } = await import('playwright');
+    const { webkit } = await import('playwright');
 
     const playwrightCookies = Object.entries(cookies)
       .filter(([_, value]) => value !== undefined)
@@ -81,13 +81,10 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       }));
 
     // Build launch options with optional proxy
+    // Using WebKit (Safari engine) — matches the Safari UA used in iOS cookie creation
+    // This ensures TLS fingerprint (JA3) consistency with the User-Agent header
     const launchOptions: Record<string, any> = {
       headless: true,
-      args: [
-        '--disable-blink-features=AutomationControlled',
-        '--disable-features=IsolateOrigins,site-per-process',
-        '--no-sandbox',
-      ],
     };
 
     if (config.instagramProxy.url) {
@@ -99,7 +96,7 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
       log.info({ userId, proxy: config.instagramProxy.url }, 'Using residential proxy');
     }
 
-    const browser = await chromium.launch(launchOptions);
+    const browser = await webkit.launch(launchOptions);
 
     const context = await browser.newContext({
       viewport: { width: 390, height: 844 },
@@ -114,8 +111,6 @@ async function syncUserInstagram(userId: string, connectionId: string): Promise<
     // Remove webdriver flag for anti-detection
     await context.addInitScript(() => {
       Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-      // @ts-ignore
-      window.chrome = { runtime: {} };
     });
 
     await context.addCookies(playwrightCookies);
