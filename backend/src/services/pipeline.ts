@@ -18,6 +18,7 @@ import { processPodcastTranscript } from './podcastTranscription.js';
 import { processContentQuiz } from './quizGeneration.js';
 import { autoTagContent } from './tagging.js';
 import { classifyContentForUser } from './themeClassification.js';
+import { cloneFromDonor } from './contentDedup.js';
 import { logger } from '../config/logger.js';
 import pLimit from 'p-limit';
 
@@ -53,7 +54,10 @@ export async function runUserPipeline(userId: string): Promise<void> {
     const startTime = Date.now();
 
     try {
-      // Phase 1: Transcribe untranscribed content
+      // Phase 0: Dedup — clone from existing processed content (skip expensive pipeline)
+      const cloned = await deduplicateUserContent(userId);
+
+      // Phase 1: Transcribe untranscribed content (only those not cloned)
       const transcribed = await transcribeUserContent(userId);
 
       // Phase 2: Generate quizzes for content that has transcripts but no quiz
@@ -68,9 +72,9 @@ export async function runUserPipeline(userId: string): Promise<void> {
       const elapsed = Date.now() - startTime;
 
       // Only log if we actually did work
-      if (transcribed > 0 || quizzed > 0 || tagged > 0 || themed > 0) {
+      if (cloned > 0 || transcribed > 0 || quizzed > 0 || tagged > 0 || themed > 0) {
         log.info(
-          { userId, transcribed, quizzed, tagged, themed, elapsedMs: elapsed },
+          { userId, cloned, transcribed, quizzed, tagged, themed, elapsedMs: elapsed },
           'User pipeline completed'
         );
       } else {
@@ -82,6 +86,45 @@ export async function runUserPipeline(userId: string): Promise<void> {
       activePipelines.delete(userId);
     }
   });
+}
+
+// ---------------------------------------------------------------------------
+// Phase 0: Deduplication — clone from already-processed content
+// ---------------------------------------------------------------------------
+
+async function deduplicateUserContent(userId: string): Promise<number> {
+  // Find content that needs processing (no transcript yet, not failed)
+  const pending = await prisma.content.findMany({
+    where: {
+      userId,
+      transcript: null,
+      transcriptionFailed: false,
+      status: { in: ['INBOX', 'SELECTED'] },
+    },
+    select: { id: true },
+    take: 20,
+    orderBy: { createdAt: 'asc' },
+  });
+
+  if (pending.length === 0) return 0;
+
+  let cloned = 0;
+  const limit = pLimit(5); // cloning is fast (DB only, no API calls)
+
+  await Promise.allSettled(
+    pending.map(content =>
+      limit(async () => {
+        const ok = await cloneFromDonor(content.id);
+        if (ok) cloned++;
+      })
+    )
+  );
+
+  if (cloned > 0) {
+    log.info({ userId, cloned, checked: pending.length }, 'Pipeline: dedup phase');
+  }
+
+  return cloned;
 }
 
 // ---------------------------------------------------------------------------

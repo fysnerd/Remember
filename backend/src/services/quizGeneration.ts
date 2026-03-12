@@ -6,6 +6,7 @@ import pLimit from 'p-limit';
 import { llmLimiter } from '../utils/rateLimiter.js';
 import { logger } from '../config/logger.js';
 import { sendPushToUser } from './pushNotifications.js';
+import { cloneFromDonor } from './contentDedup.js';
 
 const log = logger.child({ service: 'quiz-generation' });
 
@@ -939,7 +940,27 @@ export async function runQuizGenerationWorker(): Promise<void> {
     return;
   }
 
-  log.info({ count: pendingContent.length }, 'Processing pending content');
+  // Try dedup first: clone from donor if another user already has quiz for same content
+  let cloned = 0;
+  const remainingContent = [];
+  for (const content of pendingContent) {
+    const ok = await cloneFromDonor(content.id);
+    if (ok) {
+      cloned++;
+    } else {
+      remainingContent.push(content);
+    }
+  }
+  if (cloned > 0) {
+    log.info({ cloned }, 'Quiz generation: cloned from donors');
+  }
+
+  if (remainingContent.length === 0) {
+    log.info({ cloned }, 'Quiz generation worker completed (all cloned)');
+    return;
+  }
+
+  log.info({ count: remainingContent.length }, 'Processing pending content');
 
   let success = 0;
   let failed = 0;
@@ -947,7 +968,7 @@ export async function runQuizGenerationWorker(): Promise<void> {
   const limit = pLimit(3); // Each quiz needs ~3 LLM calls (assessment + questions + memo)
 
   const results = await Promise.allSettled(
-    pendingContent.map(content =>
+    remainingContent.map(content =>
       limit(() => processContentQuiz(content.id))
     )
   );
