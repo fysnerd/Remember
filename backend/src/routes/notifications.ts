@@ -25,6 +25,12 @@ notificationRouter.post('/push-token', async (req: Request, res: Response) => {
       return;
     }
 
+    // A physical device can only belong to one user at a time.
+    // Remove this token from any other user before registering.
+    await prisma.pushToken.deleteMany({
+      where: { token, NOT: { userId } },
+    });
+
     // Upsert: if this user+token combo exists, update it; otherwise create
     await prisma.pushToken.upsert({
       where: {
