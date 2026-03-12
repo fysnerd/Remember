@@ -74,6 +74,7 @@ model UserSettings {
   // Notifications
   emailReminders    Boolean @default(true)
   lastPushSentAt    DateTime? // Dedup: morning push (daily subjects announcement)
+  noonPushSentAt    DateTime? // Dedup: noon push (new inbox content)
   afternoonPushSentAt DateTime? // Dedup: afternoon push (single subject nudge)
 
   // Onboarding preferences (synced from onboarding flow)

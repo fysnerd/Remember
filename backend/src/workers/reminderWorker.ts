@@ -1,13 +1,17 @@
-// Daily Reminder Worker — exactly 2 push notifications per day:
+// Daily Reminder Worker — push notifications per day:
 //   1. Morning (user's dailyReminderTime): "Tes 3 sujets du jour sont prets"
-//   2. Afternoon (14:00 user time): "Et si tu revisais [random subject] ?"
+//   2. Noon (12:00 user time): "X nouveaux contenus a valider"
+//   3. Afternoon (14:00 user time): "Et si tu revisais [random subject] ?"
+//   4. Inactivity win-back (J+3): "Ca fait un moment !"
 import { logger } from '../config/logger.js';
 import { prisma } from '../config/database.js';
 import { sendPushToUser } from '../services/pushNotifications.js';
 import { generateRecommendations } from '../routes/home.js';
+import { ContentStatus, Platform } from '@prisma/client';
 
 const log = logger.child({ job: 'reminder' });
 
+const NOON_HOUR = 12;     // 12:00 in user's timezone
 const AFTERNOON_HOUR = 14; // 14:00 in user's timezone
 const INACTIVITY_DAYS = 3;
 
@@ -121,6 +125,7 @@ export async function runReminderWorker(): Promise<void> {
 
   try {
     let morningSent = 0;
+    let noonSent = 0;
     let afternoonSent = 0;
     let inactivitySent = 0;
 
@@ -138,6 +143,7 @@ export async function runReminderWorker(): Promise<void> {
 
       const [reminderH, reminderM] = settings.dailyReminderTime.split(':').map(Number);
       const morningTarget = reminderH * 60 + reminderM;
+      const noonTarget = NOON_HOUR * 60;           // 12:00
       const afternoonTarget = AFTERNOON_HOUR * 60; // 14:00
 
       // ── Notif 1: Morning — announce daily subjects ──
@@ -171,7 +177,36 @@ export async function runReminderWorker(): Promise<void> {
         }
       }
 
-      // ── Notif 2: Afternoon — nudge with one random remaining subject ──
+      // ── Notif 2: Noon — new inbox content to validate ──
+      if (isWithinWindow(currentMinutes, noonTarget) && !wasSentToday(settings.noonPushSentAt, tz)) {
+        const inboxCount = await prisma.content.count({
+          where: {
+            userId: settings.userId,
+            status: ContentStatus.INBOX,
+            NOT: [
+              { platform: { in: [Platform.TIKTOK, Platform.INSTAGRAM] }, duration: { not: null, lt: 10 } },
+            ],
+          },
+        });
+
+        if (inboxCount > 0) {
+          const title = inboxCount === 1
+            ? '1 nouveau contenu a valider'
+            : `${inboxCount} nouveaux contenus a valider`;
+          const body = 'Ouvre ta boite de reception pour trier !';
+
+          const result = await sendPushToUser(settings.userId, title, body, { screen: '/(tabs)/inbox' });
+          if (result.sent > 0) {
+            noonSent++;
+            await prisma.userSettings.update({
+              where: { userId: settings.userId },
+              data: { noonPushSentAt: new Date() },
+            });
+          }
+        }
+      }
+
+      // ── Notif 3: Afternoon — nudge with one random remaining subject ──
       if (isWithinWindow(currentMinutes, afternoonTarget) && !wasSentToday(settings.afternoonPushSentAt, tz)) {
         const dailyRecs = await ensureDailyRecs(settings.userId, tz);
         const remaining = dailyRecs.filter(r => !r.completedAt);
@@ -234,7 +269,7 @@ export async function runReminderWorker(): Promise<void> {
       }
     }
 
-    log.info({ morningSent, afternoonSent, inactivitySent }, 'Reminders completed');
+    log.info({ morningSent, noonSent, afternoonSent, inactivitySent }, 'Reminders completed');
   } catch (error) {
     log.error({ err: error }, 'Worker error');
   }
