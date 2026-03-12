@@ -85,6 +85,9 @@ const envSchema = z.object({
   INSTAGRAM_PROXY_USER: z.string().optional(),
   INSTAGRAM_PROXY_PASS: z.string().optional(),
 
+  // Instagrapi Python sidecar (fallback for Instagram sync)
+  INSTAGRAPI_URL: z.string().optional(),
+
   // Apple Sign-In verification
   APPLE_TEAM_ID: z.string().optional(),
   APPLE_BUNDLE_ID: z.string().optional(),
@@ -202,6 +205,10 @@ export const config = {
     url: env.INSTAGRAM_PROXY_URL || '',
     user: env.INSTAGRAM_PROXY_USER || '',
     pass: env.INSTAGRAM_PROXY_PASS || '',
+  },
+
+  instagrapi: {
+    url: env.INSTAGRAPI_URL || '',
   },
 
   apple: {
