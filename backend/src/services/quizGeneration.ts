@@ -5,6 +5,7 @@ import { getLLMClient, generateText } from './llm.js';
 import pLimit from 'p-limit';
 import { llmLimiter } from '../utils/rateLimiter.js';
 import { logger } from '../config/logger.js';
+import { sendPushToUser } from './pushNotifications.js';
 
 const log = logger.child({ service: 'quiz-generation' });
 
@@ -715,6 +716,17 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
         data: { status: ContentStatus.READY },
       });
     });
+
+    // Notify user that quiz is ready
+    const titleShort = content.title.length > 50
+      ? content.title.substring(0, 47) + '...'
+      : content.title;
+    sendPushToUser(
+      content.userId,
+      'Quiz pret !',
+      `${result.questions.length} questions sur "${titleShort}"`,
+      { screen: '/(tabs)', contentId: content.id }
+    ).catch(() => {}); // fire-and-forget, don't block pipeline
 
     // Generate memo + synopsis in parallel (non-blocking, after quiz creation)
     const postProcessing: Promise<void>[] = [];

@@ -76,6 +76,7 @@ model UserSettings {
   lastPushSentAt    DateTime? // Dedup: morning push (daily subjects announcement)
   noonPushSentAt    DateTime? // Dedup: noon push (new inbox content)
   afternoonPushSentAt DateTime? // Dedup: afternoon push (single subject nudge)
+  eveningPushSentAt DateTime? // Dedup: evening push (streak in danger)
 
   // Onboarding preferences (synced from onboarding flow)
   interests         String[]  @default([])

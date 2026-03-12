@@ -1,8 +1,9 @@
 // Daily Reminder Worker — push notifications per day:
-//   1. Morning (user's dailyReminderTime): "Tes 3 sujets du jour sont prets"
+//   1. Morning (user's dailyReminderTime): "Tes 3 sujets du jour sont prets" + streak
 //   2. Noon (12:00 user time): "X nouveaux contenus a valider"
 //   3. Afternoon (14:00 user time): "Et si tu revisais [random subject] ?"
-//   4. Inactivity win-back (J+3): "Ca fait un moment !"
+//   4. Evening (20:00 user time): "Ton streak de Xj est en danger !" (if no review today)
+//   5. Inactivity win-back (J+3): "Ca fait un moment !"
 import { logger } from '../config/logger.js';
 import { prisma } from '../config/database.js';
 import { sendPushToUser } from '../services/pushNotifications.js';
@@ -13,6 +14,7 @@ const log = logger.child({ job: 'reminder' });
 
 const NOON_HOUR = 12;     // 12:00 in user's timezone
 const AFTERNOON_HOUR = 14; // 14:00 in user's timezone
+const EVENING_HOUR = 20;  // 20:00 in user's timezone
 const INACTIVITY_DAYS = 3;
 
 // ============================================================================
@@ -127,6 +129,7 @@ export async function runReminderWorker(): Promise<void> {
     let morningSent = 0;
     let noonSent = 0;
     let afternoonSent = 0;
+    let eveningSent = 0;
     let inactivitySent = 0;
 
     const usersWithSettings = await prisma.userSettings.findMany({
@@ -145,6 +148,7 @@ export async function runReminderWorker(): Promise<void> {
       const morningTarget = reminderH * 60 + reminderM;
       const noonTarget = NOON_HOUR * 60;           // 12:00
       const afternoonTarget = AFTERNOON_HOUR * 60; // 14:00
+      const eveningTarget = EVENING_HOUR * 60;     // 20:00
 
       // ── Notif 1: Morning — announce daily subjects ──
       if (isWithinWindow(currentMinutes, morningTarget) && !wasSentToday(settings.lastPushSentAt, tz)) {
@@ -161,9 +165,15 @@ export async function runReminderWorker(): Promise<void> {
             const title = count === 1
               ? 'Ton sujet du jour est pret !'
               : `Tes ${count} sujets du jour sont prets !`;
-            const body = names.length <= 2
+            let body = names.length <= 2
               ? names.join(' et ')
               : `${names.slice(0, 2).join(', ')} et ${names[names.length - 1]}`;
+
+            // Append streak info if user has an active streak
+            const streak = await prisma.streak.findUnique({ where: { userId: settings.userId } });
+            if (streak && streak.currentStreak >= 2) {
+              body += ` | ${streak.currentStreak}j de suite !`;
+            }
 
             const result = await sendPushToUser(settings.userId, title, body, { screen: '/(tabs)' });
             if (result.sent > 0) {
@@ -231,9 +241,37 @@ export async function runReminderWorker(): Promise<void> {
           }
         }
       }
+
+      // ── Notif 4: Evening — streak in danger ──
+      if (isWithinWindow(currentMinutes, eveningTarget) && !wasSentToday(settings.eveningPushSentAt, tz)) {
+        const streak = await prisma.streak.findUnique({ where: { userId: settings.userId } });
+
+        if (streak && streak.currentStreak >= 2) {
+          // Check if user has reviewed today
+          const todayStart = new Date(getUserTodayDate(tz) + 'T00:00:00Z');
+          const reviewedToday = await prisma.review.count({
+            where: { userId: settings.userId, createdAt: { gte: todayStart } },
+            take: 1,
+          });
+
+          if (reviewedToday === 0) {
+            const title = `Ton streak de ${streak.currentStreak}j est en danger !`;
+            const body = 'Une petite revision avant de dormir ?';
+
+            const result = await sendPushToUser(settings.userId, title, body, { screen: '/(tabs)' });
+            if (result.sent > 0) {
+              eveningSent++;
+              await prisma.userSettings.update({
+                where: { userId: settings.userId },
+                data: { eveningPushSentAt: new Date() },
+              });
+            }
+          }
+        }
+      }
     }
 
-    // ── Inactivity win-back (J+3) ──
+    // ── Inactivity win-back (J+5) ──
     const inactivityThreshold = new Date();
     inactivityThreshold.setDate(inactivityThreshold.getDate() - INACTIVITY_DAYS);
     const inactivityWindowStart = new Date();
@@ -269,7 +307,7 @@ export async function runReminderWorker(): Promise<void> {
       }
     }
 
-    log.info({ morningSent, noonSent, afternoonSent, inactivitySent }, 'Reminders completed');
+    log.info({ morningSent, noonSent, afternoonSent, eveningSent, inactivitySent }, 'Reminders completed');
   } catch (error) {
     log.error({ err: error }, 'Worker error');
   }
