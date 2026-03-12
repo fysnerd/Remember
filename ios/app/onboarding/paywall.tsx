@@ -7,16 +7,17 @@
  */
 
 import { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
+import { X } from 'lucide-react-native';
 import { Text, Button } from '../../components/ui';
 import { OnboardingProgressBar } from '../../components/onboarding/OnboardingProgressBar';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useAuthStore } from '../../stores/authStore';
 import { isRevenueCatAvailable } from '../../lib/purchases';
-import { colors, spacing } from '../../theme';
+import { colors, spacing, borderRadius } from '../../theme';
 import { haptics } from '../../lib/haptics';
 
 // Try loading RevenueCatUI (native module, may not be in binary)
@@ -75,6 +76,13 @@ export default function PaywallScreen() {
             onRestoreCompleted={handleRestoreCompleted}
             onDismiss={handleDismiss}
           />
+          <Pressable
+            style={styles.closeButton}
+            onPress={handleDismiss}
+            hitSlop={12}
+          >
+            <X size={20} color={colors.textSecondary} />
+          </Pressable>
         </View>
       </SafeAreaView>
     );
@@ -117,6 +125,18 @@ const styles = StyleSheet.create({
   },
   paywallContainer: {
     flex: 1,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
   },
   content: {
     flex: 1,

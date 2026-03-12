@@ -17,10 +17,11 @@ import { colors, spacing, fonts, typography } from '../../theme';
 
 export default function AuthScreen() {
   const router = useRouter();
-  const { loginWithApple, loginWithGoogle, login, clearError } = useAuthStore();
+  const { loginWithApple, loginWithGoogle, sendMagicLink, login, clearError } = useAuthStore();
   const { show, ToastComponent } = useToast();
 
   const [email, setEmail] = useState('');
+  const [emailLoading, setEmailLoading] = useState(false);
   const [appleLoading, setAppleLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [devLoading, setDevLoading] = useState(false);
@@ -44,8 +45,11 @@ export default function AuthScreen() {
         });
       }
     } catch (error: any) {
-      if (error.code !== 'ERR_REQUEST_CANCELED') {
-        show('Apple Sign-In unavailable', 'error');
+      if (error.code === 'ERR_REQUEST_CANCELED' || error.code === 'ERR_CANCELED') {
+        // User cancelled — do nothing
+      } else {
+        console.error('Apple Sign-In error:', error);
+        show(error.message || 'Apple Sign-In failed', 'error');
       }
     } finally {
       setAppleLoading(false);
@@ -57,30 +61,47 @@ export default function AuthScreen() {
       setGoogleLoading(true);
       clearError();
       const { GoogleSignin } = await import('@react-native-google-signin/google-signin');
-      await GoogleSignin.hasPlayServices();
       const response = await GoogleSignin.signIn();
+
+      if (response.type === 'cancelled') return;
+
       const idToken = response.data?.idToken;
       if (idToken) {
         await loginWithGoogle(idToken);
+      } else {
+        show('Google Sign-In: no token received', 'error');
       }
     } catch (error: any) {
-      if (error.code !== 'SIGN_IN_CANCELLED') {
-        show('Google Sign-In unavailable', 'error');
+      if (error.code === 'SIGN_IN_CANCELLED' || error.code === 'CANCELED') {
+        // User cancelled — do nothing
+      } else {
+        console.error('Google Sign-In error:', error);
+        show(error.message || 'Google Sign-In failed', 'error');
       }
     } finally {
       setGoogleLoading(false);
     }
   };
 
-  const handleEmailContinue = () => {
-    if (!email.trim()) {
+  const handleEmailContinue = async () => {
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed) {
       show('Enter your email', 'error');
       return;
     }
-    router.push({
-      pathname: '/onboarding/password',
-      params: { email: email.trim().toLowerCase() },
-    });
+    try {
+      setEmailLoading(true);
+      clearError();
+      await sendMagicLink(trimmed);
+      router.push({
+        pathname: '/onboarding/check-email',
+        params: { email: trimmed },
+      });
+    } catch {
+      show('Failed to send email. Try again.', 'error');
+    } finally {
+      setEmailLoading(false);
+    }
   };
 
   const handleDevLogin = async () => {
@@ -160,6 +181,7 @@ export default function AuthScreen() {
               variant="primary"
               fullWidth
               onPress={handleEmailContinue}
+              loading={emailLoading}
             >
               Continue
             </Button>
