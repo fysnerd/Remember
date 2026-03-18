@@ -15,6 +15,7 @@ import { syncTikTokForUser } from '../workers/tiktokSync.js';
 import { syncInstagramForUser } from '../workers/instagramSync.js';
 import { runUserPipeline } from '../services/pipeline.js';
 import { generateText, generateEmbedding } from '../services/llm.js';
+import { shouldFilterContent, cleanTitle } from '../services/contentFilter.js';
 import { logger } from '../config/logger.js';
 
 const log = logger.child({ route: 'content' });
@@ -169,6 +170,108 @@ contentRouter.post('/refresh', async (req: Request, res: Response, next: NextFun
         log.error({ err, userId }, 'User pipeline failed after refresh');
       });
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// ============================================================================
+// Instagram On-Device Sync — Import items extracted on user's device
+// ============================================================================
+
+/**
+ * POST /api/content/import-instagram-items
+ *
+ * Receives Instagram liked feed items that were extracted on-device via WebView.
+ * The mobile app intercepts Instagram's feed/liked API response and sends
+ * the raw items here. This avoids making Instagram API calls from the VPS
+ * (which triggers "suspicious login" warnings).
+ *
+ * Body: { items: InstagramItem[] }
+ * Returns: { newItems: number }
+ */
+contentRouter.post('/import-instagram-items', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+    const { items } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.json({ newItems: 0, message: 'No items provided' });
+    }
+
+    log.info({ userId, itemCount: items.length }, 'Importing Instagram items from on-device sync');
+
+    // Filter: only videos (media_type 2 = video, product_type 'clips' = reel)
+    const videos = items.filter((item: any) =>
+      item.media_type === 2 || item.product_type === 'clips'
+    );
+
+    if (videos.length === 0) {
+      return res.json({ newItems: 0, message: 'No video/reel items found' });
+    }
+
+    // Limit to 20 most recent
+    const toProcess = videos.slice(0, 20);
+
+    // Batch check existing content to avoid duplicates
+    const externalIds = toProcess
+      .map((item: any) => item.pk?.toString() || item.id?.toString() || item.code)
+      .filter((id: any): id is string => !!id);
+
+    const existingContent = await prisma.content.findMany({
+      where: { userId, platform: Platform.INSTAGRAM, externalId: { in: externalIds } },
+      select: { externalId: true },
+    });
+    const existingIds = new Set(existingContent.map(c => c.externalId));
+
+    // Insert oldest-liked first so most-recently-liked gets the latest createdAt
+    const itemsReversed = [...toProcess].reverse();
+    let newItems = 0;
+
+    for (const item of itemsReversed) {
+      const externalId = item.pk?.toString() || item.id?.toString() || item.code;
+      if (!externalId || existingIds.has(externalId)) continue;
+
+      const filterReason = shouldFilterContent(item.caption?.text || null, item.video_duration || null);
+      if (filterReason) {
+        log.debug({ externalId, filterReason }, 'Skipping filtered Instagram reel');
+        continue;
+      }
+
+      const shortcode = item.code || externalId;
+      const url = `https://www.instagram.com/p/${shortcode}/`;
+      const authorUsername = item.user?.username || null;
+
+      await prisma.content.create({
+        data: {
+          userId,
+          platform: Platform.INSTAGRAM,
+          externalId,
+          url,
+          title: cleanTitle(item.caption?.text || null, 'Instagram Reel'),
+          description: item.caption?.text || null,
+          thumbnailUrl: item.image_versions2?.candidates?.[0]?.url || null,
+          duration: item.video_duration || null,
+          authorUsername,
+          channelName: authorUsername ? `@${authorUsername}` : null,
+          likeCount: item.like_count || null,
+          commentCount: item.comment_count || null,
+          capturedAt: new Date(),
+          status: ContentStatus.INBOX,
+        },
+      });
+      newItems++;
+    }
+
+    // Update lastSyncAt on the connection (if it exists)
+    await prisma.connectedPlatform.updateMany({
+      where: { userId, platform: Platform.INSTAGRAM },
+      data: { lastSyncAt: new Date(), lastSyncError: null },
+    });
+
+    log.info({ userId, newItems, totalItems: items.length, videos: videos.length }, 'On-device Instagram import done');
+
+    return res.json({ newItems });
   } catch (error) {
     return next(error);
   }

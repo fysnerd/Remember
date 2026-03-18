@@ -240,6 +240,30 @@ export default function ProfileScreen() {
 
   const handlePlatformPress = (platformId: string, platformName: string, isConnected: boolean) => {
     if (loadingPlatform) return;
+
+    // Instagram connected → offer sync (on-device) or disconnect
+    if (platformId === 'instagram' && isConnected) {
+      Alert.alert(platformName, 'Que voulez-vous faire ?', [
+        {
+          text: 'Synchroniser',
+          onPress: () => router.push('/instagram-sync' as any),
+        },
+        {
+          text: 'Déconnecter',
+          style: 'destructive',
+          onPress: () => handleDisconnect(platformId, platformName),
+        },
+        { text: 'Annuler', style: 'cancel' },
+      ]);
+      return;
+    }
+
+    // Instagram not connected → go to on-device sync (login + sync in one flow)
+    if (platformId === 'instagram' && !isConnected) {
+      router.push('/instagram-sync' as any);
+      return;
+    }
+
     if (isConnected) {
       handleDisconnect(platformId, platformName);
     } else {
