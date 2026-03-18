@@ -277,6 +277,72 @@ contentRouter.post('/import-instagram-items', async (req: Request, res: Response
   }
 });
 
+/**
+ * POST /api/content/import-instagram-shortcodes
+ *
+ * Receives shortcodes extracted on-device from Instagram's Bloks responses.
+ * Creates Content records with URLs — the transcription pipeline will
+ * handle downloading and processing.
+ *
+ * Body: { shortcodes: string[] }
+ * Returns: { newItems: number }
+ */
+contentRouter.post('/import-instagram-shortcodes', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+    const { shortcodes } = req.body;
+
+    if (!Array.isArray(shortcodes) || shortcodes.length === 0) {
+      res.json({ newItems: 0 });
+      return;
+    }
+
+    log.info({ userId, count: shortcodes.length }, 'Importing Instagram shortcodes from on-device sync');
+
+    // Deduplicate
+    const uniqueCodes = [...new Set(shortcodes as string[])].slice(0, 30);
+
+    // Check existing content by externalId (shortcode)
+    const existingContent = await prisma.content.findMany({
+      where: { userId, platform: Platform.INSTAGRAM, externalId: { in: uniqueCodes } },
+      select: { externalId: true },
+    });
+    const existingIds = new Set(existingContent.map(c => c.externalId));
+
+    let newItems = 0;
+
+    for (const code of uniqueCodes) {
+      if (existingIds.has(code)) continue;
+
+      const url = `https://www.instagram.com/reel/${code}/`;
+
+      await prisma.content.create({
+        data: {
+          userId,
+          platform: Platform.INSTAGRAM,
+          externalId: code,
+          url,
+          title: 'Instagram Reel',
+          capturedAt: new Date(),
+          status: ContentStatus.INBOX,
+        },
+      });
+      newItems++;
+    }
+
+    // Update lastSyncAt
+    await prisma.connectedPlatform.updateMany({
+      where: { userId, platform: Platform.INSTAGRAM },
+      data: { lastSyncAt: new Date(), lastSyncError: null },
+    });
+
+    log.info({ userId, newItems, totalCodes: uniqueCodes.length }, 'On-device Instagram shortcodes import done');
+    res.json({ newItems });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 // GET /api/content - List user's content with search & filters
 contentRouter.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
