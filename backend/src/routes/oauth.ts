@@ -841,16 +841,17 @@ oauthRouter.get('/instagram/cookies', authenticateToken, async (req: Request, re
     });
 
     if (!connection?.accessToken) {
-      return res.json({ cookies: null });
+      res.json({ cookies: null });
+      return;
     }
 
     try {
       const parsed = JSON.parse(connection.accessToken);
       // Strip device fingerprint — only send actual cookies
       const { _device, ...cookies } = parsed;
-      return res.json({ cookies });
+      res.json({ cookies });
     } catch {
-      return res.json({ cookies: null });
+      res.json({ cookies: null });
     }
   } catch (error) {
     next(error);
