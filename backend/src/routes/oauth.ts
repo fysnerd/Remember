@@ -831,6 +831,32 @@ oauthRouter.get('/status', authenticateToken, async (req: Request, res: Response
   }
 });
 
+// GET /api/oauth/instagram/cookies - Return stored Instagram cookies for on-device sync
+// The mobile app injects these into a WebView to make requests from the user's device
+oauthRouter.get('/instagram/cookies', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const connection = await prisma.connectedPlatform.findUnique({
+      where: { userId_platform: { userId: req.user!.id, platform: Platform.INSTAGRAM } },
+      select: { accessToken: true },
+    });
+
+    if (!connection?.accessToken) {
+      return res.json({ cookies: null });
+    }
+
+    try {
+      const parsed = JSON.parse(connection.accessToken);
+      // Strip device fingerprint — only send actual cookies
+      const { _device, ...cookies } = parsed;
+      return res.json({ cookies });
+    } catch {
+      return res.json({ cookies: null });
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ============================================================================
 // Source Type Configuration
 // ============================================================================

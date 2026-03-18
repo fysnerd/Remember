@@ -1,25 +1,23 @@
 /**
  * Instagram On-Device Sync Screen
  *
- * Instead of sending cookies to the backend (which calls Instagram from a VPS IP
- * and triggers "suspicious login" warnings), this screen:
- * 1. Opens Instagram in a WebView on the user's device
- * 2. User logs in naturally (same device, same IP)
- * 3. Injected JS intercepts fetch() responses containing liked feed data
- * 4. Extracted items are sent to the backend for content creation + transcription
+ * Two modes:
+ * 1. ALREADY CONNECTED: Fetch stored cookies from backend → inject into WebView
+ *    → auto-fetch feed/liked → send items to backend. No login needed.
+ * 2. FIRST TIME: User logs into Instagram in WebView → cookies saved →
+ *    auto-fetch feed/liked → send items to backend.
  *
- * The user's device makes the Instagram requests, so Instagram sees a normal
- * mobile session — no data center IP, no fingerprint mismatch.
+ * All Instagram API calls happen FROM THE USER'S DEVICE (their IP, their
+ * Safari WebView), not from our VPS. This avoids "suspicious login" warnings.
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
+import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import { useQueryClient } from '@tanstack/react-query';
 import { Text, Button } from '../components/ui';
-import { LoadingScreen } from '../components/LoadingScreen';
 import api from '../lib/api';
 import { colors, spacing } from '../theme';
 
@@ -31,74 +29,17 @@ try {
   console.warn('CookieManager not available');
 }
 
-// Safari iOS UA to avoid WebView blocks from Instagram
+// Safari iOS UA
 const USER_AGENT =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 
-// JS injected into the WebView to intercept Instagram API responses
-const INJECT_JS = `
-(function() {
-  if (window.__ankoraInjected) return;
-  window.__ankoraInjected = true;
-
-  // Override fetch to intercept Instagram API responses
-  const origFetch = window.fetch;
-  window.fetch = async function(...args) {
-    const response = await origFetch.apply(this, args);
-    try {
-      const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
-      // Intercept liked feed responses (web or mobile API)
-      if (url.includes('feed/liked') || url.includes('liked_by') ||
-          (url.includes('graphql') && url.includes('liked'))) {
-        const clone = response.clone();
-        const text = await clone.text();
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'API_RESPONSE',
-          url: url,
-          body: text
-        }));
-      }
-    } catch(e) {}
-    return response;
-  };
-
-  // Override XMLHttpRequest for older-style calls
-  const origOpen = XMLHttpRequest.prototype.open;
-  const origSend = XMLHttpRequest.prototype.send;
-  XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-    this.__url = url;
-    return origOpen.call(this, method, url, ...rest);
-  };
-  XMLHttpRequest.prototype.send = function(...args) {
-    this.addEventListener('load', function() {
-      try {
-        const url = this.__url || '';
-        if (url.includes('feed/liked') || url.includes('liked_by')) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'API_RESPONSE',
-            url: url,
-            body: this.responseText
-          }));
-        }
-      } catch(e) {}
-    });
-    return origSend.apply(this, args);
-  };
-
-  window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'INJECTED' }));
-})();
-true;
-`;
-
-// JS to trigger the liked feed fetch from within the WebView context
+// JS to fetch liked feed from within the WebView's authenticated context
 const FETCH_LIKED_JS = `
 (async function() {
   try {
-    // Get CSRF token from cookies
     const csrfMatch = document.cookie.match(/csrftoken=([^;]+)/);
     const csrfToken = csrfMatch ? csrfMatch[1] : '';
 
-    // Try the web API endpoint first
     const res = await fetch('/api/v1/feed/liked/', {
       credentials: 'include',
       headers: {
@@ -132,208 +73,322 @@ const FETCH_LIKED_JS = `
 true;
 `;
 
-type SyncState = 'login' | 'ready' | 'syncing' | 'done' | 'error';
-
-interface SyncResult {
-  newItems: number;
-  message: string;
-}
+type SyncState =
+  | 'loading'    // Fetching stored cookies from backend
+  | 'login'      // No cookies — user needs to log in
+  | 'injecting'  // Injecting cookies into WebView
+  | 'syncing'    // Fetching liked feed
+  | 'done'       // Success
+  | 'error';     // Failed
 
 export default function InstagramSyncScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const webViewRef = useRef<WebView>(null);
 
-  const [state, setState] = useState<SyncState>('login');
-  const [isWebViewLoading, setIsWebViewLoading] = useState(true);
-  const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [state, setState] = useState<SyncState>('loading');
+  const [message, setMessage] = useState('');
+  const [newItems, setNewItems] = useState(0);
+  const [storedCookies, setStoredCookies] = useState<Record<string, string> | null>(null);
+  const [webViewReady, setWebViewReady] = useState(false);
+  const [syncTriggered, setSyncTriggered] = useState(false);
 
-  // Check if user is logged in by looking for session cookies
-  const checkLoginStatus = useCallback(async () => {
-    if (!CookieManager) return;
+  // 1. On mount: try to fetch stored cookies from backend
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await api.get('/oauth/instagram/cookies');
+        if (data.cookies?.sessionid) {
+          setStoredCookies(data.cookies);
+          setState('injecting');
+        } else {
+          setState('login');
+        }
+      } catch {
+        setState('login');
+      }
+    })();
+  }, []);
+
+  // 2. When WebView loads and we have cookies → inject them then fetch
+  const onWebViewLoad = useCallback(() => {
+    setWebViewReady(true);
+
+    if (state === 'injecting' && storedCookies && !syncTriggered) {
+      // Inject cookies into WebView via JS
+      const cookieStatements = Object.entries(storedCookies)
+        .filter(([_, v]) => v && typeof v === 'string')
+        .map(([k, v]) => `document.cookie = "${k}=${v}; domain=.instagram.com; path=/; secure";`)
+        .join('\n');
+
+      const injectAndFetch = `
+        (function() {
+          ${cookieStatements}
+          // Small delay to let cookies settle, then fetch
+          setTimeout(function() {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'COOKIES_SET' }));
+          }, 500);
+        })();
+        true;
+      `;
+      webViewRef.current?.injectJavaScript(injectAndFetch);
+    }
+  }, [state, storedCookies, syncTriggered]);
+
+  // 3. For login mode: check if user has logged in
+  const checkLoginAndSync = useCallback(async () => {
+    if (state !== 'login' || !CookieManager) return;
     try {
       const cookies = await CookieManager.get('https://www.instagram.com');
       const hasSession = cookies?.sessionid?.value || cookies?.ds_user_id?.value;
-      if (hasSession && !isLoggedIn) {
-        setIsLoggedIn(true);
-        setState('ready');
-      }
-    } catch (e) {
-      // Ignore cookie check errors
-    }
-  }, [isLoggedIn]);
-
-  // Also send cookies to backend for transcription (yt-dlp needs them)
-  const saveCookiesForTranscription = useCallback(async () => {
-    if (!CookieManager) return;
-    try {
-      const cookies = await CookieManager.get('https://www.instagram.com');
-      const formatted: Record<string, string> = {};
-      for (const [name, cookie] of Object.entries(cookies)) {
-        if (cookie && typeof cookie === 'object' && 'value' in cookie) {
-          formatted[name] = (cookie as { value: string }).value;
+      if (hasSession && !syncTriggered) {
+        // Save cookies to backend for transcription
+        const formatted: Record<string, string> = {};
+        for (const [name, cookie] of Object.entries(cookies)) {
+          if (cookie && typeof cookie === 'object' && 'value' in cookie) {
+            formatted[name] = (cookie as { value: string }).value;
+          }
         }
+        if (formatted.sessionid) {
+          api.post('/oauth/instagram/connect', formatted).catch(() => {});
+        }
+
+        // Now trigger the sync
+        setSyncTriggered(true);
+        setState('syncing');
+        setMessage('Connecté ! Récupération de vos reels...');
+        webViewRef.current?.injectJavaScript(FETCH_LIKED_JS);
       }
-      if (formatted.sessionid) {
-        await api.post('/oauth/instagram/connect', formatted);
-      }
-    } catch (e) {
-      console.warn('Could not save cookies for transcription:', e);
-    }
-  }, []);
+    } catch {}
+  }, [state, syncTriggered]);
 
-  // Process items received from the WebView
-  const processItems = useCallback(async (items: any[]) => {
-    if (!items || items.length === 0) {
-      setSyncResult({ newItems: 0, message: 'Aucun nouveau reel trouvé.' });
-      setState('done');
-      return;
-    }
-
-    try {
-      // Send extracted items to backend
-      const res = await api.post('/content/import-instagram-items', { items });
-      const newItems = res.data?.newItems || 0;
-
-      // Also save cookies for transcription pipeline
-      await saveCookiesForTranscription();
-
-      // Invalidate queries to refresh UI
-      queryClient.invalidateQueries({ queryKey: ['content'] });
-      queryClient.invalidateQueries({ queryKey: ['inbox'] });
-      queryClient.invalidateQueries({ queryKey: ['home'] });
-      queryClient.invalidateQueries({ queryKey: ['oauth', 'status'] });
-
-      setSyncResult({
-        newItems,
-        message: newItems > 0
-          ? `${newItems} nouveau${newItems > 1 ? 'x' : ''} reel${newItems > 1 ? 's' : ''} importé${newItems > 1 ? 's' : ''} !`
-          : 'Tous vos reels sont déjà synchronisés.',
-      });
-      setState('done');
-    } catch (error) {
-      console.error('Import error:', error);
-      setSyncResult({ newItems: 0, message: "Erreur lors de l'import." });
-      setState('error');
-    }
-  }, [queryClient, saveCookiesForTranscription]);
-
-  // Handle messages from the WebView
+  // 4. Handle messages from WebView
   const onMessage = useCallback((event: WebViewMessageEvent) => {
     try {
       const msg = JSON.parse(event.nativeEvent.data);
 
-      if (msg.type === 'INJECTED') {
-        console.log('[InstagramSync] JS injected successfully');
+      if (msg.type === 'COOKIES_SET') {
+        // Cookies injected — now fetch liked feed
+        setSyncTriggered(true);
+        setState('syncing');
+        setMessage('Récupération de vos reels likés...');
+        webViewRef.current?.injectJavaScript(FETCH_LIKED_JS);
         return;
       }
 
-      if (msg.type === 'LIKED_FEED' || msg.type === 'API_RESPONSE') {
+      if (msg.type === 'LIKED_FEED') {
         try {
           const data = JSON.parse(msg.body);
           const items = data.items || [];
           if (items.length > 0) {
-            console.log(`[InstagramSync] Got ${items.length} items from Instagram`);
             processItems(items);
           } else {
-            // Might be a GraphQL response with different structure
-            console.log('[InstagramSync] Response had no items, checking structure...');
-            setSyncResult({ newItems: 0, message: 'Aucun reel liké trouvé.' });
+            setMessage('Aucun reel liké trouvé.');
             setState('done');
           }
-        } catch (parseErr) {
-          console.error('[InstagramSync] Failed to parse response:', parseErr);
+        } catch {
+          setMessage('Format de réponse inattendu.');
           setState('error');
-          setSyncResult({ newItems: 0, message: 'Format de réponse inattendu.' });
         }
         return;
       }
 
       if (msg.type === 'FETCH_ERROR') {
-        console.error('[InstagramSync] Fetch error:', msg);
-        setState('error');
-        setSyncResult({
-          newItems: 0,
-          message: `Erreur Instagram: ${msg.status || msg.error || 'inconnue'}`,
-        });
+        // If auto-sync failed (expired cookies), fall back to login mode
+        if (state === 'syncing' && storedCookies) {
+          setState('login');
+          setMessage('Session expirée. Reconnectez-vous.');
+          setSyncTriggered(false);
+          // Clear cookies so WebView shows login page
+          CookieManager?.clearAll?.().catch(() => {});
+        } else {
+          setMessage(`Erreur: ${msg.status || msg.error || 'inconnue'}`);
+          setState('error');
+        }
         return;
       }
-    } catch (e) {
-      // Not JSON, ignore
+    } catch {}
+  }, [state, storedCookies]);
+
+  // 5. Send extracted items to backend
+  const processItems = useCallback(async (items: any[]) => {
+    try {
+      const res = await api.post('/content/import-instagram-items', { items });
+      const count = res.data?.newItems || 0;
+      setNewItems(count);
+
+      // Also save fresh cookies from WebView for transcription
+      if (CookieManager) {
+        try {
+          const cookies = await CookieManager.get('https://www.instagram.com');
+          const formatted: Record<string, string> = {};
+          for (const [name, cookie] of Object.entries(cookies)) {
+            if (cookie && typeof cookie === 'object' && 'value' in cookie) {
+              formatted[name] = (cookie as { value: string }).value;
+            }
+          }
+          if (formatted.sessionid) {
+            await api.post('/oauth/instagram/connect', formatted);
+          }
+        } catch {}
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['content'] });
+      queryClient.invalidateQueries({ queryKey: ['inbox'] });
+      queryClient.invalidateQueries({ queryKey: ['home'] });
+      queryClient.invalidateQueries({ queryKey: ['oauth', 'status'] });
+
+      setMessage(
+        count > 0
+          ? `${count} nouveau${count > 1 ? 'x' : ''} reel${count > 1 ? 's' : ''} importé${count > 1 ? 's' : ''} !`
+          : 'Tout est déjà synchronisé.'
+      );
+      setState('done');
+    } catch {
+      setMessage("Erreur lors de l'import.");
+      setState('error');
     }
-  }, [processItems]);
+  }, [queryClient]);
 
-  // Start sync: inject JS to fetch liked feed
-  const startSync = useCallback(() => {
-    setState('syncing');
-    webViewRef.current?.injectJavaScript(FETCH_LIKED_JS);
-  }, []);
-
+  // --- No CookieManager fallback ---
   if (!CookieManager) {
     return (
       <>
         <Stack.Screen options={{ title: 'Sync Instagram' }} />
         <SafeAreaView style={styles.container}>
-          <View style={styles.centerContent}>
-            <Text variant="h3" style={styles.centerText}>
-              Development Build requis
-            </Text>
-            <Text variant="body" color="secondary" style={styles.centerText}>
-              Nécessite un build avec les modules natifs.
-            </Text>
-            <Button variant="outline" onPress={() => router.back()}>
-              Retour
-            </Button>
+          <View style={styles.center}>
+            <Text variant="h3" style={styles.centerText}>Development Build requis</Text>
+            <Button variant="outline" onPress={() => router.back()}>Retour</Button>
           </View>
         </SafeAreaView>
       </>
     );
   }
 
+  // --- Loading stored cookies ---
+  if (state === 'loading') {
+    return (
+      <>
+        <Stack.Screen options={{ title: 'Sync Instagram' }} />
+        <SafeAreaView style={styles.container}>
+          <View style={styles.center}>
+            <ActivityIndicator size="large" color={colors.accent} />
+            <Text variant="body" color="secondary" style={{ marginTop: spacing.md }}>
+              Préparation...
+            </Text>
+          </View>
+        </SafeAreaView>
+      </>
+    );
+  }
+
+  // --- Syncing / Injecting (WebView hidden or minimal) ---
+  if (state === 'injecting' || state === 'syncing') {
+    return (
+      <>
+        <Stack.Screen options={{ title: 'Sync Instagram' }} />
+        <SafeAreaView style={styles.container}>
+          <View style={styles.center}>
+            <ActivityIndicator size="large" color={colors.accent} />
+            <Text variant="body" color="secondary" style={{ marginTop: spacing.md }}>
+              {message || 'Synchronisation en cours...'}
+            </Text>
+          </View>
+
+          {/* Hidden WebView that does the actual work */}
+          <WebView
+            ref={webViewRef}
+            source={{ uri: 'https://www.instagram.com/' }}
+            userAgent={USER_AGENT}
+            onLoadEnd={onWebViewLoad}
+            onMessage={onMessage}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            thirdPartyCookiesEnabled={true}
+            sharedCookiesEnabled={true}
+            incognito={false}
+            style={{ height: 0, opacity: 0 }}
+          />
+        </SafeAreaView>
+      </>
+    );
+  }
+
+  // --- Done / Error ---
+  if (state === 'done' || state === 'error') {
+    return (
+      <>
+        <Stack.Screen options={{ title: 'Sync Instagram' }} />
+        <SafeAreaView style={styles.container}>
+          <View style={styles.center}>
+            <Text variant="h2" style={styles.centerText}>
+              {state === 'done' ? (newItems > 0 ? '🎉' : '✅') : '⚠️'}
+            </Text>
+            <Text variant="h3" style={styles.centerText}>{message}</Text>
+            {state === 'done' && (
+              <Text variant="caption" color="secondary" style={[styles.centerText, { marginTop: spacing.sm }]}>
+                Astuce : si Instagram signale une activité suspecte, confirmez dans Instagram {'>'} Paramètres {'>'} "C'est bien moi".
+              </Text>
+            )}
+            <View style={styles.buttonRow}>
+              <Button
+                variant="outline"
+                onPress={() => {
+                  setState('loading');
+                  setSyncTriggered(false);
+                  setWebViewReady(false);
+                  // Re-trigger the flow
+                  (async () => {
+                    try {
+                      const { data } = await api.get('/oauth/instagram/cookies');
+                      if (data.cookies?.sessionid) {
+                        setStoredCookies(data.cookies);
+                        setState('injecting');
+                      } else {
+                        setState('login');
+                      }
+                    } catch {
+                      setState('login');
+                    }
+                  })();
+                }}
+                style={styles.btn}
+              >
+                Relancer
+              </Button>
+              <Button variant="primary" onPress={() => router.back()} style={styles.btn}>
+                Terminé
+              </Button>
+            </View>
+          </View>
+        </SafeAreaView>
+      </>
+    );
+  }
+
+  // --- Login mode: show WebView for user to log in ---
   return (
     <>
       <Stack.Screen
         options={{
-          title: 'Sync Instagram',
+          title: 'Connexion Instagram',
           headerBackTitle: 'Retour',
         }}
       />
       <SafeAreaView style={styles.container}>
-        {/* Instructions */}
         <View style={styles.instructions}>
           <Text variant="body" color="secondary">
-            {state === 'login' && "Connectez-vous à Instagram, puis appuyez sur Synchroniser."}
-            {state === 'ready' && "Connecté ! Appuyez sur Synchroniser pour importer vos reels likés."}
-            {state === 'syncing' && "Récupération de vos reels likés..."}
-            {state === 'done' && (syncResult?.message || 'Terminé !')}
-            {state === 'error' && (syncResult?.message || 'Une erreur est survenue.')}
+            {message || "Connectez-vous à Instagram. La synchronisation démarrera automatiquement."}
           </Text>
-          {state === 'done' && (
-            <Text variant="caption" color="secondary" style={{ marginTop: spacing.xs }}>
-              Astuce : si Instagram vous signale une activité suspecte, allez dans Instagram {'>'} Paramètres {'>'} Sécurité {'>'} Connexions {'>'} "C'est bien moi".
-            </Text>
-          )}
         </View>
 
-        {/* WebView */}
         <View style={styles.webviewContainer}>
-          {isWebViewLoading && (
-            <View style={styles.loadingOverlay}>
-              <LoadingScreen />
-            </View>
-          )}
           <WebView
             ref={webViewRef}
             source={{ uri: 'https://www.instagram.com/accounts/login/' }}
             userAgent={USER_AGENT}
-            onLoadStart={() => setIsWebViewLoading(true)}
-            onLoadEnd={() => {
-              setIsWebViewLoading(false);
-              checkLoginStatus();
-            }}
-            onNavigationStateChange={() => checkLoginStatus()}
-            injectedJavaScript={INJECT_JS}
+            onLoadEnd={() => checkLoginAndSync()}
+            onNavigationStateChange={() => checkLoginAndSync()}
             onMessage={onMessage}
             javaScriptEnabled={true}
             domStorageEnabled={true}
@@ -342,46 +397,6 @@ export default function InstagramSyncScreen() {
             incognito={false}
             style={styles.webview}
           />
-        </View>
-
-        {/* Footer */}
-        <View style={styles.footer}>
-          {(state === 'login' || state === 'ready') && (
-            <Button
-              variant="primary"
-              fullWidth
-              onPress={startSync}
-              disabled={state === 'login'}
-            >
-              {state === 'login' ? 'Connectez-vous d\'abord' : 'Synchroniser mes reels likés'}
-            </Button>
-          )}
-          {state === 'syncing' && (
-            <Button variant="primary" fullWidth disabled loading onPress={() => {}}>
-              Synchronisation...
-            </Button>
-          )}
-          {(state === 'done' || state === 'error') && (
-            <View style={styles.footerRow}>
-              <Button
-                variant="outline"
-                onPress={() => {
-                  setState('ready');
-                  setSyncResult(null);
-                }}
-                style={styles.footerButton}
-              >
-                Relancer
-              </Button>
-              <Button
-                variant="primary"
-                onPress={() => router.back()}
-                style={styles.footerButton}
-              >
-                Terminé
-              </Button>
-            </View>
-          )}
         </View>
       </SafeAreaView>
     </>
@@ -393,7 +408,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  centerContent: {
+  center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
@@ -411,27 +426,16 @@ const styles = StyleSheet.create({
   },
   webviewContainer: {
     flex: 1,
-    position: 'relative',
-  },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 1,
-    backgroundColor: colors.background,
   },
   webview: {
     flex: 1,
   },
-  footer: {
-    padding: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.background,
-  },
-  footerRow: {
+  buttonRow: {
     flexDirection: 'row',
     gap: spacing.sm,
+    marginTop: spacing.lg,
   },
-  footerButton: {
+  btn: {
     flex: 1,
   },
 });
