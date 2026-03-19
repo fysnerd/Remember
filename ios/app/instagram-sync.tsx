@@ -102,42 +102,9 @@ const SCRAPE_JS = `
     var scraped = scrapeItems();
     var codes = scraped;
 
-    // Deep DOM inspection
-    if (attempts === 3 || attempts === 8) {
-      // 1. Dump a sample role="button" element
-      var btns = document.querySelectorAll('[role="button"]');
-      if (btns.length > 0) {
-        sendDebug('BUTTON[0] outerHTML (500ch): ' + btns[0].outerHTML.substring(0, 500));
-        if (btns.length > 2) {
-          sendDebug('BUTTON[2] outerHTML (500ch): ' + btns[2].outerHTML.substring(0, 500));
-        }
-      }
-
-      // 2. Search raw HTML for shortcode patterns
-      var html = document.body.innerHTML;
-      var codeMatches = html.match(/"code"\s*:\s*"([A-Za-z0-9_-]+)"/g);
-      sendDebug('Raw "code" matches in HTML: ' + (codeMatches ? codeMatches.length : 0) + ' — samples: ' + (codeMatches ? codeMatches.slice(0,3).join(', ') : 'none'));
-
-      // 3. Search for /reel/ or /p/ in raw HTML
-      var reelMatches = html.match(/\\/reel\\/[A-Za-z0-9_-]+/g);
-      var pMatches = html.match(/\\/p\\/[A-Za-z0-9_-]+/g);
-      sendDebug('Raw /reel/ matches: ' + (reelMatches ? reelMatches.length : 0) + ', /p/ matches: ' + (pMatches ? pMatches.length : 0));
-
-      // 4. Check script tags for embedded JSON
-      var scripts = document.querySelectorAll('script[type="application/json"]');
-      sendDebug('JSON script tags: ' + scripts.length);
-      for (var s = 0; s < Math.min(scripts.length, 3); s++) {
-        var txt = scripts[s].textContent || '';
-        if (txt.indexOf('code') !== -1) {
-          sendDebug('Script[' + s + '] has "code", len=' + txt.length + ', preview=' + txt.substring(0, 300));
-        }
-      }
-
-      // 5. Check img src for instagram CDN patterns (media IDs)
-      var imgs = document.querySelectorAll('img[src*="instagram"]');
-      if (imgs.length > 0) {
-        sendDebug('IG images: ' + imgs.length + ', src[0]=' + imgs[0].getAttribute('src').substring(0, 150));
-      }
+    // Debug: log sample items found
+    if (attempts === 3 && codes.length > 0) {
+      sendDebug('Sample items: ' + JSON.stringify(codes.slice(0, 3)));
     }
 
     sendDebug('Attempt ' + attempts + ': found ' + codes.length + ' codes, URL=' + location.href);

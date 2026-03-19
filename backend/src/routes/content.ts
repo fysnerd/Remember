@@ -348,10 +348,94 @@ contentRouter.post('/import-instagram-shortcodes', async (req: Request, res: Res
 
     log.info({ userId, newItems, totalCodes: uniqueCodes.length }, 'On-device Instagram shortcodes import done');
     res.json({ newItems });
+
+    // Background: enrich new items with yt-dlp metadata (title, thumbnail, author, duration)
+    if (newItems > 0) {
+      enrichInstagramItems(userId).catch((err) => {
+        log.error({ err, userId }, 'Background Instagram enrichment failed');
+      });
+    }
   } catch (error) {
     return next(error);
   }
 });
+
+/**
+ * Background enrichment: fetch metadata for Instagram items that only have "Instagram Reel" as title.
+ * Uses yt-dlp --dump-json (fast, no download) with stored cookies.
+ */
+async function enrichInstagramItems(userId: string): Promise<void> {
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const { writeFile, unlink } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const path = await import('node:path');
+  const execFileAsync = promisify(execFile);
+
+  const items = await prisma.content.findMany({
+    where: { userId, platform: Platform.INSTAGRAM, title: 'Instagram Reel' },
+    select: { id: true, url: true, externalId: true },
+    take: 20,
+    orderBy: { createdAt: 'desc' },
+  });
+
+  if (items.length === 0) return;
+  log.info({ userId, count: items.length }, 'Enriching Instagram items with yt-dlp');
+
+  // Build cookies file from stored connection
+  let cookiesPath: string | null = null;
+  try {
+    const connection = await prisma.connectedPlatform.findUnique({
+      where: { userId_platform: { userId, platform: Platform.INSTAGRAM } },
+      select: { accessToken: true },
+    });
+    if (connection?.accessToken) {
+      const cookies = JSON.parse(connection.accessToken);
+      const lines = ['# Netscape HTTP Cookie File'];
+      for (const [name, value] of Object.entries(cookies)) {
+        if (name.startsWith('_') || typeof value !== 'string') continue;
+        lines.push(`.instagram.com\tTRUE\t/\tTRUE\t0\t${name}\t${value}`);
+      }
+      cookiesPath = path.join(tmpdir(), `ig-enrich-${userId}.txt`);
+      await writeFile(cookiesPath, lines.join('\n'));
+    }
+  } catch {}
+
+  for (const item of items) {
+    try {
+      const args = ['--no-warnings', '--dump-json', '--no-download'];
+      if (cookiesPath) args.push('--cookies', cookiesPath);
+      args.push(item.url);
+
+      const { stdout } = await execFileAsync('yt-dlp', args, { timeout: 15000 });
+      const meta = JSON.parse(stdout);
+
+      const title = meta.title || meta.description?.substring(0, 100) || 'Instagram Reel';
+      const update: any = {
+        title: title.split('\n')[0].substring(0, 200), // First line, max 200 chars
+      };
+
+      if (meta.thumbnail) update.thumbnailUrl = meta.thumbnail;
+      if (meta.duration) update.duration = Math.round(meta.duration);
+      if (meta.uploader || meta.channel) {
+        update.authorUsername = meta.uploader || meta.channel;
+        update.channelName = `@${update.authorUsername}`;
+      }
+
+      await prisma.content.update({ where: { id: item.id }, data: update });
+      log.debug({ contentId: item.id, title: update.title }, 'Enriched Instagram item');
+    } catch (err) {
+      log.debug({ contentId: item.id, err }, 'Could not enrich Instagram item');
+    }
+  }
+
+  // Cleanup
+  if (cookiesPath) {
+    try { await unlink(cookiesPath); } catch {}
+  }
+
+  log.info({ userId, count: items.length }, 'Instagram enrichment done');
+}
 
 // GET /api/content - List user's content with search & filters
 contentRouter.get('/', async (req: Request, res: Response, next: NextFunction) => {
