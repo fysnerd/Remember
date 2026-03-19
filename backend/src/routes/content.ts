@@ -307,8 +307,10 @@ contentRouter.post('/import-instagram-shortcodes', async (req: Request, res: Res
       }
     }
 
-    // Deduplicate
-    const uniqueCodes = [...new Set(shortcodes as string[])].slice(0, 50);
+    // Deduplicate + filter invalid shortcodes (valid IG shortcodes are 6-14 chars)
+    const uniqueCodes = [...new Set(shortcodes as string[])]
+      .filter(code => code.length >= 6 && code.length <= 14)
+      .slice(0, 50);
 
     // Check existing content by externalId (shortcode)
     const existingContent = await prisma.content.findMany({
@@ -401,7 +403,15 @@ async function enrichInstagramItems(userId: string): Promise<void> {
     }
   } catch {}
 
-  for (const item of items) {
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    // Skip invalid shortcodes (too long = bad ig_cache_key decode)
+    if (item.externalId && item.externalId.length > 15) {
+      log.debug({ contentId: item.id, code: item.externalId }, 'Skipping invalid shortcode');
+      continue;
+    }
+    // Rate-limit: wait 2s between each request to avoid Instagram throttling
+    if (i > 0) await new Promise(r => setTimeout(r, 2000));
     try {
       const args = ['--no-warnings', '--dump-json', '--no-download'];
       if (cookiesPath) args.push('--cookies', cookiesPath);
