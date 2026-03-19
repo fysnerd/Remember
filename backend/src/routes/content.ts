@@ -284,13 +284,13 @@ contentRouter.post('/import-instagram-items', async (req: Request, res: Response
  * Creates Content records with URLs — the transcription pipeline will
  * handle downloading and processing.
  *
- * Body: { shortcodes: string[] }
+ * Body: { shortcodes: string[], items?: { code, pk, thumbnailUrl }[] }
  * Returns: { newItems: number }
  */
 contentRouter.post('/import-instagram-shortcodes', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.id;
-    const { shortcodes } = req.body;
+    const { shortcodes, items: richItems } = req.body;
 
     if (!Array.isArray(shortcodes) || shortcodes.length === 0) {
       res.json({ newItems: 0 });
@@ -299,8 +299,16 @@ contentRouter.post('/import-instagram-shortcodes', async (req: Request, res: Res
 
     log.info({ userId, count: shortcodes.length }, 'Importing Instagram shortcodes from on-device sync');
 
+    // Build lookup for rich items (code → { thumbnailUrl, pk })
+    const itemLookup: Record<string, { thumbnailUrl?: string; pk?: string }> = {};
+    if (Array.isArray(richItems)) {
+      for (const item of richItems) {
+        if (item.code) itemLookup[item.code] = item;
+      }
+    }
+
     // Deduplicate
-    const uniqueCodes = [...new Set(shortcodes as string[])].slice(0, 30);
+    const uniqueCodes = [...new Set(shortcodes as string[])].slice(0, 50);
 
     // Check existing content by externalId (shortcode)
     const existingContent = await prisma.content.findMany({
@@ -315,6 +323,7 @@ contentRouter.post('/import-instagram-shortcodes', async (req: Request, res: Res
       if (existingIds.has(code)) continue;
 
       const url = `https://www.instagram.com/reel/${code}/`;
+      const rich = itemLookup[code];
 
       await prisma.content.create({
         data: {
@@ -323,6 +332,7 @@ contentRouter.post('/import-instagram-shortcodes', async (req: Request, res: Res
           externalId: code,
           url,
           title: 'Instagram Reel',
+          thumbnailUrl: rich?.thumbnailUrl || null,
           capturedAt: new Date(),
           status: ContentStatus.INBOX,
         },
