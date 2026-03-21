@@ -2,8 +2,10 @@
  * Root Layout - Providers + Auth Guard + Font Loading + Stack Navigation
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
+import '../lib/i18n'; // Side-effect: synchronous i18n init
+import { hydrateI18n } from '../lib/i18n';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -47,6 +49,12 @@ export default function RootLayout() {
   const { isAuthenticated, isLoading, user, checkAuth } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
+
+  // i18n hydration (resolve stored language from SecureStore)
+  const [i18nReady, setI18nReady] = useState(false);
+  useEffect(() => {
+    hydrateI18n().then(() => setI18nReady(true));
+  }, []);
 
   // Load Geist fonts
   const [fontsLoaded] = useFonts({
@@ -107,12 +115,12 @@ export default function RootLayout() {
     checkAuth();
   }, []);
 
-  // Hide splash screen when fonts loaded AND auth check done
+  // Hide splash screen when fonts loaded AND auth check done AND i18n ready
   useEffect(() => {
-    if (fontsLoaded && !isLoading) {
+    if (fontsLoaded && !isLoading && i18nReady) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, isLoading]);
+  }, [fontsLoaded, isLoading, i18nReady]);
 
   // Auth guard - 3 states: unauthenticated, onboarding, authenticated
   useEffect(() => {
@@ -151,8 +159,8 @@ export default function RootLayout() {
     }
   }, [isAuthenticated, isLoading, user?.onboardingCompleted, user?.onboardingStep, segments]);
 
-  // Keep splash screen visible while loading
-  if (isLoading || !fontsLoaded) {
+  // Keep splash screen visible while loading (fonts + auth + i18n)
+  if (isLoading || !fontsLoaded || !i18nReady) {
     return null;
   }
 

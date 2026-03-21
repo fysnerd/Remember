@@ -37,6 +37,9 @@ model User {
   quizFrequency       String?   // "relaxed", "regular", "daily"
   attributionSource   String[]  @default([])
 
+  // Language preference
+  language            String    @default("fr") // "fr" | "en"
+
   // Social auth
   authProvider        String?   // "apple", "google", "email"
   appleUserId         String?   @unique

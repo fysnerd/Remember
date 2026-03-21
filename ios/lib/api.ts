@@ -10,6 +10,7 @@ import {
   setTokens,
   clearTokens,
 } from './storage';
+import i18n from './i18n';
 
 // Create axios instance
 const api = axios.create({
@@ -33,6 +34,8 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // Send current language to backend on every request
+    config.headers['Accept-Language'] = i18n.language || 'fr';
     return config;
   },
   (error) => Promise.reject(error)

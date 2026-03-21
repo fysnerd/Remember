@@ -15,6 +15,7 @@ declare global {
       user?: {
         id: string;
         email: string;
+        language: string;
       };
     }
   }
@@ -38,7 +39,7 @@ export const authenticateToken = async (
     // Verify user still exists
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
-      select: { id: true, email: true },
+      select: { id: true, email: true, language: true },
     });
 
     if (!user) {
