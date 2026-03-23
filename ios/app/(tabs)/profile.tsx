@@ -9,7 +9,8 @@ import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronRight, Crown, Wrench, LogOut, CreditCard, RotateCcw, Info } from 'lucide-react-native';
+import { ChevronRight, Crown, Wrench, LogOut, CreditCard, RotateCcw, Info, Globe } from 'lucide-react-native';
+import i18n, { setLanguage } from '../../lib/i18n';
 import Constants from 'expo-constants';
 import { useTranslation } from 'react-i18next';
 import { Text } from '../../components/ui';
@@ -154,6 +155,35 @@ export default function ProfileScreen() {
     } catch (error) {
       console.error('Paywall error:', error);
     }
+  };
+
+  const handleChangeLanguage = () => {
+    const current = i18n.language;
+    Alert.alert(
+      t('profile.language'),
+      undefined,
+      [
+        {
+          text: `${current === 'fr' ? '✓ ' : ''}${t('profile.french')}`,
+          onPress: async () => {
+            if (current !== 'fr') {
+              await setLanguage('fr');
+              api.put('/auth/language', { language: 'fr' }).catch(() => {});
+            }
+          },
+        },
+        {
+          text: `${current === 'en' ? '✓ ' : ''}${t('profile.english')}`,
+          onPress: async () => {
+            if (current !== 'en') {
+              await setLanguage('en');
+              api.put('/auth/language', { language: 'en' }).catch(() => {});
+            }
+          },
+        },
+        { text: t('common.cancel'), style: 'cancel' },
+      ]
+    );
   };
 
   const handleLogout = () => {
@@ -377,6 +407,16 @@ export default function ProfileScreen() {
           </View>
           <Text variant="body" style={styles.rowLabel}>
             {restoringPurchases ? t('profile.restoring') : t('profile.restorePurchases')}
+          </Text>
+          <ChevronRight size={18} color={colors.textSecondary} strokeWidth={1.75} />
+        </Pressable>
+        <Pressable style={[styles.row, styles.rowBorder]} onPress={handleChangeLanguage}>
+          <View style={styles.rowIcon}>
+            <Globe size={20} color={colors.textSecondary} strokeWidth={1.75} />
+          </View>
+          <Text variant="body" style={styles.rowLabel}>{t('profile.language')}</Text>
+          <Text variant="caption" color="secondary" style={{ marginRight: spacing.xs }}>
+            {i18n.language === 'fr' ? t('profile.french') : t('profile.english')}
           </Text>
           <ChevronRight size={18} color={colors.textSecondary} strokeWidth={1.75} />
         </Pressable>
