@@ -925,7 +925,7 @@ reviewRouter.post('/practice/theme', async (req: Request, res: Response, next: N
 
           if (contentMemos.length >= 2) {
             const { generateSynthesisQuestions } = await import('../services/quizGeneration.js');
-            const result = await generateSynthesisQuestions(theme.name, contentMemos, 5);
+            const result = await generateSynthesisQuestions(theme.name, contentMemos, 5, req.user!.language);
 
             if (result.questions.length > 0) {
               for (const q of result.questions) {

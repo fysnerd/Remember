@@ -969,13 +969,13 @@ contentRouter.get('/inbox/count', async (req: Request, res: Response, next: Next
 });
 
 // Pipeline helper: quiz → auto-tag → theme classification (fire-and-forget)
-async function quizThenClassify(contentId: string, userId: string): Promise<void> {
-  await processContentQuiz(contentId);
-  const tags = await autoTagContent(contentId);
+async function quizThenClassify(contentId: string, userId: string, language: string = 'fr'): Promise<void> {
+  await processContentQuiz(contentId, language);
+  const tags = await autoTagContent(contentId, language);
   if (tags.length > 0) {
-    await classifyContentForUser(contentId, userId);
+    await classifyContentForUser(contentId, userId, language);
     // If content couldn't be classified, check if we need new themes
-    await evolveThemesForUser(userId);
+    await evolveThemesForUser(userId, language);
   }
 }
 
@@ -1032,11 +1032,12 @@ contentRouter.post('/triage/bulk', async (req: Request, res: Response, next: Nex
       // quiz → auto-tag → theme classification (all chained)
       if (action === 'learn') {
         const userId = req.user!.id;
+        const userLang = req.user!.language;
         for (const content of ownedContent) {
           if (content.transcript && content.quizzes.length === 0) {
             // Has transcript, no quiz yet - generate quiz + tag + classify
             log.debug({ contentId: content.id, userId }, 'Bulk triage: triggering immediate pipeline');
-            quizThenClassify(content.id, userId).catch((error) => {
+            quizThenClassify(content.id, userId, userLang).catch((error) => {
               log.error({ err: error, contentId: content.id, userId }, 'Bulk triage pipeline failed');
             });
             processingStarted++;
@@ -1055,7 +1056,7 @@ contentRouter.post('/triage/bulk', async (req: Request, res: Response, next: Nex
             if (transcribe) {
               transcribe(content.id)
                 .then(async (success) => {
-                  if (success) await quizThenClassify(content.id, userId);
+                  if (success) await quizThenClassify(content.id, userId, userLang);
                 })
                 .catch((err) => log.error({ err, contentId: content.id }, 'Bulk triage pipeline failed'));
               processingStarted++;
@@ -1181,7 +1182,7 @@ contentRouter.post('/bulk-generate-quiz', async (req: Request, res: Response, ne
       });
 
       // Fire and forget - process in background
-      processContentQuiz(content.id).catch(err => {
+      processContentQuiz(content.id, req.user!.language).catch(err => {
         log.error({ err, contentId: content.id, userId: req.user!.id }, 'Bulk quiz generation failed');
       });
 
@@ -1337,6 +1338,7 @@ contentRouter.post('/:id/generate-quiz', async (req: Request, res: Response, nex
     });
 
     // Process in background based on platform
+    const selectLang = req.user!.language;
     if (content.platform === Platform.YOUTUBE) {
       // YouTube: Fast, free transcription via subtitles
       if (!content.transcript) {
@@ -1344,7 +1346,7 @@ contentRouter.post('/:id/generate-quiz', async (req: Request, res: Response, nex
           .then(async (success) => {
             if (success) {
               // After transcription, trigger quiz generation
-              await processContentQuiz(content.id);
+              await processContentQuiz(content.id, selectLang);
             }
           })
           .catch((error) => {
@@ -1352,7 +1354,7 @@ contentRouter.post('/:id/generate-quiz', async (req: Request, res: Response, nex
           });
       } else if (content.quizzes.length === 0) {
         // Already has transcript, just generate quiz
-        processContentQuiz(content.id).catch((error) => {
+        processContentQuiz(content.id, selectLang).catch((error) => {
           log.error({ err: error, contentId: content.id }, 'Quiz generation failed');
         });
       }
@@ -1362,14 +1364,14 @@ contentRouter.post('/:id/generate-quiz', async (req: Request, res: Response, nex
         processPodcastTranscript(content.id)
           .then(async (success) => {
             if (success) {
-              await processContentQuiz(content.id);
+              await processContentQuiz(content.id, selectLang);
             }
           })
           .catch((error) => {
             log.error({ err: error, contentId: content.id }, 'Podcast processing failed');
           });
       } else if (content.quizzes.length === 0) {
-        processContentQuiz(content.id).catch((error) => {
+        processContentQuiz(content.id, selectLang).catch((error) => {
           log.error({ err: error, contentId: content.id }, 'Quiz generation failed');
         });
       }
@@ -1413,7 +1415,7 @@ contentRouter.post('/:id/regenerate-quiz', async (req: Request, res: Response, n
     }
 
     // Regenerate quiz in background
-    regenerateQuiz(content.id).catch((error) => {
+    regenerateQuiz(content.id, req.user!.language).catch((error) => {
       log.error({ err: error, contentId: content.id }, 'Quiz regeneration failed');
     });
 
@@ -1619,7 +1621,7 @@ contentRouter.post('/:id/auto-tag', async (req: Request, res: Response, next: Ne
       return res.status(400).json({ error: 'Content has no transcript - cannot generate tags' });
     }
 
-    const tags = await autoTagContent(contentId);
+    const tags = await autoTagContent(contentId, req.user!.language);
 
     return res.json({
       message: 'Tags generated successfully',
@@ -1674,7 +1676,8 @@ contentRouter.get('/:id/memo', async (req: Request, res: Response, next: NextFun
       content.title,
       tagNames,
       creatorContext,
-      [] // contextCues not stored in DB yet
+      [], // contextCues not stored in DB yet
+      req.user!.language
     );
 
     // Cache the memo on Content
@@ -1729,7 +1732,8 @@ contentRouter.post('/:id/memo/regenerate', async (req: Request, res: Response, n
       content.title,
       tagNames,
       creatorContext,
-      [] // contextCues not stored in DB yet
+      [], // contextCues not stored in DB yet
+      req.user!.language
     );
 
     // Update cached memo on Content
@@ -1930,9 +1934,10 @@ contentRouter.patch('/:id/triage', async (req: Request, res: Response, next: Nex
     // OPTIMIZATION: If user clicks "Learn" and transcript already exists (pre-transcription),
     // trigger quiz generation immediately instead of waiting for cron
     let processingStarted = false;
+    const triageLang = req.user!.language;
     if (action === 'learn' && content.transcript && content.quizzes.length === 0) {
       log.debug({ contentId: id, userId: req.user!.id }, 'Triage: triggering immediate quiz for transcribed content');
-      processContentQuiz(id).catch((error) => {
+      processContentQuiz(id, triageLang).catch((error) => {
         log.error({ err: error, contentId: id }, 'Triage quiz generation failed');
       });
       processingStarted = true;
@@ -1942,7 +1947,7 @@ contentRouter.patch('/:id/triage', async (req: Request, res: Response, next: Nex
         processContentTranscript(id)
           .then(async (success) => {
             if (success) {
-              await processContentQuiz(id);
+              await processContentQuiz(id, triageLang);
             }
           })
           .catch((error) => {
@@ -1953,7 +1958,7 @@ contentRouter.patch('/:id/triage', async (req: Request, res: Response, next: Nex
         processPodcastTranscript(id)
           .then(async (success) => {
             if (success) {
-              await processContentQuiz(id);
+              await processContentQuiz(id, triageLang);
             }
           })
           .catch((error) => {
@@ -1964,7 +1969,7 @@ contentRouter.patch('/:id/triage', async (req: Request, res: Response, next: Nex
         processTikTokTranscript(id)
           .then(async (success) => {
             if (success) {
-              await processContentQuiz(id);
+              await processContentQuiz(id, triageLang);
             }
           })
           .catch((error) => {
@@ -1975,7 +1980,7 @@ contentRouter.patch('/:id/triage', async (req: Request, res: Response, next: Nex
         processInstagramTranscript(id)
           .then(async (success) => {
             if (success) {
-              await processContentQuiz(id);
+              await processContentQuiz(id, triageLang);
             }
           })
           .catch((error) => {

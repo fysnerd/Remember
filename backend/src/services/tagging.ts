@@ -5,6 +5,7 @@ import pLimit from 'p-limit';
 import { llmLimiter } from '../utils/rateLimiter.js';
 import { logger } from '../config/logger.js';
 import { getPromptLocale } from './promptLocale.js';
+import { normalizeLanguage } from '../utils/language.js';
 
 const log = logger.child({ service: 'auto-tagging' });
 
@@ -73,7 +74,7 @@ export async function generateTags(
 /**
  * Auto-tag a content item
  */
-export async function autoTagContent(contentId: string): Promise<string[]> {
+export async function autoTagContent(contentId: string, language: string = 'fr'): Promise<string[]> {
   const content = await prisma.content.findUnique({
     where: { id: contentId },
     include: { transcript: true, tags: true },
@@ -97,7 +98,7 @@ export async function autoTagContent(contentId: string): Promise<string[]> {
 
   log.info({ contentId, title: content.title }, 'Generating tags');
 
-  const tagNames = await generateTags(content.transcript.text, content.title);
+  const tagNames = await generateTags(content.transcript.text, content.title, language);
 
   if (tagNames.length === 0) {
     return [];
@@ -149,11 +150,19 @@ export async function runAutoTaggingWorker(): Promise<void> {
 
     log.info({ count: contentToTag.length }, 'Found items to tag');
 
+    // Look up user language for each content item
+    const tagUserIds = [...new Set(contentToTag.map(c => c.userId))];
+    const tagUsers = await prisma.user.findMany({
+      where: { id: { in: tagUserIds } },
+      select: { id: true, language: true },
+    });
+    const tagUserLangMap = new Map(tagUsers.map(u => [u.id, normalizeLanguage(u.language)]));
+
     const limit = pLimit(5); // 5 concurrent tagging jobs
 
     const results = await Promise.allSettled(
       contentToTag.map(content =>
-        limit(() => autoTagContent(content.id))
+        limit(() => autoTagContent(content.id, tagUserLangMap.get(content.userId) || 'fr'))
       )
     );
 

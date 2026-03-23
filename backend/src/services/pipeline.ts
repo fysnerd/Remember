@@ -21,6 +21,7 @@ import { classifyContentForUser } from './themeClassification.js';
 import { cloneFromDonor } from './contentDedup.js';
 import { logger } from '../config/logger.js';
 import pLimit from 'p-limit';
+import { normalizeLanguage } from '../utils/language.js';
 
 const log = logger.child({ service: 'user-pipeline' });
 
@@ -54,6 +55,13 @@ export async function runUserPipeline(userId: string): Promise<void> {
     const startTime = Date.now();
 
     try {
+      // Look up user's language preference
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { language: true },
+      });
+      const language = normalizeLanguage(user?.language);
+
       // Phase 0: Dedup — clone from existing processed content (skip expensive pipeline)
       const cloned = await deduplicateUserContent(userId);
 
@@ -61,13 +69,13 @@ export async function runUserPipeline(userId: string): Promise<void> {
       const transcribed = await transcribeUserContent(userId);
 
       // Phase 2: Generate quizzes for content that has transcripts but no quiz
-      const quizzed = await generateUserQuizzes(userId);
+      const quizzed = await generateUserQuizzes(userId, language);
 
       // Phase 3: Auto-tag content that is READY but has no tags
-      const tagged = await tagUserContent(userId);
+      const tagged = await tagUserContent(userId, language);
 
       // Phase 4: Classify tagged content into themes (so themes show before triage)
-      const themed = await classifyUserContent(userId);
+      const themed = await classifyUserContent(userId, language);
 
       const elapsed = Date.now() - startTime;
 
@@ -192,7 +200,7 @@ async function transcribeByPlatform(
 // Phase 2: Quiz generation
 // ---------------------------------------------------------------------------
 
-async function generateUserQuizzes(userId: string): Promise<number> {
+async function generateUserQuizzes(userId: string, language: string = 'fr'): Promise<number> {
   const pending = await prisma.content.findMany({
     where: {
       userId,
@@ -218,7 +226,7 @@ async function generateUserQuizzes(userId: string): Promise<number> {
     pending.map((content) =>
       limit(async () => {
         try {
-          const ok = await processContentQuiz(content.id);
+          const ok = await processContentQuiz(content.id, language);
           if (ok) success++;
         } catch (error) {
           log.error({ err: error, contentId: content.id }, 'Pipeline quiz generation failed');
@@ -234,7 +242,7 @@ async function generateUserQuizzes(userId: string): Promise<number> {
 // Phase 3: Auto-tagging
 // ---------------------------------------------------------------------------
 
-async function tagUserContent(userId: string): Promise<number> {
+async function tagUserContent(userId: string, language: string = 'fr'): Promise<number> {
   const pending = await prisma.content.findMany({
     where: {
       userId,
@@ -258,7 +266,7 @@ async function tagUserContent(userId: string): Promise<number> {
     pending.map((content) =>
       limit(async () => {
         try {
-          const tags = await autoTagContent(content.id);
+          const tags = await autoTagContent(content.id, language);
           if (tags.length > 0) success++;
         } catch (error) {
           log.error({ err: error, contentId: content.id }, 'Pipeline auto-tagging failed');
@@ -274,7 +282,7 @@ async function tagUserContent(userId: string): Promise<number> {
 // Phase 4: Theme classification
 // ---------------------------------------------------------------------------
 
-async function classifyUserContent(userId: string): Promise<number> {
+async function classifyUserContent(userId: string, language: string = 'fr'): Promise<number> {
   // Find content that has tags but no themes yet
   const pending = await prisma.content.findMany({
     where: {
@@ -299,7 +307,7 @@ async function classifyUserContent(userId: string): Promise<number> {
     pending.map((content) =>
       limit(async () => {
         try {
-          await classifyContentForUser(content.id, userId);
+          await classifyContentForUser(content.id, userId, language);
           success++;
         } catch (error) {
           log.error({ err: error, contentId: content.id }, 'Pipeline theme classification failed');

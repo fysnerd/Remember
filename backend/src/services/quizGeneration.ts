@@ -9,6 +9,7 @@ import { sendPushToUser } from './pushNotifications.js';
 import { cloneFromDonor } from './contentDedup.js';
 import { getPromptLocale } from './promptLocale.js';
 import { formatDateForUser } from '../utils/formatLocale.js';
+import { normalizeLanguage } from '../utils/language.js';
 
 const log = logger.child({ service: 'quiz-generation' });
 
@@ -433,7 +434,7 @@ export async function generateSynthesisQuestions(
 /**
  * Process content to generate quiz questions and create cards
  */
-export async function processContentQuiz(contentId: string): Promise<boolean> {
+export async function processContentQuiz(contentId: string, language: string = 'fr'): Promise<boolean> {
   const content = await prisma.content.findUnique({
     where: { id: contentId },
     include: {
@@ -482,7 +483,8 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
         capturedAt: content.capturedAt,
       },
       [],
-      targetQuestions
+      targetQuestions,
+      language
     );
 
     if (!result.isEducational) {
@@ -540,14 +542,18 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
       });
     });
 
-    // Notify user that quiz is ready (use French for push — language not available here)
+    // Notify user that quiz is ready
     const titleShort = content.title.length > 50
       ? content.title.substring(0, 47) + '...'
       : content.title;
+    const pushTitle = language === 'en' ? 'Quiz ready!' : 'Quiz pret !';
+    const pushBody = language === 'en'
+      ? `${result.questions.length} questions about "${titleShort}"`
+      : `${result.questions.length} questions sur "${titleShort}"`;
     sendPushToUser(
       content.userId,
-      'Quiz pret !',
-      `${result.questions.length} questions sur "${titleShort}"`,
+      pushTitle,
+      pushBody,
       { screen: '/(tabs)', contentId: content.id }
     ).catch(() => {}); // fire-and-forget, don't block pipeline
 
@@ -565,7 +571,8 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
             content.title,
             tagNames,
             result.creatorContext,
-            result.contextCues || []
+            result.contextCues || [],
+            language
           );
           await prisma.content.update({
             where: { id: contentId },
@@ -588,7 +595,8 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
               content.description,
               content.title,
               result.creatorContext,
-              result.contextCues || []
+              result.contextCues || [],
+              language
             );
             await prisma.content.update({
               where: { id: contentId },
@@ -632,7 +640,7 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
 /**
  * Regenerate quiz for content (user requested)
  */
-export async function regenerateQuiz(contentId: string): Promise<boolean> {
+export async function regenerateQuiz(contentId: string, language: string = 'fr'): Promise<boolean> {
   // Fetch existing questions BEFORE deleting for anti-repetition
   const previousQuestions = await fetchExistingQuestions(contentId);
 
@@ -675,7 +683,8 @@ export async function regenerateQuiz(contentId: string): Promise<boolean> {
         capturedAt: content.capturedAt,
       },
       previousQuestions,
-      targetQuestions
+      targetQuestions,
+      language
     );
 
     if (!result.isEducational || result.questions.length === 0) {
@@ -784,6 +793,14 @@ export async function runQuizGenerationWorker(): Promise<void> {
 
   log.info({ count: remainingContent.length }, 'Processing pending content');
 
+  // Look up user language for each content item
+  const userIds = [...new Set(remainingContent.map(c => c.userId))];
+  const users = await prisma.user.findMany({
+    where: { id: { in: userIds } },
+    select: { id: true, language: true },
+  });
+  const userLangMap = new Map(users.map(u => [u.id, normalizeLanguage(u.language)]));
+
   let success = 0;
   let failed = 0;
 
@@ -791,7 +808,7 @@ export async function runQuizGenerationWorker(): Promise<void> {
 
   const results = await Promise.allSettled(
     remainingContent.map(content =>
-      limit(() => processContentQuiz(content.id))
+      limit(() => processContentQuiz(content.id, userLangMap.get(content.userId) || 'fr'))
     )
   );
 
@@ -829,6 +846,14 @@ export async function runSynopsisBackfill(): Promise<void> {
 
   log.info({ count: contents.length }, 'Backfilling synopsis');
 
+  // Look up user language for each content item
+  const synopsisUserIds = [...new Set(contents.map(c => c.userId))];
+  const synopsisUsers = await prisma.user.findMany({
+    where: { id: { in: synopsisUserIds } },
+    select: { id: true, language: true },
+  });
+  const synopsisUserLangMap = new Map(synopsisUsers.map(u => [u.id, normalizeLanguage(u.language)]));
+
   const limit = pLimit(3);
   let success = 0;
 
@@ -836,10 +861,14 @@ export async function runSynopsisBackfill(): Promise<void> {
     contents.map(content =>
       limit(async () => {
         try {
+          const lang = synopsisUserLangMap.get(content.userId) || 'fr';
           const synopsis = await generateSynopsis(
             content.transcript!.text,
             content.description,
-            content.title
+            content.title,
+            undefined,
+            undefined,
+            lang
           );
           await prisma.content.update({
             where: { id: content.id },

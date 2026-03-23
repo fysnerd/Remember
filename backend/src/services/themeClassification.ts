@@ -8,6 +8,7 @@ import { logger } from '../config/logger.js';
 import { generateSlug } from '../utils/slug.js';
 import { findBestImageForTheme } from './themeImageMatching.js';
 import { getPromptLocale } from './promptLocale.js';
+import { normalizeLanguage } from '../utils/language.js';
 
 const log = logger.child({ service: 'theme-classification' });
 
@@ -62,11 +63,11 @@ export async function runThemeClassificationWorker(): Promise<void> {
           },
         },
       },
-      select: { id: true },
+      select: { id: true, language: true },
     });
 
     // Filter to users with MIN_TAGGED_CONTENT+ tagged content items
-    const eligibleUsers: { id: string }[] = [];
+    const eligibleUsers: { id: string; language: string }[] = [];
     for (const user of usersNeedingThemes) {
       const taggedCount = await prisma.content.count({
         where: { userId: user.id, tags: { some: {} } },
@@ -80,7 +81,7 @@ export async function runThemeClassificationWorker(): Promise<void> {
       log.info({ count: eligibleUsers.length }, 'Generating themes for new users');
       const userLimit = pLimit(3);
       await Promise.allSettled(
-        eligibleUsers.map(user => userLimit(() => generateThemesForUser(user.id)))
+        eligibleUsers.map(user => userLimit(() => generateThemesForUser(user.id, normalizeLanguage(user.language))))
       );
     }
 
@@ -97,11 +98,19 @@ export async function runThemeClassificationWorker(): Promise<void> {
     });
 
     if (unclassifiedContent.length > 0) {
+      // Look up user languages for classification
+      const classifyUserIds = [...new Set(unclassifiedContent.map(c => c.userId))];
+      const classifyUsers = await prisma.user.findMany({
+        where: { id: { in: classifyUserIds } },
+        select: { id: true, language: true },
+      });
+      const classifyLangMap = new Map(classifyUsers.map(u => [u.id, normalizeLanguage(u.language)]));
+
       log.info({ count: unclassifiedContent.length }, 'Classifying unthemed content');
       const classifyLimit = pLimit(5);
       await Promise.allSettled(
         unclassifiedContent.map(c =>
-          classifyLimit(() => classifyContentForUser(c.id, c.userId))
+          classifyLimit(() => classifyContentForUser(c.id, c.userId, classifyLangMap.get(c.userId) || 'fr'))
         )
       );
     }
@@ -120,10 +129,18 @@ export async function runThemeClassificationWorker(): Promise<void> {
     `;
 
     if (usersWithOrphans.length > 0) {
+      // Look up user languages for evolution
+      const evolveUserIds = usersWithOrphans.map(u => u.userId);
+      const evolveUsers = await prisma.user.findMany({
+        where: { id: { in: evolveUserIds } },
+        select: { id: true, language: true },
+      });
+      const evolveLangMap = new Map(evolveUsers.map(u => [u.id, normalizeLanguage(u.language)]));
+
       log.info({ count: usersWithOrphans.length }, 'Evolving themes for users with orphan content');
       const evolveLimit = pLimit(2);
       await Promise.allSettled(
-        usersWithOrphans.map(u => evolveLimit(() => evolveThemesForUser(u.userId)))
+        usersWithOrphans.map(u => evolveLimit(() => evolveThemesForUser(u.userId, evolveLangMap.get(u.userId) || 'fr')))
       );
     }
 
@@ -141,7 +158,7 @@ export async function runThemeClassificationWorker(): Promise<void> {
  * Generate themes for a user by clustering their tags via LLM.
  * Idempotent: skips if user already has themes.
  */
-export async function generateThemesForUser(userId: string): Promise<void> {
+export async function generateThemesForUser(userId: string, language: string = 'fr'): Promise<void> {
   // Check idempotency: skip if user already has themes
   const existingThemeCount = await prisma.theme.count({ where: { userId } });
   if (existingThemeCount > 0) {
@@ -176,7 +193,7 @@ export async function generateThemesForUser(userId: string): Promise<void> {
   }
 
   // Call LLM to cluster tags into themes
-  const generatedThemes = await generateThemesFromTags(tagList, []);
+  const generatedThemes = await generateThemesFromTags(tagList, [], language);
 
   if (generatedThemes.length === 0) {
     log.warn({ userId }, 'LLM returned no themes');
@@ -251,7 +268,7 @@ export async function generateThemesForUser(userId: string): Promise<void> {
   });
 
   // After creating themes, classify all existing tagged content for this user
-  await classifyAllContentForUser(userId);
+  await classifyAllContentForUser(userId, language);
 
   log.info({ userId }, 'Theme generation and initial classification complete');
 }
@@ -264,7 +281,7 @@ export async function generateThemesForUser(userId: string): Promise<void> {
  * Classify a single content item into 1-3 matching themes.
  * Uses deterministic tag matching first, LLM fallback if no match.
  */
-export async function classifyContentForUser(contentId: string, userId: string): Promise<void> {
+export async function classifyContentForUser(contentId: string, userId: string, language: string = 'fr'): Promise<void> {
   try {
     // Load content with its tags
     const content = await prisma.content.findUnique({
@@ -331,7 +348,8 @@ export async function classifyContentForUser(contentId: string, userId: string):
     const matchedNames = await classifyContentViaLLM(
       content.title,
       contentTagNames,
-      themesForLLM
+      themesForLLM,
+      language
     );
 
     if (matchedNames.length > 0) {
@@ -377,12 +395,13 @@ export async function runBackfillThemes(): Promise<void> {
           some: { tags: { some: {} } },
         },
       },
-      select: { id: true },
+      select: { id: true, language: true },
     });
 
     const backfillLimit = pLimit(2);
     await Promise.allSettled(
       users.map(user => backfillLimit(async () => {
+        const lang = normalizeLanguage(user.language);
         const taggedCount = await prisma.content.count({
           where: { userId: user.id, tags: { some: {} } },
         });
@@ -395,11 +414,11 @@ export async function runBackfillThemes(): Promise<void> {
         // Generate themes if user has none
         const themeCount = await prisma.theme.count({ where: { userId: user.id } });
         if (themeCount === 0) {
-          await generateThemesForUser(user.id);
+          await generateThemesForUser(user.id, lang);
         }
 
         // Classify all tagged content without theme assignments
-        await classifyAllContentForUser(user.id);
+        await classifyAllContentForUser(user.id, lang);
       }))
     );
 
@@ -556,7 +575,7 @@ async function classifyContentViaLLM(
  * Only runs for users who already have themes (initial generation is handled by generateThemesForUser).
  * Reuses generateThemesFromTags with existing themes passed to avoid duplicates.
  */
-export async function evolveThemesForUser(userId: string): Promise<void> {
+export async function evolveThemesForUser(userId: string, language: string = 'fr'): Promise<void> {
   try {
     // Only evolve for users who already have themes
     const existingThemes = await prisma.theme.findMany({
@@ -609,7 +628,7 @@ export async function evolveThemesForUser(userId: string): Promise<void> {
     log.info({ userId, orphanCount: orphanContent.length, tagCount: orphanTags.length }, 'Evolving themes from orphan content');
 
     // Ask LLM to suggest new themes, passing existing themes to avoid duplicates
-    const newThemes = await generateThemesFromTags(orphanTags, existingThemes);
+    const newThemes = await generateThemesFromTags(orphanTags, existingThemes, language);
 
     if (newThemes.length === 0) {
       log.debug({ userId }, 'LLM returned no new themes for evolution');
@@ -663,7 +682,7 @@ export async function evolveThemesForUser(userId: string): Promise<void> {
     // Classify orphan content with new themes available
     const classifyLimit = pLimit(5);
     await Promise.allSettled(
-      orphanContent.map(c => classifyLimit(() => classifyContentForUser(c.id, userId)))
+      orphanContent.map(c => classifyLimit(() => classifyContentForUser(c.id, userId, language)))
     );
 
     log.info({ userId, newThemeCount: cappedThemes.length, orphanCount: orphanContent.length }, 'Theme evolution complete');
@@ -679,7 +698,7 @@ export async function evolveThemesForUser(userId: string): Promise<void> {
 /**
  * Classify all tagged content without theme assignments for a given user.
  */
-async function classifyAllContentForUser(userId: string): Promise<void> {
+async function classifyAllContentForUser(userId: string, language: string = 'fr'): Promise<void> {
   const unthemed = await prisma.content.findMany({
     where: {
       userId,
@@ -698,6 +717,6 @@ async function classifyAllContentForUser(userId: string): Promise<void> {
 
   const classifyLimit = pLimit(5);
   await Promise.allSettled(
-    unthemed.map(c => classifyLimit(() => classifyContentForUser(c.id, userId)))
+    unthemed.map(c => classifyLimit(() => classifyContentForUser(c.id, userId, language)))
   );
 }
