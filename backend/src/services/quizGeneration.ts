@@ -7,6 +7,8 @@ import { llmLimiter } from '../utils/rateLimiter.js';
 import { logger } from '../config/logger.js';
 import { sendPushToUser } from './pushNotifications.js';
 import { cloneFromDonor } from './contentDedup.js';
+import { getPromptLocale } from './promptLocale.js';
+import { formatDateForUser } from '../utils/formatLocale.js';
 
 const log = logger.child({ service: 'quiz-generation' });
 
@@ -85,21 +87,25 @@ function getCreatorName(content: {
 function buildCreatorContext(
   platformLabel: string,
   creatorName: string | null,
-  capturedAt?: Date | null
+  capturedAt?: Date | null,
+  language: string = 'fr'
 ): string {
-  const platformRef =
-    platformLabel === 'TikTok' ? 'video TikTok' :
-    platformLabel === 'Instagram' ? 'reel Instagram' :
-    platformLabel === 'YouTube' ? 'video YouTube' :
-    'podcast Spotify';
+  const locale = getPromptLocale(language);
+  const platformRef = locale.platformRef(platformLabel);
 
-  const creatorRef = creatorName ? ` de ${creatorName}` : '';
-
-  const temporalRef = capturedAt
-    ? ` (contenu que tu as ${platformLabel === 'Spotify' ? 'ecoute' : 'regarde'} le ${capturedAt.toLocaleDateString('fr-FR')})`
+  const creatorRef = creatorName
+    ? (language === 'en' ? ` by ${creatorName}` : ` de ${creatorName}`)
     : '';
 
-  return `cette ${platformRef}${creatorRef}${temporalRef}`;
+  const verb = platformLabel === 'Spotify' ? locale.listened : locale.watched;
+
+  const temporalRef = capturedAt
+    ? (language === 'en'
+        ? ` (content you ${verb} on ${formatDateForUser(capturedAt, language)})`
+        : ` (contenu que tu as ${verb} le ${formatDateForUser(capturedAt, language)})`)
+    : '';
+
+  return locale.contentRef(platformRef, creatorRef, temporalRef);
 }
 
 /**
@@ -156,14 +162,17 @@ export async function generateQuizFromTranscript(
     capturedAt?: Date | null;
   },
   existingQuestions: string[] = [],
-  targetQuestionCount?: number
+  targetQuestionCount?: number,
+  language: string = 'fr'
 ): Promise<QuizGenerationResult> {
   const llm = getLLMClient();
+  const locale = getPromptLocale(language);
 
   const creatorContext = buildCreatorContext(
     contentMetadata.platformLabel,
     contentMetadata.creatorName,
-    contentMetadata.capturedAt
+    contentMetadata.capturedAt,
+    language
   );
 
   // Chunk transcript if too long
@@ -173,41 +182,13 @@ export async function generateQuizFromTranscript(
   const assessmentChunk = chunks[0];
 
   // Assess content topics and filter doomscrolling content
-  const assessmentPrompt = `Analyse cette transcription de ${creatorContext} et évalue sa pertinence pédagogique.
-
-Titre: "${contentTitle}"
-
-Extrait de la transcription:
-"""
-${assessmentChunk.substring(0, 3000)}
-"""
-
-RÈGLES D'ÉVALUATION (isEducational) :
-1. Accepte le contenu s'il contient des idées, concepts, histoires, opinions argumentées, conseils ou informations constructives.
-2. REJETTE le contenu (isEducational: false) s'il s'agit de musique pure, de silence, ou de contenu inintelligible.
-3. REJETTE le contenu (isEducational: false) s'il s'agit de pur "doomscrolling" : contenu exclusivement anxiogène, sensationnaliste, ou polémique sans aucune valeur d'apprentissage ou de réflexion constructive.
-
-EXTRACTION DU CONTEXTE (contextCues) :
-Identifie 1 à 3 éléments de contexte spécifiques à cet extrait (une anecdote marquante, un détail visuel décrit, le ton du créateur, ou un exemple précis). Cela servira à réactiver la mémoire contextuelle de l'utilisateur.
-
-Pour chaque sujet identifié, précise le niveau de complexité (basique, intermédiaire, avancé).
-
-Réponds en JSON uniquement selon cette structure :
-{
-  "isEducational": true/false,
-  "isDoomscrolling": true/false,
-  "reason": "Brève description justifiant le choix éducatif et le rejet si doomscrolling",
-  "mainTopics": ["sujet1", "sujet2", "sujet3"],
-  "contextCues": ["indice contextuel 1", "indice contextuel 2"],
-  "complexity": "basique|intermédiaire|avancé",
-  "contentStyle": "explicatif|narratif|conversationnel|argumentatif"
-}`;
+  const assessmentPrompt = locale.assessmentUserPrompt(creatorContext, contentTitle, assessmentChunk.substring(0, 3000));
 
   const assessmentResponse = await llmLimiter(() => llm.chatCompletion({
     messages: [
       {
         role: 'system',
-        content: 'Tu es un analyste de contenu cognitif et pédagogique. Ton but est d\'évaluer le potentiel d\'apprentissage d\'un contenu, tout en protégeant la charge cognitive de l\'utilisateur. Identifie les sujets, le niveau de complexité, et extrais le contexte spécifique. Réponds uniquement en JSON valide.',
+        content: locale.assessmentSystemPrompt,
       },
       {
         role: 'user',
@@ -248,7 +229,7 @@ Réponds en JSON uniquement selon cette structure :
 
   // Extract context cues for self-reference effect
   const contextCues = assessment.contextCues || [];
-  const contextCuesStr = contextCues.length > 0 ? contextCues.join(', ') : 'aucun indice contextuel disponible';
+  const contextCuesStr = contextCues.length > 0 ? contextCues.join(', ') : (language === 'en' ? 'no context cues available' : 'aucun indice contextuel disponible');
 
   for (let i = 0; i < distribution.length; i++) {
     const chunk = chunks[i];
@@ -259,81 +240,25 @@ Réponds en JSON uniquement selon cette structure :
 
     // Build anti-repetition block dynamically (includes questions from previous chunks)
     const dynamicAntiRepetitionBlock = allGeneratedQuestionTexts.length > 0
-      ? `\nQUESTIONS DEJA POSEES (NE PAS repeter ni reformuler ces questions) :\n${allGeneratedQuestionTexts.map((q, idx) => `${idx + 1}. ${q}`).join('\n')}\n`
+      ? `\n${language === 'en' ? 'QUESTIONS ALREADY ASKED (DO NOT repeat or rephrase these questions)' : 'QUESTIONS DEJA POSEES (NE PAS repeter ni reformuler ces questions)'}:\n${allGeneratedQuestionTexts.map((q, idx) => `${idx + 1}. ${q}`).join('\n')}\n`
       : '';
 
-    const questionPrompt = `Genere EXACTEMENT ${questionsNeeded} questions de quiz a choix multiples basees sur ce contenu.
-
-Titre: "${contentTitle}"
-Sujets principaux: ${assessment.mainTopics?.join(', ') || 'Culture generale'}
-Style du contenu: ${assessment.contentStyle || 'explicatif'}
-${isFirstBatch ? `\nCONTEXTE DE L'ANCRAGE (pour la question 1) : C'est le PREMIER lot de questions. La question 1 doit utiliser l'ancrage fort.` : `\nCONTEXTE DE FLUIDITE : Ce n'est PAS le premier lot. Toutes les questions doivent etre directes et fluides (pas d'ancrage).`}
-
-Contenu source:
-"""
-${chunk}
-"""
-${dynamicAntiRepetitionBlock}
-Reponds uniquement en JSON:
-{
-  "questions": [
-    {
-      "question": "Question (voir regles de contextualisation dans le system prompt)",
-      "options": ["A) Option", "B) Option", "C) Option", "D) Option"],
-      "correctAnswer": "A",
-      "explanation": "Explication avec tutoiement...",
-      "bloomLevel": "comprendre|appliquer|analyser"
-    }
-  ]
-}`;
+    const questionPrompt = locale.quizUserPrompt({
+      questionsNeeded,
+      contentTitle,
+      mainTopics: assessment.mainTopics?.join(', ') || '',
+      contentStyle: assessment.contentStyle || '',
+      isFirstBatch,
+      chunk,
+      antiRepetitionBlock: dynamicAntiRepetitionBlock,
+    });
 
     try {
       const questionResponse = await llmLimiter(() => llm.chatCompletion({
         messages: [
           {
             role: 'system',
-            content: `Tu es un concepteur pedagogique expert en neurosciences cognitives. Ton objectif est de generer des questions a choix multiples (QCM) qui forcent le "rappel actif" en utilisant l'Effet de Reference a Soi.
-
-Tu as acces aux elements suivants :
-- La source : ${creatorContext}
-- Les indices contextuels (anecdotes, visuels, ton) : ${contextCuesStr}
-- La transcription du contenu.
-
-REGLE D'OR : CONTEXTUALISATION EVOLUTIVE (ANTI-SPAM)
-Pour eviter la lourdeur et la surcharge cognitive, la formulation de tes questions doit evoluer :
-
-- POUR LA QUESTION 1 UNIQUEMENT (L'Ancrage) :
-  Tu dois faire un ancrage fort. Utilise le tutoiement ("tu"), mentionne la source, et integre un element des indices contextuels.
-  -> Modele exige Q1 : "Dans le contenu de ${creatorContext} que tu as enregistre, au moment ou [inserer un element des indices contextuels], quel concept etait explique concernant [sujet] ?"
-
-- POUR LES QUESTIONS SUIVANTES (Fluidite) :
-  Ne mentionne PLUS JAMAIS le createur, la video, ou le fait que l'utilisateur l'a enregistre. Garde UNIQUEMENT le tutoiement ("tu", "ton") pour maintenir l'engagement personnel, mais pose la question de maniere directe et naturelle.
-  -> Modele exige Q2 et suivantes : "Toujours sur ce sujet, pourquoi [phenomene] se produit-il ?" ou "Comment appliquerais-tu ce concept a..."
-
-- INTERDIT POUR TOUTES LES QUESTIONS: Toute reference a la transcription en tant que telle ("Dans la transcription...").
-
-PRINCIPES PEDAGOGIQUES (Taxonomie de Bloom) - Varie les niveaux cognitifs:
-- Comprendre: "Qu'est-ce que [concept] ?" / "Quel est le lien entre X et Y ?"
-- Appliquer: "Dans quelle situation utiliserais-tu [concept] ?"
-- Analyser: "Pourquoi [fait] est-il important ?"
-
-VARIATION OBLIGATOIRE:
-- Chaque question doit aborder un ANGLE DIFFERENT (pas deux questions sur le meme sous-concept).
-- Varier les niveaux de difficulte (au moins 2 niveaux differents).
-
-REGLES POUR LES DISTRACTEURS (options incorrectes):
-- Chaque distracteur doit etre PLAUSIBLE (pas absurde ni evident).
-- Utiliser des erreurs de comprehension courantes comme distracteurs.
-- Les distracteurs ne doivent PAS etre partiellement corrects.
-- Varier la position de la bonne reponse.
-
-REGLES FINALES POUR LES QUESTIONS:
-1. La question doit etre impossible a repondre correctement sans avoir compris le sujet.
-2. 4 options exactement (A, B, C, D), une seule correcte.
-3. L'explication doit dire POURQUOI la bonne reponse est correcte ET pourquoi les autres ne le sont pas (1-2 phrases). L'explication doit utiliser le tutoiement.
-4. Tout en FRANCAIS.
-
-Reponds uniquement en JSON valide.`,
+            content: locale.quizSystemPrompt(creatorContext, contextCuesStr),
           },
           {
             role: 'user',
@@ -395,57 +320,17 @@ export async function generateMemoFromTranscript(
   contentTitle: string,
   tags: string[],
   creatorContext?: string,
-  contextCues?: string[]
+  contextCues?: string[],
+  language: string = 'fr'
 ): Promise<string> {
+  const locale = getPromptLocale(language);
   const transcriptText = transcript.slice(0, 8000);
   const tagsStr = tags.length > 0 ? tags.join(', ') : '';
-  const contextCuesStr = contextCues && contextCues.length > 0 ? contextCues.join(', ') : 'aucun indice contextuel disponible';
-  const creatorCtx = creatorContext || 'ce contenu';
+  const contextCuesStr = contextCues && contextCues.length > 0 ? contextCues.join(', ') : (language === 'en' ? 'no context cues available' : 'aucun indice contextuel disponible');
+  const creatorCtx = creatorContext || (language === 'en' ? 'this content' : 'ce contenu');
 
-  const systemPrompt = `Tu es un concepteur pedagogique expert en neurosciences cognitives. Tu transformes des transcriptions de videos/podcasts en CARROUSELS D'ETUDE optimises pour la retention a long terme sur mobile.
-
-PRINCIPES SCIENTIFIQUES APPLIQUES:
-- Effet de Reference a Soi (Rogers, 1977) : L'information doit etre liee a l'utilisateur. Utilise le tutoiement ("tu", "ton"). Rappelle-lui pourquoi IL a trouve ce contenu interessant.
-- Microlearning & Charge Cognitive (Sweller, 1988) : Puisque le format est un CARROUSEL, la regle absolue est : 1 Slide = 1 Idee = 40 mots maximum. Ne surcharge jamais une slide.
-- Technique de Feynman : Explique chaque concept comme si tu parlais a un adolescent, PUIS introduis le terme technique.
-- Meaningfulness (Ebbinghaus, 1885) : Relie les concepts abstraits a la vie quotidienne d'un jeune adulte (18-25 ans) ou a l'anecdote de la video.
-
-STRUCTURE DU CARROUSEL (Format de sortie exige) :
-Tu dois structurer ta reponse exactement selon ces Slides :
-
-[SLIDE 1 : LE DECLIC]
-- Objectif : Le "Takeaway" principal combine au contexte de l'utilisateur.
-- Format : "Dans ce contenu de ${creatorCtx} ou [inserer un element des indices contextuels], voici ce que tu as voulu retenir :" + 1 phrase choc resumant l'essentiel.
-
-[SLIDE 2 a 4 : LES CONCEPTS CLES] (Genere 2 a 3 slides maximum ici)
-- Objectif : 1 Slide = 1 Concept (Chunking).
-- Format :
-  * [Emoji] **[Nom du Concept]**
-  * Explication simple (Feynman) en 1 phrase.
-  * "En pratique :" ou "C'est comme :" suivi d'une analogie ou d'un exemple tire du contenu.
-
-[SLIDE 5 : LA CONNEXION]
-- Objectif : Relier ce savoir a la vie de l'utilisateur (Schema theory).
-- Format : "Pourquoi c'est important pour toi :" + 1 phrase expliquant comment utiliser cette information dans sa vie quotidienne, ses etudes ou sa culture generale.
-
-CONTRAINTES STRICTES :
-- Langage SIMPLE, DIRECT et CONVERSATIONNEL.
-- PAS de jargon sans explication.
-- PAS de formulations scolaires ou passives ("Il est interessant de noter que..."). Sois percutant.
-- Genere UNIQUEMENT le texte des slides, separe par des balises claires (ex: --- SLIDE 1 ---).
-- Tout en FRANCAIS.`;
-
-  const userPrompt = `Titre original : "${contentTitle}"
-Source : ${creatorCtx}
-Indices contextuels (Context Cues) : ${contextCuesStr}
-Themes : ${tagsStr ? tagsStr : 'Culture generale'}
-
-Transcription :
-"""
-${transcriptText}
-"""
-
-Genere le carrousel d'etude selon les regles strictes.`;
+  const systemPrompt = locale.memoSystemPrompt(creatorCtx);
+  const userPrompt = locale.memoUserPrompt({ contentTitle, creatorCtx, contextCuesStr, tagsStr, transcriptText });
 
   return generateText(userPrompt, { system: systemPrompt, temperature: 0.5 });
 }
@@ -458,41 +343,17 @@ export async function generateSynopsis(
   description: string | null,
   contentTitle: string,
   creatorContext?: string,
-  contextCues?: string[]
+  contextCues?: string[],
+  language: string = 'fr'
 ): Promise<string> {
+  const locale = getPromptLocale(language);
   const transcriptText = transcript.slice(0, 6000);
   const descriptionText = description?.slice(0, 500) || '';
-  const creatorCtx = creatorContext || 'ce contenu';
-  const contextCuesStr = contextCues && contextCues.length > 0 ? contextCues.join(', ') : 'aucun indice contextuel disponible';
+  const creatorCtx = creatorContext || (language === 'en' ? 'this content' : 'ce contenu');
+  const contextCuesStr = contextCues && contextCues.length > 0 ? contextCues.join(', ') : (language === 'en' ? 'no context cues available' : 'aucun indice contextuel disponible');
 
-  const systemPrompt = `Tu es un expert en neuro-pedagogie et en copywriting pour l'application Ankora. Tu generes des synopsis ultra-concis (2 phrases) qui agissent comme des declencheurs cognitifs pour motiver l'utilisateur a reviser.
-
-Regles et Principes Scientifiques :
-- Effet de Reference a Soi : Utilise obligatoirement le tutoiement ("tu", "ton"). Parle directement a l'utilisateur de *son* choix d'avoir sauvegarde ce contenu.
-- Ecart de Curiosite (Curiosity Gap) : Ne donne JAMAIS la reponse factuelle finale. Tease le concept, le "pourquoi" ou le mecanisme que l'utilisateur va devoir maitriser.
-- Utilite (Meaningfulness) : Fais comprendre en quoi cette connaissance lui est utile dans sa vie ou pour sa culture.
-
-Structure Exigee (Exactement 2 phrases) :
-- Phrase 1 (L'Ancrage) : Rappelle son interaction en integrant la source (${creatorCtx}) et un indice visuel ou contextuel.
-- Phrase 2 (Le Hook) : Formule la promesse de connaissance sans la devoiler.
-
-Contraintes STRICTES :
-- Maximum 2 phrases COURTES (40 mots max au total).
-- AUCUN emoji (interdiction absolue).
-- Pas de formulations passives comme "Cette video parle de...", "Decouvrez...", "L'auteur explique...".
-- Entierement en francais.`;
-
-  const userPrompt = `Titre: "${contentTitle}"
-Source : ${creatorCtx}
-Indices contextuels (Context Cues) : ${contextCuesStr}
-${descriptionText ? `Description originale: "${descriptionText}"` : ''}
-
-Transcription (extrait):
-"""
-${transcriptText}
-"""
-
-Genere le synopsis cognitif (2 phrases courtes, 40 mots max, 0 emoji) selon les regles exigees.`;
+  const systemPrompt = locale.synopsisSystemPrompt(creatorCtx);
+  const userPrompt = locale.synopsisUserPrompt({ contentTitle, creatorCtx, contextCuesStr, descriptionText, transcriptText });
 
   return generateText(userPrompt, { system: systemPrompt, temperature: 0.5 });
 }
@@ -518,60 +379,21 @@ interface SynthesisGenerationResult {
 export async function generateSynthesisQuestions(
   themeName: string,
   contentMemos: { id: string; title: string; memo: string }[],
-  maxQuestions: number = 5
+  maxQuestions: number = 5,
+  language: string = 'fr'
 ): Promise<SynthesisGenerationResult> {
   if (contentMemos.length < 2) {
     return { questions: [] };
   }
 
   try {
+    const locale = getPromptLocale(language);
     const memosText = contentMemos
       .map((cm, i) => `[Source ${i + 1}: "${cm.title}"]\n${cm.memo.substring(0, 2000)}`)
       .join('\n\n---\n\n');
 
-    const systemPrompt = `Tu es un expert en neuro-pedagogie specialise dans la theorie des schemas cognitifs (Schema Theory) pour l'application Ankora. Ton role est de creer des questions de SYNTHESE inter-contenus qui forcent l'utilisateur a connecter differentes informations qu'IL a lui-meme selectionnees, creant ainsi des reseaux neuronaux durables.
-
-REGLES DE CONTEXTUALISATION (Effet de Reference a Soi) :
-- Utilise obligatoirement le tutoiement ("tu", "tes contenus").
-- Rappelle a l'utilisateur que ce sont SES interets qui se croisent.
-- Exemple de formulation : "En reliant ce que tu as appris dans [Source 1] et dans [Source 2], quelle conclusion peux-tu tirer sur..." ou "Si tu combines le concept vu dans [Source 1] avec le mecanisme de [Source 2]..."
-
-REGLES PEDAGOGIQUES ET COGNITIVES :
-- Chaque question DOIT necessiter la comprehension d'AU MOINS 2 sources differentes parmi celles fournies.
-- Les questions doivent relier, comparer ou connecter des idees (comparaison, cause-effet, generalisation, contradiction, complementarite).
-- 4 options (A-D), une seule correcte.
-- Difficulte Desirable : Les distracteurs (mauvaises reponses) doivent etre tres plausibles -- ils doivent sembler parfaitement logiques si l'utilisateur ne se souvient que d'UNE seule des deux sources.
-
-REGLE POUR L'EXPLICATION :
-- L'explication doit etre formulee comme un feedback de coach ("Exactement !", "Et non, car...").
-- Elle doit obligatoirement nommer les sources concernees et expliquer clairement la mecanique qui les relie.
-- PAS d'emoji. Tout en FRANCAIS.
-- Style direct, clair, evitant la surcharge cognitive.
-
-Reponds UNIQUEMENT en JSON valide.`;
-
-    const userPrompt = `Theme: "${themeName}"
-Nombre de sources: ${contentMemos.length}
-
-Contenus (Memos) :
-"""
-${memosText}
-"""
-
-Genere EXACTEMENT ${maxQuestions} questions de synthese (0 emoji) qui connectent les idees de plusieurs sources selon les regles exigees. Reponds UNIQUEMENT en JSON valide.
-
-Format JSON attendu:
-{
-  "questions": [
-    {
-      "question": "Question de synthese claire, tutoyant l'utilisateur et nommant les sources ?",
-      "options": ["A) Option", "B) Option", "C) Option", "D) Option"],
-      "correctAnswer": "A",
-      "explanation": "Explication directe et valorisante, mentionnant explicitement comment les sources se completent...",
-      "sourceIndices": [1, 2]
-    }
-  ]
-}`;
+    const systemPrompt = locale.synthesisSystemPrompt;
+    const userPrompt = locale.synthesisUserPrompt({ themeName, contentCount: contentMemos.length, memosText, maxQuestions });
 
     const response = await llmLimiter(() =>
       getLLMClient().chatCompletion({
@@ -718,7 +540,7 @@ export async function processContentQuiz(contentId: string): Promise<boolean> {
       });
     });
 
-    // Notify user that quiz is ready
+    // Notify user that quiz is ready (use French for push — language not available here)
     const titleShort = content.title.length > 50
       ? content.title.substring(0, 47) + '...'
       : content.title;

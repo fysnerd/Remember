@@ -7,6 +7,7 @@ import { llmLimiter } from '../utils/rateLimiter.js';
 import { logger } from '../config/logger.js';
 import { generateSlug } from '../utils/slug.js';
 import { findBestImageForTheme } from './themeImageMatching.js';
+import { getPromptLocale } from './promptLocale.js';
 
 const log = logger.child({ service: 'theme-classification' });
 
@@ -424,64 +425,35 @@ function extractFirstEmoji(str: string): string {
  */
 async function generateThemesFromTags(
   userTags: { name: string; count: number }[],
-  existingThemes: { name: string; slug: string }[]
+  existingThemes: { name: string; slug: string }[],
+  language: string = 'fr'
 ): Promise<GeneratedTheme[]> {
   try {
     const llm = getLLMClient();
+    const locale = getPromptLocale(language);
 
     // Format tags with usage counts, sorted by frequency
+    const countLabel = locale.contentCountLabel;
     const tagList = userTags
       .sort((a, b) => b.count - a.count)
-      .map(t => `- "${t.name}" (${t.count} contenus)`)
+      .map(t => `- "${t.name}" (${t.count} ${countLabel})`)
       .join('\n');
 
     const existingList = existingThemes.length > 0
-      ? `\n\nThemes EXISTANTS (NE PAS creer de doublons ni de variantes):\n${existingThemes.map(t => `- "${t.name}"`).join('\n')}`
+      ? (language === 'en'
+          ? `\n\nEXISTING themes (DO NOT create duplicates or variants):\n${existingThemes.map(t => `- "${t.name}"`).join('\n')}`
+          : `\n\nThemes EXISTANTS (NE PAS creer de doublons ni de variantes):\n${existingThemes.map(t => `- "${t.name}"`).join('\n')}`)
       : '';
 
     const response = await llmLimiter(() => llm.chatCompletion({
       messages: [
         {
           role: 'system',
-          content: `Tu es un expert en organisation de connaissances. Tu regroupes des tags de contenu en themes coherents.
-
-Regles:
-- Genere entre 5 et 15 themes maximum
-- Chaque theme regroupe des tags SEMANTIQUEMENT proches
-- Fusionne les synonymes et traductions (ex: "music" + "musique" = un seul theme)
-- Fusionne les variantes (ex: "rap", "french rap", "hip hop" = un seul theme)
-- Ignore les tags utilises une seule fois sauf s'ils correspondent a un theme existant
-- Noms de themes en francais, clairs et concis (2-4 mots max)
-- PAS D'EMOJI dans la reponse (mettre une chaine vide pour emoji)
-- Chaque theme doit avoir une couleur hex
-- Un tag peut appartenir a plusieurs themes si pertinent
-
-Reponds UNIQUEMENT en JSON valide.`,
+          content: locale.themeGenerationSystemPrompt,
         },
         {
           role: 'user',
-          content: `Voici les tags d'un utilisateur avec leur frequence d'utilisation:
-${tagList}
-${existingList}
-
-Regroupe ces tags en themes coherents. Pour chaque theme, indique:
-- name: nom du theme en francais
-- description: une courte description du theme (1 phrase, max 15 mots, en francais)
-- color: code hex (parmi: #EF4444, #F97316, #EAB308, #22C55E, #14B8A6, #3B82F6, #6366F1, #8B5CF6, #EC4899, #F43F5E, #06B6D4, #84CC16)
-- tags: liste des tags regroupes dans ce theme
-
-Format:
-{
-  "themes": [
-    {
-      "name": "Nom du theme",
-      "emoji": "",
-      "description": "Courte description du theme",
-      "color": "#hex",
-      "tags": ["tag1", "tag2", "tag3"]
-    }
-  ]
-}`,
+          content: locale.themeGenerationUserPrompt(tagList, existingList),
         },
       ],
       temperature: 0.3,
@@ -535,10 +507,12 @@ Format:
 async function classifyContentViaLLM(
   contentTitle: string,
   contentTags: string[],
-  existingThemes: { id: string; name: string; tags: string[] }[]
+  existingThemes: { id: string; name: string; tags: string[] }[],
+  language: string = 'fr'
 ): Promise<string[]> {
   try {
     const llm = getLLMClient();
+    const locale = getPromptLocale(language);
 
     const themeList = existingThemes
       .map(t => `- "${t.name}" (tags: ${t.tags.join(', ')})`)
@@ -548,20 +522,11 @@ async function classifyContentViaLLM(
       messages: [
         {
           role: 'system',
-          content: `Tu classes du contenu dans des themes existants. Reponds UNIQUEMENT en JSON valide.`,
+          content: locale.themeClassificationSystemPrompt,
         },
         {
           role: 'user',
-          content: `Contenu: "${contentTitle}"
-Tags du contenu: ${contentTags.join(', ')}
-
-Themes disponibles:
-${themeList}
-
-Dans quel(s) theme(s) ce contenu devrait-il etre classe? (1 a 3 themes max)
-
-Reponds: { "themeNames": ["Nom theme 1", "Nom theme 2"] }
-Si aucun theme ne correspond, reponds: { "themeNames": [] }`,
+          content: locale.themeClassificationUserPrompt(contentTitle, contentTags.join(', '), themeList),
         },
       ],
       temperature: 0.2,

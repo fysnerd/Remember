@@ -4,6 +4,7 @@ import { getLLMClient } from './llm.js';
 import pLimit from 'p-limit';
 import { llmLimiter } from '../utils/rateLimiter.js';
 import { logger } from '../config/logger.js';
+import { getPromptLocale } from './promptLocale.js';
 
 const log = logger.child({ service: 'auto-tagging' });
 
@@ -12,10 +13,12 @@ const log = logger.child({ service: 'auto-tagging' });
  */
 export async function generateTags(
   transcript: string,
-  title: string
+  title: string,
+  language: string = 'fr'
 ): Promise<string[]> {
   try {
     const llm = getLLMClient();
+    const locale = getPromptLocale(language);
 
     // Truncate transcript for API limits
     const maxLength = 4000;
@@ -27,28 +30,11 @@ export async function generateTags(
       messages: [
         {
           role: 'system',
-          content: `Tu es un expert en catégorisation de contenu. Génère 3-5 tags pertinents EN FRANÇAIS pour le contenu donné.
-
-Règles:
-- Tags en minuscules, en français, 1 à 3 mots maximum
-- Privilégie les termes couramment utilisés en français (même si le terme anglais existe)
-- Les tags doivent décrire le SUJET principal, le DOMAINE et le TYPE de connaissance
-- Sois spécifique mais pas trop niche (le tag doit pouvoir regrouper plusieurs contenus)
-- Bons exemples: "intelligence artificielle", "productivité", "histoire", "psychologie", "entrepreneuriat", "nutrition"
-- Mauvais exemples: "intéressant", "vidéo", "épisode", "cool", "important"
-- Si un terme anglais est universellement utilisé en français (ex: "machine learning", "marketing"), garde-le
-
-Retourne UNIQUEMENT un tableau JSON de strings.
-Exemple: ["psychologie cognitive", "mémoire", "apprentissage"]`,
+          content: locale.tagInstruction,
         },
         {
           role: 'user',
-          content: `Titre: ${title}
-
-Contenu:
-${truncatedTranscript}
-
-Génère 3-5 tags pertinents en français pour ce contenu.`,
+          content: locale.tagUserPrompt(title, truncatedTranscript),
         },
       ],
       temperature: 0.2,
