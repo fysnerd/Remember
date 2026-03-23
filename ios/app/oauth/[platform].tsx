@@ -185,7 +185,7 @@ export default function OAuthWebViewScreen() {
       ]);
     } catch (error) {
       console.error('Cookie extraction error:', error);
-      Alert.alert('Erreur', "Impossible de valider la connexion. Réessayez.");
+      Alert.alert(t('common.error'), t('platforms.validationError'));
     } finally {
       setIsExtracting(false);
     }
@@ -195,8 +195,8 @@ export default function OAuthWebViewScreen() {
     <>
       <Stack.Screen
         options={{
-          title: `Connexion ${config.name}`,
-          headerBackTitle: 'Annuler',
+          title: t('platforms.loginTitle', { name: config.name }),
+          headerBackTitle: t('common.cancel'),
         }}
       />
       <SafeAreaView style={styles.container}>

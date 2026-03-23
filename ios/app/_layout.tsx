@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import '../lib/i18n'; // Side-effect: synchronous i18n init
 import { hydrateI18n } from '../lib/i18n';
+import { useTranslation } from 'react-i18next';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -47,6 +48,7 @@ const ONBOARDING_ROUTES: Record<number, string> = {
 
 export default function RootLayout() {
   const { isAuthenticated, isLoading, user, checkAuth } = useAuthStore();
+  const { t } = useTranslation();
   const segments = useSegments();
   const router = useRouter();
 
@@ -255,7 +257,7 @@ export default function RootLayout() {
             name="oauth/[platform]"
             options={{
               headerShown: true,
-              title: 'Connexion',
+              title: t('auth.login'),
               presentation: 'modal',
               animation: 'slide_from_bottom',
               animationDuration: 300,
