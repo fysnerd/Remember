@@ -9,6 +9,8 @@ import { prisma } from '../config/database.js';
 import { sendPushToUser } from '../services/pushNotifications.js';
 import { generateRecommendations } from '../routes/home.js';
 import { ContentStatus, Platform } from '@prisma/client';
+import { getNotifString } from '../utils/notificationStrings.js';
+import { normalizeLanguage } from '../utils/language.js';
 
 const log = logger.child({ job: 'reminder' });
 
@@ -135,12 +137,13 @@ export async function runReminderWorker(): Promise<void> {
     const usersWithSettings = await prisma.userSettings.findMany({
       where: { emailReminders: true },
       include: {
-        user: { select: { id: true, email: true, name: true } },
+        user: { select: { id: true, email: true, name: true, language: true } },
       },
     });
 
     for (const settings of usersWithSettings) {
       const tz = settings.timezone || 'UTC';
+      const lang = normalizeLanguage(settings.user.language);
       const { hour, minute } = getUserCurrentTime(tz);
       const currentMinutes = hour * 60 + minute;
 
@@ -162,17 +165,16 @@ export async function runReminderWorker(): Promise<void> {
 
           if (names.length > 0) {
             const count = names.length;
-            const title = count === 1
-              ? 'Ton sujet du jour est pret !'
-              : `Tes ${count} sujets du jour sont prets !`;
+            const title = getNotifString('morningTitle', lang, { count });
+            const joiner = lang === 'en' ? ' and ' : ' et ';
             let body = names.length <= 2
-              ? names.join(' et ')
-              : `${names.slice(0, 2).join(', ')} et ${names[names.length - 1]}`;
+              ? names.join(joiner)
+              : `${names.slice(0, 2).join(', ')}${joiner}${names[names.length - 1]}`;
 
             // Append streak info if user has an active streak
             const streak = await prisma.streak.findUnique({ where: { userId: settings.userId } });
             if (streak && streak.currentStreak >= 2) {
-              body += ` | ${streak.currentStreak}j de suite !`;
+              body += ` | ${getNotifString('morningStreakSuffix', lang, { count: streak.currentStreak })}`;
             }
 
             const result = await sendPushToUser(settings.userId, title, body, { screen: '/(tabs)' });
@@ -200,10 +202,8 @@ export async function runReminderWorker(): Promise<void> {
         });
 
         if (inboxCount > 0) {
-          const title = inboxCount === 1
-            ? '1 nouveau contenu a valider'
-            : `${inboxCount} nouveaux contenus a valider`;
-          const body = 'Ouvre ta boite de reception pour trier !';
+          const title = getNotifString('noonTitle', lang, { count: inboxCount });
+          const body = getNotifString('noonBody', lang);
 
           const result = await sendPushToUser(settings.userId, title, body, { screen: '/(tabs)/inbox' });
           if (result.sent > 0) {
@@ -227,7 +227,7 @@ export async function runReminderWorker(): Promise<void> {
           const name = await getSubjectName(pick);
 
           if (name) {
-            const title = 'Et si tu revisais un sujet ?';
+            const title = getNotifString('afternoonTitle', lang);
             const body = name;
 
             const result = await sendPushToUser(settings.userId, title, body, { screen: '/(tabs)' });
@@ -255,8 +255,8 @@ export async function runReminderWorker(): Promise<void> {
           });
 
           if (reviewedToday === 0) {
-            const title = `Ton streak de ${streak.currentStreak}j est en danger !`;
-            const body = 'Une petite revision avant de dormir ?';
+            const title = getNotifString('eveningTitle', lang, { count: streak.currentStreak });
+            const body = getNotifString('eveningBody', lang);
 
             const result = await sendPushToUser(settings.userId, title, body, { screen: '/(tabs)' });
             if (result.sent > 0) {
@@ -277,8 +277,8 @@ export async function runReminderWorker(): Promise<void> {
     const inactivityWindowStart = new Date();
     inactivityWindowStart.setDate(inactivityWindowStart.getDate() - (INACTIVITY_DAYS + 1));
 
-    const inactiveUsers = await prisma.$queryRaw<{ userId: string }[]>`
-      SELECT u."id" as "userId"
+    const inactiveUsers = await prisma.$queryRaw<{ userId: string; language: string | null }[]>`
+      SELECT u."id" as "userId", u."language"
       FROM "User" u
       WHERE EXISTS (SELECT 1 FROM "PushToken" pt WHERE pt."userId" = u."id")
       AND (
@@ -286,14 +286,15 @@ export async function runReminderWorker(): Promise<void> {
       ) BETWEEN ${inactivityWindowStart} AND ${inactivityThreshold}
     `;
 
-    for (const { userId } of inactiveUsers) {
+    for (const { userId, language } of inactiveUsers) {
       const us = await prisma.userSettings.findUnique({ where: { userId } });
       if (us && wasSentToday(us.lastPushSentAt, us.timezone || 'UTC')) continue;
 
+      const inactLang = normalizeLanguage(language);
       const result = await sendPushToUser(
         userId,
-        'Ca fait un moment !',
-        'Tes sujets t\'attendent. Une petite session ?',
+        getNotifString('inactivityTitle', inactLang),
+        getNotifString('inactivityBody', inactLang),
         { screen: '/(tabs)' }
       );
       if (result.sent > 0) {

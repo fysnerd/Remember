@@ -14,6 +14,7 @@ import { syncUserYouTube } from '../workers/youtubeSync.js';
 import { syncUserSpotify } from '../workers/spotifySync.js';
 import { syncTikTokForUser } from '../workers/tiktokSync.js';
 import { logger } from '../config/logger.js';
+import { normalizeLanguage } from '../utils/language.js';
 
 const log = logger.child({ route: 'auth' });
 
@@ -64,6 +65,7 @@ const userSelectFields = {
   email: true,
   name: true,
   firstName: true,
+  language: true,
   plan: true,
   trialEndsAt: true,
   onboardingCompleted: true,
@@ -78,8 +80,9 @@ async function findOrCreateSocialUser(opts: {
   providerId: string;
   email: string;
   name?: string;
+  language?: string;
 }): Promise<{ user: any; isNewUser: boolean }> {
-  const { provider, providerId, email, name } = opts;
+  const { provider, providerId, email, name, language } = opts;
   const providerField = provider === 'apple' ? 'appleUserId' : 'googleId';
 
   // 1. Find by provider ID
@@ -111,6 +114,7 @@ async function findOrCreateSocialUser(opts: {
     data: {
       email,
       name,
+      language: normalizeLanguage(language),
       [providerField]: providerId,
       authProvider: provider,
       trialEndsAt,
@@ -127,6 +131,7 @@ const signupSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   name: z.string().optional(),
+  language: z.string().optional(),
 });
 
 const loginSchema = z.object({
@@ -160,6 +165,7 @@ authRouter.post('/signup', async (req: Request, res: Response, next: NextFunctio
         email: data.email,
         passwordHash,
         name: data.name,
+        language: normalizeLanguage(data.language),
         authProvider: 'email',
         trialEndsAt,
         settings: {
@@ -261,7 +267,7 @@ authRouter.post('/refresh', async (req: Request, res: Response, next: NextFuncti
     // Verify user exists
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
-      select: { id: true, email: true },
+      select: userSelectFields,
     });
 
     if (!user) {
@@ -269,9 +275,9 @@ authRouter.post('/refresh', async (req: Request, res: Response, next: NextFuncti
     }
 
     // Generate new tokens
-    const tokens = generateTokens(user);
+    const tokens = generateTokens({ id: user.id, email: user.email });
 
-    return res.json(tokens);
+    return res.json({ user, ...tokens });
   } catch (error) {
     return next(error);
   }
@@ -287,6 +293,7 @@ authRouter.get('/me', authenticateToken, async (req: Request, res: Response, nex
         email: true,
         name: true,
         firstName: true,
+        language: true,
         avatarUrl: true,
         plan: true,
         trialEndsAt: true,
@@ -324,11 +331,12 @@ const appleSchema = z.object({
     givenName: z.string().nullable().optional(),
     familyName: z.string().nullable().optional(),
   }).optional(),
+  language: z.string().optional(),
 });
 
 authRouter.post('/apple', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { identityToken, fullName } = appleSchema.parse(req.body);
+    const { identityToken, fullName, language } = appleSchema.parse(req.body);
 
     // Verify Apple identity token via JWKS
     const { payload } = await jwtVerify(identityToken, APPLE_JWKS, {
@@ -352,6 +360,7 @@ authRouter.post('/apple', async (req: Request, res: Response, next: NextFunction
       providerId: appleUserId,
       email,
       name,
+      language,
     });
 
     const tokens = generateTokens({ id: user.id, email: user.email });
@@ -370,11 +379,12 @@ authRouter.post('/apple', async (req: Request, res: Response, next: NextFunction
 // POST /api/auth/google
 const googleSchema = z.object({
   idToken: z.string(),
+  language: z.string().optional(),
 });
 
 authRouter.post('/google', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { idToken } = googleSchema.parse(req.body);
+    const { idToken, language } = googleSchema.parse(req.body);
 
     // Verify Google ID token via Google's tokeninfo endpoint
     const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`);
@@ -393,6 +403,7 @@ authRouter.post('/google', async (req: Request, res: Response, next: NextFunctio
       providerId: payload.sub,
       email: payload.email,
       name: payload.name || payload.given_name,
+      language,
     });
 
     const tokens = generateTokens({ id: user.id, email: user.email });
@@ -411,11 +422,13 @@ authRouter.post('/google', async (req: Request, res: Response, next: NextFunctio
 // POST /api/auth/magic-link
 const magicLinkSchema = z.object({
   email: z.string().email(),
+  language: z.string().optional(),
 });
 
 authRouter.post('/magic-link', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { email } = magicLinkSchema.parse(req.body);
+    const { email, language } = magicLinkSchema.parse(req.body);
+    const lang = normalizeLanguage(language);
 
     if (!resend) {
       throw new AppError(503, 'Email service not configured');
@@ -431,7 +444,7 @@ authRouter.post('/magic-link', async (req: Request, res: Response, next: NextFun
     });
 
     // Build magic link URL (HTTPS redirect → deep link, since email clients block custom schemes)
-    const webFallbackUrl = `${config.magicLink.baseUrl}/api/auth/magic-link/redirect?token=${token}&email=${encodeURIComponent(email.toLowerCase())}`;
+    const webFallbackUrl = `${config.magicLink.baseUrl}/api/auth/magic-link/redirect?token=${token}&email=${encodeURIComponent(email.toLowerCase())}&lang=${lang}`;
 
     // Send email
     await resend.emails.send({
@@ -464,8 +477,9 @@ authRouter.post('/magic-link', async (req: Request, res: Response, next: NextFun
 
 // GET /api/auth/magic-link/redirect — web fallback that redirects to deep link
 authRouter.get('/magic-link/redirect', (req: Request, res: Response) => {
-  const { token, email } = req.query;
-  const deepLink = `ankora://auth/verify?token=${token}&email=${email}`;
+  const { token, email, lang } = req.query;
+  const langParam = lang ? `&lang=${lang}` : '';
+  const deepLink = `ankora://auth/verify?token=${token}&email=${email}${langParam}`;
   res.send(`
     <html><head><meta http-equiv="refresh" content="0;url=${deepLink}" /></head>
     <body style="background:#0A0F1A;color:#F8FAFC;font-family:sans-serif;text-align:center;padding-top:100px;">
@@ -479,11 +493,12 @@ authRouter.get('/magic-link/redirect', (req: Request, res: Response) => {
 const verifyMagicLinkSchema = z.object({
   token: z.string(),
   email: z.string().email(),
+  lang: z.string().optional(),
 });
 
 authRouter.post('/verify-magic-link', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { token, email } = verifyMagicLinkSchema.parse(req.body);
+    const { token, email, lang } = verifyMagicLinkSchema.parse(req.body);
 
     // Find and validate token
     const magicToken = await prisma.magicLinkToken.findUnique({ where: { token } });
@@ -515,6 +530,7 @@ authRouter.post('/verify-magic-link', async (req: Request, res: Response, next: 
       user = await prisma.user.create({
         data: {
           email: email.toLowerCase(),
+          language: normalizeLanguage(lang),
           emailVerified: true,
           authProvider: 'email',
           trialEndsAt,
@@ -538,6 +554,7 @@ authRouter.post('/verify-magic-link', async (req: Request, res: Response, next: 
       email: user.email,
       name: user.name,
       firstName: (user as any).firstName,
+      language: (user as any).language,
       plan: user.plan,
       trialEndsAt: user.trialEndsAt,
       onboardingCompleted: (user as any).onboardingCompleted,
@@ -550,6 +567,27 @@ authRouter.post('/verify-magic-link', async (req: Request, res: Response, next: 
       return res.status(400).json({ error: 'Validation error', details: error.errors });
     }
     log.error({ err: error }, 'Magic link verification failed');
+    return next(error);
+  }
+});
+
+// PUT /api/auth/language
+authRouter.put('/language', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { language } = req.body;
+    if (!language || typeof language !== 'string') {
+      throw new AppError(400, 'language is required');
+    }
+
+    const normalized = normalizeLanguage(language);
+
+    await prisma.user.update({
+      where: { id: req.user!.id },
+      data: { language: normalized },
+    });
+
+    return res.json({ language: normalized });
+  } catch (error) {
     return next(error);
   }
 });
