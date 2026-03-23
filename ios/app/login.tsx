@@ -5,12 +5,14 @@
 import { useState } from 'react';
 import { View, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { Text, Input, Button, useToast } from '../components/ui';
 import { AnkoraLogo } from '../components/icons';
 import { useAuthStore } from '../stores/authStore';
 import { colors, spacing } from '../theme';
 
 export default function LoginScreen() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { login, isLoading, error, clearError } = useAuthStore();
@@ -19,7 +21,7 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      show('Veuillez remplir tous les champs', 'error');
+      show(t('auth.fillAllFields'), 'error');
       return;
     }
 
@@ -28,7 +30,7 @@ export default function LoginScreen() {
       await login(email.trim(), password);
       // Auth guard in _layout will redirect to /(tabs)
     } catch {
-      show(error || 'Connexion échouée', 'error');
+      show(error || t('auth.loginFailed'), 'error');
     }
   };
 
@@ -49,8 +51,8 @@ export default function LoginScreen() {
 
         <View style={styles.form}>
           <Input
-            label="Email"
-            placeholder="votre@email.com"
+            label={t('auth.email')}
+            placeholder={t('auth.emailPlaceholder')}
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
@@ -58,7 +60,7 @@ export default function LoginScreen() {
           />
 
           <Input
-            label="Mot de passe"
+            label={t('auth.password')}
             placeholder="••••••••"
             value={password}
             onChangeText={setPassword}
@@ -71,16 +73,16 @@ export default function LoginScreen() {
             onPress={handleLogin}
             loading={isLoading}
           >
-            Se connecter
+            {t('auth.login')}
           </Button>
         </View>
 
         <Pressable onPress={goToSignup} style={styles.link}>
           <Text variant="body" color="secondary">
-            Pas de compte ?{' '}
+            {t('auth.noAccount')}{' '}
           </Text>
           <Text variant="body" weight="medium">
-            S'inscrire
+            {t('auth.signup')}
           </Text>
         </Pressable>
       </View>

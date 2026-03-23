@@ -8,9 +8,11 @@
 import { useColorScheme } from 'react-native';
 import { ThemeProvider, DarkTheme, DefaultTheme } from '@react-navigation/native';
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
+import { useTranslation } from 'react-i18next';
 import { colors } from '../../theme';
 
 export default function TabLayout() {
+  const { t } = useTranslation();
   const colorScheme = useColorScheme();
 
   return (
@@ -25,28 +27,28 @@ export default function TabLayout() {
           <NativeTabs.Trigger.Icon
             sf={{ default: 'house', selected: 'house.fill' }}
           />
-          <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Label>{t('tabs.home')}</NativeTabs.Trigger.Label>
         </NativeTabs.Trigger>
 
         <NativeTabs.Trigger name="library">
           <NativeTabs.Trigger.Icon
             sf={{ default: 'safari', selected: 'safari.fill' }}
           />
-          <NativeTabs.Trigger.Label>Explorer</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Label>{t('tabs.explore')}</NativeTabs.Trigger.Label>
         </NativeTabs.Trigger>
 
         <NativeTabs.Trigger name="reviews">
           <NativeTabs.Trigger.Icon
             sf={{ default: 'brain.head.profile', selected: 'brain.head.profile.fill' }}
           />
-          <NativeTabs.Trigger.Label>Revisions</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Label>{t('tabs.reviews')}</NativeTabs.Trigger.Label>
         </NativeTabs.Trigger>
 
         <NativeTabs.Trigger name="profile">
           <NativeTabs.Trigger.Icon
             sf={{ default: 'person', selected: 'person.fill' }}
           />
-          <NativeTabs.Trigger.Label>Profil</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Label>{t('tabs.profile')}</NativeTabs.Trigger.Label>
         </NativeTabs.Trigger>
       </NativeTabs>
     </ThemeProvider>

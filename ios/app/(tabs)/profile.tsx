@@ -11,6 +11,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronRight, Crown, Wrench, LogOut, CreditCard, RotateCcw, Info } from 'lucide-react-native';
 import Constants from 'expo-constants';
+import { useTranslation } from 'react-i18next';
 import { Text } from '../../components/ui';
 import { GlassCard } from '../../components/glass/GlassCard';
 import { PlatformIcon } from '../../components/icons';
@@ -38,6 +39,7 @@ const platformConfig = [
 ] as const;
 
 export default function ProfileScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { bottom: bottomInset, top: topInset } = useSafeAreaInsets();
   const tabBarHeight = bottomInset + 49;
@@ -88,7 +90,7 @@ export default function ProfileScreen() {
       handleCloseNameDrawer();
     } catch (error) {
       haptics.error();
-      Alert.alert('Erreur', 'Impossible de modifier le nom');
+      Alert.alert(t('common.error'), t('errors.nameUpdateFailed'));
     } finally {
       setSavingName(false);
     }
@@ -104,7 +106,7 @@ export default function ProfileScreen() {
       }));
       queryClient.invalidateQueries({ queryKey: ['subscription'] });
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible de changer le plan');
+      Alert.alert(t('common.error'), t('errors.planChangeFailed'));
     } finally {
       setSwitchingPlan(false);
     }
@@ -113,7 +115,7 @@ export default function ProfileScreen() {
   const handleManageSubscription = async () => {
     haptics.light();
     if (!RevenueCatUI) {
-      Alert.alert('Bientôt disponible', 'La gestion d\'abonnement nécessite une mise à jour de l\'app.');
+      Alert.alert(t('errors.comingSoon'), t('errors.comingSoonMsg'));
       return;
     }
     try {
@@ -130,12 +132,12 @@ export default function ProfileScreen() {
       const info = await restorePurchases();
       if (info) {
         haptics.success();
-        Alert.alert('Achats restaurés', 'Vos achats ont été restaurés avec succès.');
+        Alert.alert(t('profile.purchasesRestored'), t('profile.purchasesRestoredMsg'));
       } else {
-        Alert.alert('Aucun achat', 'Aucun achat à restaurer.');
+        Alert.alert(t('profile.noPurchases'), t('profile.noPurchasesMsg'));
       }
     } catch {
-      Alert.alert('Erreur', 'Impossible de restaurer les achats.');
+      Alert.alert(t('common.error'), t('errors.restoreFailed'));
     } finally {
       setRestoringPurchases(false);
     }
@@ -144,7 +146,7 @@ export default function ProfileScreen() {
   const handleShowPaywall = async () => {
     haptics.light();
     if (!RevenueCatUI) {
-      Alert.alert('Bientôt disponible', 'Les abonnements nécessitent une mise à jour de l\'app.');
+      Alert.alert(t('errors.comingSoon'), t('errors.subscriptionRequired'));
       return;
     }
     try {
@@ -156,12 +158,12 @@ export default function ProfileScreen() {
 
   const handleLogout = () => {
     Alert.alert(
-      'Déconnexion',
-      'Tu veux vraiment te déconnecter ?',
+      t('profile.logout'),
+      t('profile.logoutConfirm'),
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Déconnecter',
+          text: t('platforms.disconnect'),
           style: 'destructive',
           onPress: async () => {
             queryClient.cancelQueries();
@@ -214,12 +216,12 @@ export default function ProfileScreen() {
 
   const handleDisconnect = (platformId: string, platformName: string) => {
     Alert.alert(
-      'Déconnecter ' + platformName,
-      'Voulez-vous vraiment déconnecter ce compte ? Votre contenu importé sera conservé.',
+      t('platforms.disconnectTitle', { name: platformName }),
+      t('platforms.disconnectConfirm'),
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Déconnecter',
+          text: t('platforms.disconnect'),
           style: 'destructive',
           onPress: async () => {
             setLoadingPlatform(platformId);
@@ -228,7 +230,7 @@ export default function ProfileScreen() {
               refreshOAuthStatus();
             } catch (error) {
               console.error('Disconnect error:', error);
-              Alert.alert('Erreur', 'Impossible de déconnecter le compte');
+              Alert.alert(t('common.error'), t('platforms.disconnectError'));
             } finally {
               setLoadingPlatform(null);
             }
@@ -243,17 +245,17 @@ export default function ProfileScreen() {
 
     // Instagram connected → offer sync (on-device) or disconnect
     if (platformId === 'instagram' && isConnected) {
-      Alert.alert(platformName, 'Que voulez-vous faire ?', [
+      Alert.alert(platformName, t('platforms.whatToDo'), [
         {
-          text: 'Synchroniser',
+          text: t('platforms.sync'),
           onPress: () => router.push('/instagram-sync' as any),
         },
         {
-          text: 'Déconnecter',
+          text: t('platforms.disconnect'),
           style: 'destructive',
           onPress: () => handleDisconnect(platformId, platformName),
         },
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
       ]);
       return;
     }
@@ -280,8 +282,8 @@ export default function ProfileScreen() {
     status: oauthStatus?.[p.id as keyof typeof oauthStatus] ?? null,
   }));
 
-  // User name fallback chain: name > email prefix > 'Utilisateur'
-  const displayName = user?.name || user?.email?.split('@')[0] || 'Utilisateur';
+  // User name fallback chain: name > email prefix > t('profile.user')
+  const displayName = user?.name || user?.email?.split('@')[0] || t('profile.user');
   const initials = displayName.slice(0, 2).toUpperCase();
 
   const appVersion = Constants.expoConfig?.version || '1.0.0';
@@ -316,7 +318,7 @@ export default function ProfileScreen() {
             <Crown size={20} color={isProUser ? colors.accent : colors.textSecondary} strokeWidth={2} />
           </View>
           <Text variant="body" weight="medium" style={styles.planCardText}>
-            {isProUser ? 'Pro' : 'Gratuit'}
+            {isProUser ? t('profile.pro') : t('profile.free')}
           </Text>
           <ChevronRight size={18} color={colors.textSecondary} strokeWidth={1.75} />
         </Pressable>
@@ -362,7 +364,7 @@ export default function ProfileScreen() {
           <View style={styles.rowIcon}>
             <CreditCard size={20} color={colors.textSecondary} strokeWidth={1.75} />
           </View>
-          <Text variant="body" style={styles.rowLabel}>Abonnement</Text>
+          <Text variant="body" style={styles.rowLabel}>{t('profile.subscription')}</Text>
           <ChevronRight size={18} color={colors.textSecondary} strokeWidth={1.75} />
         </Pressable>
         <Pressable
@@ -374,7 +376,7 @@ export default function ProfileScreen() {
             <RotateCcw size={20} color={colors.textSecondary} strokeWidth={1.75} />
           </View>
           <Text variant="body" style={styles.rowLabel}>
-            {restoringPurchases ? 'Restauration...' : 'Restaurer les achats'}
+            {restoringPurchases ? t('profile.restoring') : t('profile.restorePurchases')}
           </Text>
           <ChevronRight size={18} color={colors.textSecondary} strokeWidth={1.75} />
         </Pressable>
@@ -382,7 +384,7 @@ export default function ProfileScreen() {
           <View style={styles.rowIcon}>
             <Info size={20} color={colors.textSecondary} strokeWidth={1.75} />
           </View>
-          <Text variant="body" style={styles.rowLabel}>À propos</Text>
+          <Text variant="body" style={styles.rowLabel}>{t('profile.about')}</Text>
           <ChevronRight size={18} color={colors.textSecondary} strokeWidth={1.75} />
         </Pressable>
       </GlassCard>
@@ -391,13 +393,13 @@ export default function ProfileScreen() {
       <Pressable style={styles.logoutButton} onPress={handleLogout}>
         <LogOut size={20} color={colors.textSecondary} strokeWidth={1.75} />
         <Text variant="body" color="secondary" style={styles.logoutLabel}>
-          Déconnexion
+          {t('profile.logout')}
         </Text>
       </Pressable>
 
       {/* Version */}
       <Text variant="caption" color="secondary" style={styles.version}>
-        Version {appVersion}
+        {t('profile.version', { version: appVersion })}
       </Text>
 
       {/* Dev Tools — only in development */}
@@ -406,12 +408,12 @@ export default function ProfileScreen() {
           <View style={styles.devHeader}>
             <Wrench size={14} color={colors.textSecondary} strokeWidth={2} />
             <Text variant="caption" color="secondary" style={styles.devTitle}>
-              Dev Tools
+              {t('profile.devTools')}
             </Text>
           </View>
           <GlassCard padding="md">
             <Text variant="caption" color="secondary" style={styles.devLabel}>
-              Plan actif (backend)
+              {t('profile.activePlan')}
             </Text>
             <View style={styles.devPlanRow}>
               {plans.map((plan) => (
@@ -462,7 +464,7 @@ export default function ProfileScreen() {
             </Pressable>
 
             <Text variant="h3" weight="semibold" style={styles.drawerTitle}>
-              Modifier le nom
+              {t('profile.editName')}
             </Text>
 
             {/* Name input */}
@@ -471,7 +473,7 @@ export default function ProfileScreen() {
               style={styles.drawerInput}
               value={editedName}
               onChangeText={setEditedName}
-              placeholder="Ton nom"
+              placeholder={t('profile.namePlaceholder')}
               placeholderTextColor="rgba(0, 0, 0, 0.4)"
               autoCapitalize="words"
               autoCorrect={false}
@@ -493,7 +495,7 @@ export default function ProfileScreen() {
               disabled={!editedName.trim() || savingName}
             >
               <Text variant="body" weight="semibold" style={styles.drawerSaveText}>
-                {savingName ? 'Enregistrement...' : 'Enregistrer'}
+                {savingName ? t('profile.saving') : t('common.save')}
               </Text>
             </Pressable>
           </View>

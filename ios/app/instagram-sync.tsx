@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Text, Button } from '../components/ui';
 import api from '../lib/api';
 import { colors, spacing } from '../theme';
@@ -139,6 +140,7 @@ type Phase = 'login' | 'likes' | 'done' | 'error';
 export default function InstagramSyncScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   const [phase, setPhase] = useState<Phase>('login');
   const [message, setMessage] = useState('');
@@ -168,12 +170,12 @@ export default function InstagramSyncScreen() {
 
         // Remount WebView on likes page (phase 2)
         setPhase('likes');
-        setMessage('Récupération de vos reels likés...');
+        setMessage(t('instagram.syncing'));
       }
     } catch (e) {
       console.error('[InstagramSync] Cookie check error:', e);
     }
-  }, [syncTriggered]);
+  }, [syncTriggered, t]);
 
   // Poll every 2s in login phase
   useEffect(() => {

@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { Text, Input, Button, useToast } from '../../components/ui';
 import { AnkoraLogo } from '../../components/icons';
 import { SocialAuthButton } from '../../components/onboarding/SocialAuthButton';
@@ -17,6 +18,7 @@ import { colors, spacing, fonts, typography } from '../../theme';
 
 export default function AuthScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { loginWithApple, loginWithGoogle, sendMagicLink, login, clearError } = useAuthStore();
   const { show, ToastComponent } = useToast();
 
@@ -49,7 +51,7 @@ export default function AuthScreen() {
         // User cancelled — do nothing
       } else {
         console.error('Apple Sign-In error:', error);
-        show(error.message || 'Apple Sign-In failed', 'error');
+        show(error.message || t('auth.appleSignInFailed'), 'error');
       }
     } finally {
       setAppleLoading(false);
