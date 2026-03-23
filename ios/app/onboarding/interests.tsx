@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { Text, Button } from '../../components/ui';
 import { OnboardingProgressBar } from '../../components/onboarding/OnboardingProgressBar';
 import { SelectChip } from '../../components/onboarding/SelectChip';
@@ -22,6 +23,7 @@ const INTEREST_OPTIONS = [
 ];
 
 export default function InterestsScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { saveStep, isSaving } = useOnboardingStore();
   const { updateUser } = useAuthStore();
@@ -49,16 +51,16 @@ export default function InterestsScreen() {
     <SafeAreaView style={styles.container}>
       <OnboardingProgressBar step={3} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text variant="h2" style={styles.title}>What are you interested in?</Text>
+        <Text variant="h2" style={styles.title}>{t('onboarding.whatInterests')}</Text>
         <Text variant="body" color="secondary" style={styles.subtitle}>
-          Pick at least 2 topics.
+          {t('onboarding.pickAtLeast')}
         </Text>
 
         <View style={styles.chips}>
           {INTEREST_OPTIONS.map((interest) => (
             <SelectChip
               key={interest}
-              label={interest}
+              label={t(`onboarding.interestOptions.${interest}`)}
               selected={selected.includes(interest)}
               onPress={() => toggleInterest(interest)}
             />
@@ -72,7 +74,7 @@ export default function InterestsScreen() {
           disabled={selected.length < 2}
           loading={isSaving}
         >
-          Continue ({selected.length} selected)
+          {t('onboarding.continueSelected', { count: selected.length })}
         </Button>
       </ScrollView>
     </SafeAreaView>

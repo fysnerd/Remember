@@ -5,6 +5,7 @@
 
 import { View, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Text } from '../ui';
 import { colors, spacing, borderRadius } from '../../theme';
 
@@ -25,6 +26,7 @@ export function SelectionBar({
   loadingLearn = false,
   loadingIgnore = false,
 }: SelectionBarProps) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const tabBarHeight = insets.bottom + 49; // Native tab bar height approximation
   const isLoading = loadingLearn || loadingIgnore;
@@ -38,12 +40,12 @@ export function SelectionBar({
           onPress={onCancel}
           disabled={isLoading}
         >
-          <Text style={styles.cancelText}>Annuler</Text>
+          <Text style={styles.cancelText}>{t('common.cancel')}</Text>
         </Pressable>
 
         {/* Count */}
         <Text variant="body" weight="medium" style={styles.count}>
-          {selectedCount} sélectionné{selectedCount > 1 ? 's' : ''}
+          {t('library.selected', { count: selectedCount })}
         </Text>
 
         {/* Action buttons */}
@@ -56,7 +58,7 @@ export function SelectionBar({
             {loadingIgnore ? (
               <ActivityIndicator size="small" color={colors.textSecondary} />
             ) : (
-              <Text style={styles.ignoreText}>Ignorer</Text>
+              <Text style={styles.ignoreText}>{t('inbox.skip')}</Text>
             )}
           </Pressable>
           <Pressable
@@ -67,7 +69,7 @@ export function SelectionBar({
             {loadingLearn ? (
               <ActivityIndicator size="small" color={colors.background} />
             ) : (
-              <Text style={styles.learnText}>Apprendre</Text>
+              <Text style={styles.learnText}>{t('inbox.learn')}</Text>
             )}
           </Pressable>
         </View>

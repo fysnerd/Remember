@@ -10,6 +10,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { FileText, Search, Trash2, X, Check } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { SessionCard } from '../../components/reviews/SessionCard';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
@@ -53,6 +54,7 @@ function deduplicateByContent(sessions: QuizSessionItem[]): MemoItem[] {
 }
 
 export default function ReviewsScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { bottom: bottomInset, top: topInset } = useSafeAreaInsets();
   const tabBarHeight = bottomInset + 49;
@@ -77,18 +79,18 @@ export default function ReviewsScreen() {
 
   const handleDelete = useCallback((contentId: string, title: string) => {
     Alert.alert(
-      'Supprimer cette fiche',
-      `Supprimer "${title}" ? Cette action est irréversible.`,
+      t('reviews.deleteCard'),
+      t('reviews.deleteConfirmTitle', { title }),
       [
-        { text: 'Annuler', style: 'cancel', onPress: () => swipeableRefs.current.get(contentId)?.close() },
+        { text: t('common.cancel'), style: 'cancel', onPress: () => swipeableRefs.current.get(contentId)?.close() },
         {
-          text: 'Supprimer',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: () => deleteContent.mutate(contentId),
         },
       ],
     );
-  }, [deleteContent]);
+  }, [deleteContent, t]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -143,7 +145,7 @@ export default function ReviewsScreen() {
           <Search size={18} color={colors.textSecondary} strokeWidth={1.5} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Rechercher une fiche..."
+            placeholder={t('reviews.searchPlaceholder')}
             placeholderTextColor={colors.textSecondary}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -176,7 +178,7 @@ export default function ReviewsScreen() {
             weight={selectedThemeIds.length === 0 ? 'medium' : 'regular'}
             style={[styles.themePillLabel, selectedThemeIds.length === 0 && styles.themePillLabelActive]}
           >
-            Tout
+            {t('reviews.all')}
           </Text>
         </Pressable>
 
@@ -213,7 +215,7 @@ export default function ReviewsScreen() {
   if (!sessions || sessions.length === 0) {
     return (
       <EmptyState
-        message="Aucune révision pour le moment. Faites un quiz pour commencer !"
+        message={t('reviews.emptyState')}
         icon={FileText}
         hasHeader
       />
@@ -255,7 +257,7 @@ export default function ReviewsScreen() {
                       onPress={() => handleDelete(item.contentId, item.title)}
                     >
                       <Trash2 size={18} color="#FFFFFF" />
-                      <Text style={styles.deleteText}>Supprimer</Text>
+                      <Text style={styles.deleteText}>{t('common.delete')}</Text>
                     </Pressable>
                   )}
                   overshootRight={false}
@@ -288,7 +290,7 @@ export default function ReviewsScreen() {
           </View>
         ) : (
           <EmptyState
-            message="Aucun résultat pour cette recherche"
+            message={t('reviews.noSearchResults')}
             icon={Search}
             hasHeader
           />

@@ -10,6 +10,7 @@
  */
 
 import { View, Image, StyleSheet, Pressable } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Text } from '../ui';
 import { PlatformIcon } from '../icons';
 import { Sparkles } from 'lucide-react-native';
@@ -35,6 +36,7 @@ function getCardVariant(type: string, platform: string | null): CardVariant {
 // --- Theme card (Figma 130:98) ---
 
 function ThemeCard({ recommendation, completed }: { recommendation: QuizRecommendation; completed: boolean }) {
+  const { t } = useTranslation();
   const { title, thumbnailUrl, questionCount, subtitle } = recommendation;
 
   return (
@@ -60,7 +62,7 @@ function ThemeCard({ recommendation, completed }: { recommendation: QuizRecommen
           </Text>
           <View style={styles.themeMetaRow}>
             <Text style={styles.themeMeta}>
-              {questionCount} Question{questionCount !== 1 ? 's' : ''}
+              {t('quiz.questionsCount', { count: questionCount })}
             </Text>
             {subtitle && (
               <>
@@ -78,6 +80,7 @@ function ThemeCard({ recommendation, completed }: { recommendation: QuizRecommen
 // --- Content card (YouTube / TikTok / Instagram / Spotify) ---
 
 function ContentCard({ recommendation, completed }: { recommendation: QuizRecommendation; completed: boolean }) {
+  const { t } = useTranslation();
   const { type, title, thumbnailUrl, emoji, platform, questionCount } = recommendation;
   const variant = getCardVariant(type, platform);
   const compact = variant === 'vertical' || variant === 'square';
@@ -131,7 +134,7 @@ function ContentCard({ recommendation, completed }: { recommendation: QuizRecomm
           {title}
         </Text>
         <Text style={styles.questionCount}>
-          {questionCount} Question{questionCount !== 1 ? 's' : ''}
+          {t('quiz.questionsCount', { count: questionCount })}
         </Text>
       </View>
     </View>

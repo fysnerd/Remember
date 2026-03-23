@@ -27,6 +27,7 @@ import { haptics } from '../../../lib/haptics';
 import type { Content } from '../../../types/content';
 import { colors, spacing, borderRadius, fonts, glass, depth } from '../../../theme';
 import api from '../../../lib/api';
+import { useTranslation } from 'react-i18next';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_GAP = spacing.md;
@@ -35,6 +36,7 @@ const COLUMN_WIDTH = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP) / 2;
 const HEADER_HEIGHT = 108;
 
 export default function LibraryScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { bottom: bottomInset, top: topInset } = useSafeAreaInsets();
@@ -200,12 +202,12 @@ export default function LibraryScreen() {
     if (selectedIds.size === 0) return;
     const count = selectedIds.size;
     Alert.alert(
-      'Supprimer',
-      `Supprimer ${count} contenu${count > 1 ? 's' : ''} de ta library ?`,
+      t('library.deleteTitle'),
+      t('library.deleteConfirm', { count }),
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Supprimer',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             setDeletingSelected(true);
@@ -218,7 +220,7 @@ export default function LibraryScreen() {
               queryClient.invalidateQueries({ queryKey: ['content'] });
               haptics.success();
             } catch {
-              Alert.alert('Erreur', 'Impossible de supprimer les contenus.');
+              Alert.alert(t('common.error'), t('library.deleteError'));
             } finally {
               setDeletingSelected(false);
             }
@@ -342,12 +344,12 @@ export default function LibraryScreen() {
               style={({ pressed }) => pressed && { opacity: 0.7 }}
             >
               <Text variant="body" weight="medium" style={{ color: colors.accent }}>
-                Annuler
+                {t('common.cancel')}
               </Text>
             </Pressable>
 
             <Text variant="body" weight="semibold" style={{ color: colors.text }}>
-              {selectedIds.size} sélectionné{selectedIds.size > 1 ? 's' : ''}
+              {t('library.selected', { count: selectedIds.size })}
             </Text>
 
             <Pressable
@@ -356,7 +358,7 @@ export default function LibraryScreen() {
               style={({ pressed }) => pressed && { opacity: 0.7 }}
             >
               <Text variant="body" weight="medium" style={{ color: colors.accent }}>
-                {allSelected ? 'Aucun' : 'Tout'}
+                {allSelected ? t('library.none') : t('library.all')}
               </Text>
             </Pressable>
           </View>
@@ -369,7 +371,7 @@ export default function LibraryScreen() {
               <Search size={18} color={colors.textSecondary} strokeWidth={1.5} />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Rechercher..."
+                placeholder={t('library.search')}
                 placeholderTextColor={colors.textSecondary}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
@@ -401,7 +403,7 @@ export default function LibraryScreen() {
                 weight="medium"
                 style={[styles.sourcesLabel, styles.sourcesLabelActive]}
               >
-                Sources ({sourceFilters.length > 0 ? sourceFilters.length : (availableSources?.length ?? 0)})
+                {t('library.sourcesCount', { count: sourceFilters.length > 0 ? sourceFilters.length : (availableSources?.length ?? 0) })}
               </Text>
               <ChevronDown size={14} color={colors.background} strokeWidth={2} />
             </Pressable>
@@ -418,7 +420,7 @@ export default function LibraryScreen() {
                   weight={themeFilters.length === 0 ? 'medium' : 'regular'}
                   style={[styles.themePillLabel, themeFilters.length === 0 && styles.themePillLabelActive]}
                 >
-                  Tout
+                  {t('library.all')}
                 </Text>
               </Pressable>
             )}
@@ -463,9 +465,9 @@ export default function LibraryScreen() {
           }
         >
           {debouncedSearch ? (
-            <EmptyState message="Aucun résultat" icon={Search} />
+            <EmptyState message={t('common.noResults')} icon={Search} />
           ) : (
-            <EmptyState message="Aucun contenu pour le moment" icon={BookOpen} />
+            <EmptyState message={t('library.noContentForNow')} icon={BookOpen} />
           )}
         </ScrollView>
       ) : (
@@ -544,16 +546,16 @@ export default function LibraryScreen() {
               {sourceFilters.length > 0 ? '🔍' : '🎉'}
             </Text>
             <Text style={styles.triageDoneTitle}>
-              {sourceFilters.length > 0 ? 'Rien à trier' : 'Tout est trié !'}
+              {sourceFilters.length > 0 ? t('library.nothingToSort') : t('library.allSorted')}
             </Text>
             <Text style={styles.triageDoneSubtitle}>
               {sourceFilters.length > 0
-                ? 'Aucun nouveau contenu pour ces sources'
-                : 'Tous tes contenus ont été triés. Reviens plus tard !'}
+                ? t('library.noContentForSources')
+                : t('library.allSortedSubtitle')}
             </Text>
             <View style={styles.triageDoneActions}>
               <Button variant="primary" size="lg" fullWidth onPress={handleCloseTriage}>
-                Retour
+                {t('common.back')}
               </Button>
             </View>
           </Animated.View>
@@ -626,7 +628,7 @@ export default function LibraryScreen() {
               <View style={styles.quizButtonContent}>
                 <Play size={16} color={selectedReadyCount > 0 ? colors.background : colors.textTertiary} fill={selectedReadyCount > 0 ? colors.background : colors.textTertiary} />
                 <Text weight="semibold" style={[styles.quizButtonText, selectedReadyCount === 0 && { color: colors.textTertiary }]}>
-                  Lancer le quiz
+                  {t('library.launchQuiz')}
                 </Text>
                 {selectedReadyCount > 0 && (
                   <View style={styles.quizCountBadge}>
@@ -666,7 +668,7 @@ export default function LibraryScreen() {
             <View style={styles.drawerHandle} />
 
             <Text variant="h3" weight="semibold" style={styles.drawerTitle}>
-              Sources
+              {t('library.sources')}
             </Text>
 
             {/* Source checkboxes */}
@@ -713,7 +715,7 @@ export default function LibraryScreen() {
               onPress={handleApplyFilter}
             >
               <Text variant="body" weight="medium" style={styles.drawerApplyText}>
-                Appliquer
+                {t('library.apply')}
               </Text>
             </Pressable>
           </Pressable>

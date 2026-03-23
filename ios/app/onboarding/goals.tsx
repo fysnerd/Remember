@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { Text, Button } from '../../components/ui';
 import { OnboardingProgressBar } from '../../components/onboarding/OnboardingProgressBar';
 import { useOnboardingStore } from '../../stores/onboardingStore';
@@ -14,13 +15,14 @@ import { colors, spacing, borderRadius, feedback } from '../../theme';
 import { haptics } from '../../lib/haptics';
 
 const GOAL_OPTIONS = [
-  { value: 'remember', emoji: '🧠', label: 'Remember what I watch' },
-  { value: 'learn', emoji: '📚', label: 'Learn continuously' },
-  { value: 'grow', emoji: '💡', label: 'Grow as a person' },
-  { value: 'productive', emoji: '⚡', label: 'Be more productive' },
+  { value: 'remember', emoji: '🧠', labelKey: 'onboarding.goals.remember' },
+  { value: 'learn', emoji: '📚', labelKey: 'onboarding.goals.learn' },
+  { value: 'grow', emoji: '💡', labelKey: 'onboarding.goals.grow' },
+  { value: 'productive', emoji: '⚡', labelKey: 'onboarding.goals.productive' },
 ];
 
 export default function GoalsScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { saveStep, isSaving } = useOnboardingStore();
   const { updateUser } = useAuthStore();
@@ -42,9 +44,9 @@ export default function GoalsScreen() {
     <SafeAreaView style={styles.container}>
       <OnboardingProgressBar step={4} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text variant="h2" style={styles.title}>What's your goal?</Text>
+        <Text variant="h2" style={styles.title}>{t('onboarding.whatsYourGoal')}</Text>
         <Text variant="body" color="secondary" style={styles.subtitle}>
-          We'll tailor quizzes for you.
+          {t('onboarding.tailorQuizzes')}
         </Text>
 
         <View style={styles.grid}>
@@ -63,7 +65,7 @@ export default function GoalsScreen() {
                 weight="medium"
                 style={[styles.label, selected === goal.value && styles.labelSelected]}
               >
-                {goal.label}
+                {t(goal.labelKey)}
               </Text>
             </Pressable>
           ))}
@@ -76,7 +78,7 @@ export default function GoalsScreen() {
           disabled={!selected}
           loading={isSaving}
         >
-          Continue
+          {t('common.continue')}
         </Button>
       </ScrollView>
     </SafeAreaView>

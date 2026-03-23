@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { View, TextInput, StyleSheet, Pressable } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Search, CircleX } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius, fonts, glass } from '../../theme';
 
 interface SearchInputProps {
@@ -17,9 +18,11 @@ interface SearchInputProps {
 export function SearchInput({
   value,
   onChangeText,
-  placeholder = 'Rechercher...',
+  placeholder,
 }: SearchInputProps) {
+  const { t } = useTranslation();
   const [isFocused, setIsFocused] = useState(false);
+  const resolvedPlaceholder = placeholder ?? t('common.search');
 
   return (
     <View style={[styles.wrapper, isFocused && styles.focused]}>
@@ -32,7 +35,7 @@ export function SearchInput({
         <Search size={18} color={colors.textSecondary} strokeWidth={1.5} />
         <TextInput
           style={styles.input}
-          placeholder={placeholder}
+          placeholder={resolvedPlaceholder}
           placeholderTextColor={colors.textSecondary}
           value={value}
           onChangeText={onChangeText}

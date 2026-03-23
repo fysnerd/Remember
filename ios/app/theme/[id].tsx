@@ -8,6 +8,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Inbox, Trash2, Brain, X } from 'lucide-react-native';
 import { Text, Button } from '../../components/ui';
 import { SwipeableContentCard } from '../../components/content';
@@ -25,6 +26,7 @@ const GRID_PADDING = spacing.lg;
 const COLUMN_WIDTH = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP) / 2;
 
 export default function ThemeDetailScreen() {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -127,7 +129,7 @@ export default function ThemeDetailScreen() {
   if (isLoading) {
     return (
       <>
-        <Stack.Screen options={{ title: '', headerBackTitle: 'Home', headerShadowVisible: false, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text }} />
+        <Stack.Screen options={{ title: '', headerBackTitle: t('tabs.home'), headerShadowVisible: false, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text }} />
         <LoadingScreen />
       </>
     );
@@ -143,7 +145,7 @@ export default function ThemeDetailScreen() {
       <Stack.Screen
         options={{
           title: theme?.name ?? '',
-          headerBackTitle: 'Home',
+          headerBackTitle: t('tabs.home'),
           headerTintColor: colors.text,
         }}
       />
@@ -165,7 +167,7 @@ export default function ThemeDetailScreen() {
             {theme?.name}
           </Text>
           <Text variant="caption" color="secondary">
-            {theme?.contentCount ?? 0} contenu{(theme?.contentCount ?? 0) !== 1 ? 's' : ''}
+            {t('theme.contentCount', { count: theme?.contentCount ?? 0 })}
           </Text>
         </View>
 
@@ -184,18 +186,18 @@ export default function ThemeDetailScreen() {
             disabled={!canQuiz}
             style={styles.actionBtn}
           >
-            {canQuiz ? 'Quiz' : `Quiz (${quizReadyCount}/3)`}
+            {canQuiz ? 'Quiz' : t('theme.quizProgress', { ready: quizReadyCount })}
           </Button>
         </View>
         {!canQuiz && (
           <Text variant="caption" color="secondary" style={styles.quizHint}>
-            Il faut au moins 3 contenus avec quiz pour lancer un quiz thème.
+            {t('theme.quizMinRequired')}
           </Text>
         )}
 
         {/* Content Grid */}
         {contents.length === 0 ? (
-          <EmptyState message="Aucun contenu dans ce thème" icon={Inbox} />
+          <EmptyState message={t('theme.noContents')} icon={Inbox} />
         ) : (
           <View style={styles.grid}>
             {contents.map((item) => (
@@ -246,7 +248,7 @@ export default function ThemeDetailScreen() {
             </Pressable>
 
             <Text variant="body" weight="medium" style={styles.selectionCount}>
-              {selectedIds.size} sélectionné{selectedIds.size > 1 ? 's' : ''}
+              {t('theme.selected', { count: selectedIds.size })}
             </Text>
 
             <View style={styles.selectionActions}>
@@ -260,7 +262,7 @@ export default function ThemeDetailScreen() {
                 ) : (
                   <>
                     <Trash2 size={14} color={colors.error} />
-                    <Text style={styles.removeText}>Retirer</Text>
+                    <Text style={styles.removeText}>{t('theme.remove')}</Text>
                   </>
                 )}
               </Pressable>

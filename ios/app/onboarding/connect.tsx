@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Text, Button } from '../../components/ui';
 import { GlassCard } from '../../components/glass/GlassCard';
 import { PlatformIcon } from '../../components/icons';
@@ -28,6 +29,7 @@ const platformConfig = [
 ] as const;
 
 export default function ConnectScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { saveStep, isSaving } = useOnboardingStore();
@@ -94,9 +96,9 @@ export default function ConnectScreen() {
     <SafeAreaView style={styles.container}>
       <OnboardingProgressBar step={6} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text variant="h2" style={styles.title}>Connect your sources</Text>
+        <Text variant="h2" style={styles.title}>{t('onboarding.connectSources')}</Text>
         <Text variant="body" color="secondary" style={styles.subtitle}>
-          We'll import content you watch to create quizzes.
+          {t('onboarding.connectSubtitle')}
         </Text>
 
         <GlassCard padding="none" style={styles.platforms}>
@@ -138,7 +140,7 @@ export default function ConnectScreen() {
           onPress={handleContinue}
           loading={isSaving}
         >
-          Continue
+          {t('common.continue')}
         </Button>
 
       </ScrollView>

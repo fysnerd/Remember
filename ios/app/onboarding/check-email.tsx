@@ -10,12 +10,14 @@ import { View, StyleSheet, Pressable, AppState, AppStateStatus } from 'react-nat
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Mail, RefreshCw } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { Text, Button, useToast } from '../../components/ui';
 import { useAuthStore } from '../../stores/authStore';
 import { haptics } from '../../lib/haptics';
 import { colors, spacing, fonts, typography, borderRadius } from '../../theme';
 
 export default function CheckEmailScreen() {
+  const { t } = useTranslation();
   const { email } = useLocalSearchParams<{ email: string }>();
   const { sendMagicLink, isAuthenticated } = useAuthStore();
   const router = useRouter();
@@ -58,10 +60,10 @@ export default function CheckEmailScreen() {
       setResending(true);
       await sendMagicLink(email);
       haptics.success();
-      show('Email sent!', 'success');
+      show(t('onboarding.emailSent'), 'success');
       setCooldown(60);
     } catch {
-      show('Failed to resend', 'error');
+      show(t('onboarding.resendFailed'), 'error');
     } finally {
       setResending(false);
     }
@@ -90,16 +92,16 @@ export default function CheckEmailScreen() {
         </View>
 
         {/* Title */}
-        <Text style={styles.title}>Check your email</Text>
+        <Text style={styles.title}>{t('onboarding.checkEmailTitle')}</Text>
 
         {/* Subtitle */}
         <Text style={styles.subtitle}>
-          We sent a sign-in link to
+          {t('onboarding.checkEmailSentTo')}
         </Text>
         <Text style={styles.email}>{email}</Text>
 
         <Text style={styles.instructions}>
-          Click the link in the email to sign in. It expires in 15 minutes.
+          {t('onboarding.checkEmailInstructions')}
         </Text>
 
         {/* Resend */}
@@ -111,13 +113,13 @@ export default function CheckEmailScreen() {
             loading={resending}
             disabled={cooldown > 0}
           >
-            {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend email'}
+            {cooldown > 0 ? t('onboarding.resendIn', { seconds: cooldown }) : t('onboarding.resendEmail')}
           </Button>
         </View>
 
         {/* Hint */}
         <Text style={styles.hint}>
-          Check your spam folder if you don't see it.
+          {t('onboarding.checkEmailHint')}
         </Text>
       </View>
     </SafeAreaView>

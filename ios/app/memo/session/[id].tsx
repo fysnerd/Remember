@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { View, ScrollView, StyleSheet, Image } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import Markdown from 'react-native-markdown-display';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Text, Button } from '../../../components/ui';
@@ -84,6 +85,7 @@ function getAccuracyColor(accuracy: number): string {
 }
 
 export default function SessionMemoScreen() {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -99,10 +101,10 @@ export default function SessionMemoScreen() {
 
   const memo = memoMutation.data?.memo ?? session?.aiMemo;
 
-  const headerOptions = { title: 'Memo', headerBackTitle: 'Retour', headerShadowVisible: false, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text };
+  const headerOptions = { title: t('memo.title'), headerBackTitle: t('common.back'), headerShadowVisible: false, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text };
 
   if (isLoading) return (<><Stack.Screen options={headerOptions} /><LoadingScreen /></>);
-  if (!session) return (<><Stack.Screen options={headerOptions} /><ErrorState message="Session introuvable" onRetry={refetch} hasHeader /></>);
+  if (!session) return (<><Stack.Screen options={headerOptions} /><ErrorState message={t('memo.sessionNotFound')} onRetry={refetch} hasHeader /></>);
 
   // Extract unique contents from reviews
   const contentMap = new Map<string, { id: string; title: string; platform: string; thumbnailUrl?: string }>();
@@ -124,8 +126,8 @@ export default function SessionMemoScreen() {
     <>
       <Stack.Screen
         options={{
-          title: 'Memo',
-          headerBackTitle: 'Retour',
+          title: t('memo.title'),
+          headerBackTitle: t('common.back'),
         }}
       />
       <ScrollView
@@ -141,7 +143,7 @@ export default function SessionMemoScreen() {
               </Text>
             </View>
             <Text variant="caption" color="secondary">
-              {totalCount} question{totalCount > 1 ? 's' : ''} {'\u2022'} {new Date(session.completedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
+              {t('memo.questionsCount', { count: totalCount })} {'\u2022'} {new Date(session.completedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
             </Text>
           </View>
 
@@ -167,13 +169,13 @@ export default function SessionMemoScreen() {
         {/* Memo content */}
         {memoMutation.isPending ? (
           <View style={styles.loadingMemo}>
-            <Text variant="body" color="secondary">Génération du mémo...</Text>
+            <Text variant="body" color="secondary">{t('memo.generating')}</Text>
           </View>
         ) : memo ? (
           <Markdown style={markdownStyles}>{memo}</Markdown>
         ) : (
           <View style={styles.loadingMemo}>
-            <Text variant="body" color="secondary">Aucun memo disponible</Text>
+            <Text variant="body" color="secondary">{t('memo.noMemo')}</Text>
           </View>
         )}
 
@@ -181,7 +183,7 @@ export default function SessionMemoScreen() {
         {memo && (
           <View style={styles.actions}>
             <Button variant="primary" fullWidth onPress={() => router.back()}>
-              OK
+              {t('common.ok')}
             </Button>
           </View>
         )}

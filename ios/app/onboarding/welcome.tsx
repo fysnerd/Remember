@@ -7,6 +7,7 @@ import { View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
 import { Text, Button } from '../../components/ui';
 import { OnboardingProgressBar } from '../../components/onboarding/OnboardingProgressBar';
 import { useOnboardingStore } from '../../stores/onboardingStore';
@@ -15,11 +16,12 @@ import { colors, spacing } from '../../theme';
 import { haptics } from '../../lib/haptics';
 
 export default function WelcomeScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { saveStep, isSaving } = useOnboardingStore();
   const { user, updateUser } = useAuthStore();
 
-  const firstName = user?.firstName || 'toi';
+  const firstName = user?.firstName || t('onboarding.welcomeNameDefault');
 
   useEffect(() => {
     haptics.success();
@@ -46,10 +48,10 @@ export default function WelcomeScreen() {
 
         <Animated.View entering={FadeIn.delay(300).duration(600)}>
           <Text variant="h1" style={styles.title}>
-            {firstName}, welcome{'\n'}to Ankora!
+            {t('onboarding.welcomeNameTitle', { name: firstName })}
           </Text>
           <Text variant="body" color="secondary" style={styles.subtitle}>
-            All set. Let's turn what you watch into lasting knowledge.
+            {t('onboarding.welcomeNameSubtitle')}
           </Text>
         </Animated.View>
 
@@ -60,7 +62,7 @@ export default function WelcomeScreen() {
             onPress={handleContinue}
             loading={isSaving}
           >
-            Continue
+            {t('common.continue')}
           </Button>
         </View>
       </View>

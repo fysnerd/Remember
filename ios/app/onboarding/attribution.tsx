@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { Text, Button } from '../../components/ui';
 import { OnboardingProgressBar } from '../../components/onboarding/OnboardingProgressBar';
 import { SelectChip } from '../../components/onboarding/SelectChip';
@@ -15,14 +16,15 @@ import { colors, spacing } from '../../theme';
 import { haptics } from '../../lib/haptics';
 
 const ATTRIBUTION_OPTIONS = [
-  { label: 'TikTok / Instagram', value: 'social_media' },
-  { label: 'Friend / Word of mouth', value: 'friend' },
-  { label: 'App Store', value: 'appstore' },
-  { label: 'Twitter / X', value: 'twitter' },
-  { label: 'Other', value: 'other' },
+  { labelKey: 'onboarding.attributionOptions.social_media', value: 'social_media' },
+  { labelKey: 'onboarding.attributionOptions.friend', value: 'friend' },
+  { labelKey: 'onboarding.attributionOptions.appstore', value: 'appstore' },
+  { labelKey: 'onboarding.attributionOptions.twitter', value: 'twitter' },
+  { labelKey: 'onboarding.attributionOptions.other', value: 'other' },
 ];
 
 export default function AttributionScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { saveStep, isSaving } = useOnboardingStore();
   const { updateUser } = useAuthStore();
@@ -44,16 +46,16 @@ export default function AttributionScreen() {
     <SafeAreaView style={styles.container}>
       <OnboardingProgressBar step={7} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text variant="h2" style={styles.title}>How did you hear about Ankora?</Text>
+        <Text variant="h2" style={styles.title}>{t('onboarding.attribution')}</Text>
         <Text variant="body" color="secondary" style={styles.subtitle}>
-          This helps us improve.
+          {t('onboarding.attributionSubtitle')}
         </Text>
 
         <View style={styles.chips}>
           {ATTRIBUTION_OPTIONS.map((option) => (
             <SelectChip
               key={option.value}
-              label={option.label}
+              label={t(option.labelKey)}
               selected={selected === option.value}
               onPress={() => setSelected(option.value)}
             />
@@ -67,7 +69,7 @@ export default function AttributionScreen() {
           disabled={!selected}
           loading={isSaving}
         >
-          Continue
+          {t('common.continue')}
         </Button>
       </ScrollView>
     </SafeAreaView>

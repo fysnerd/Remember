@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { View, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { Text, Input, Button } from '../../components/ui';
 import { OnboardingProgressBar } from '../../components/onboarding/OnboardingProgressBar';
 import { useOnboardingStore } from '../../stores/onboardingStore';
@@ -14,6 +15,7 @@ import { colors, spacing } from '../../theme';
 import { haptics } from '../../lib/haptics';
 
 export default function NameScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { saveStep, isSaving } = useOnboardingStore();
   const { updateUser } = useAuthStore();
@@ -39,14 +41,14 @@ export default function NameScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={styles.content}>
-          <Text variant="h2" style={styles.title}>What's your name?</Text>
+          <Text variant="h2" style={styles.title}>{t('onboarding.whatsYourName')}</Text>
           <Text variant="body" color="secondary" style={styles.subtitle}>
-            We'll personalize your experience.
+            {t('onboarding.personalizeExperience')}
           </Text>
 
           <View style={styles.inputWrapper}>
             <Input
-              placeholder="Your first name"
+              placeholder={t('onboarding.namePlaceholder')}
               value={name}
               onChangeText={setName}
               autoCapitalize="words"
@@ -60,7 +62,7 @@ export default function NameScreen() {
             disabled={name.trim().length < 2}
             loading={isSaving}
           >
-            Continue
+            {t('common.continue')}
           </Button>
         </View>
       </KeyboardAvoidingView>

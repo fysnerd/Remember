@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react';
 import { View, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react-native';
 import { Text, Button } from '../components/ui';
 import { QuestionCard } from '../components/quiz/QuestionCard';
@@ -53,6 +54,7 @@ function normalizeOptions(options: string[] | Record<string, string>): Normalize
 type DigestPhase = 'loading' | 'question' | 'feedback' | 'closure';
 
 export default function DigestScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const digestMutation = useDigestCards();
   const submitAnswer = useSubmitAnswer();
@@ -162,13 +164,13 @@ export default function DigestScreen() {
         <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
           <View style={styles.emptyContainer}>
             <Text variant="h3" style={styles.emptyText}>
-              Erreur de chargement
+              {t('digest.loadingError')}
             </Text>
             <Button variant="primary" onPress={() => digestMutation.mutate()}>
-              Réessayer
+              {t('common.retry')}
             </Button>
             <Button variant="outline" onPress={handleQuit}>
-              Retour
+              {t('common.back')}
             </Button>
           </View>
         </SafeAreaView>
@@ -181,13 +183,13 @@ export default function DigestScreen() {
         <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
           <View style={styles.emptyContainer}>
             <Text variant="h3" style={styles.emptyText}>
-              Rien à réviser aujourd'hui !
+              {t('digest.nothingToReview')}
             </Text>
             <Text variant="body" color="secondary" style={styles.emptySubtext}>
-              Reviens demain pour de nouvelles questions.
+              {t('digest.comeBackTomorrow')}
             </Text>
             <Button variant="primary" onPress={handleQuit}>
-              Retour
+              {t('common.back')}
             </Button>
           </View>
         </SafeAreaView>
@@ -229,7 +231,7 @@ export default function DigestScreen() {
         <Pressable onPress={handleQuit} hitSlop={8} style={styles.quitButton}>
           <X size={20} color={colors.textSecondary} />
           <Text variant="body" color="secondary">
-            Quitter
+            {t('quiz.quit')}
           </Text>
         </Pressable>
       </View>
@@ -264,7 +266,7 @@ export default function DigestScreen() {
                 disabled={!selectedAnswer || !sessionId}
                 loading={submitAnswer.isPending}
               >
-                Valider
+                {t('quiz.validate')}
               </Button>
             </View>
           </>
@@ -277,7 +279,7 @@ export default function DigestScreen() {
             />
             <View style={styles.buttonContainer}>
               <Button variant="primary" fullWidth onPress={handleNext}>
-                {currentIndex < cards.length - 1 ? 'Suivant' : 'Voir le résultat'}
+                {currentIndex < cards.length - 1 ? t('quiz.next') : t('quiz.seeResult')}
               </Button>
             </View>
           </>

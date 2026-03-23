@@ -8,19 +8,21 @@
 import { View, StyleSheet } from 'react-native';
 import { Clock, Mic, Sparkles, AlertCircle, Ban } from 'lucide-react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
 import { Text } from '../ui';
 import { colors, borderRadius, spacing, fonts, typography } from '../../theme';
 import type { ContentStatus } from '../../types/content';
 
-const STATUS_CONFIG: Record<string, { icon: typeof Clock; label: string; color: string }> = {
-  SELECTED: { icon: Clock, label: 'En attente', color: colors.textTertiary },
-  TRANSCRIBING: { icon: Mic, label: 'Transcription...', color: colors.accent },
-  GENERATING: { icon: Sparkles, label: 'Quiz en creation...', color: colors.success },
-  FAILED: { icon: AlertCircle, label: 'Erreur', color: colors.error },
-  UNSUPPORTED: { icon: Ban, label: 'Non supporte', color: colors.textTertiary },
+const STATUS_CONFIG: Record<string, { icon: typeof Clock; labelKey: string; color: string }> = {
+  SELECTED: { icon: Clock, labelKey: 'pipeline.waiting', color: colors.textTertiary },
+  TRANSCRIBING: { icon: Mic, labelKey: 'pipeline.transcriptionProgress', color: colors.accent },
+  GENERATING: { icon: Sparkles, labelKey: 'pipeline.quizCreating', color: colors.success },
+  FAILED: { icon: AlertCircle, labelKey: 'pipeline.error', color: colors.error },
+  UNSUPPORTED: { icon: Ban, labelKey: 'pipeline.notSupported', color: colors.textTertiary },
 };
 
 export function PipelineStatusBadge({ status }: { status: ContentStatus }) {
+  const { t } = useTranslation();
   const config = STATUS_CONFIG[status];
   if (!config) return null; // READY, INBOX, ARCHIVED -- no badge
 
@@ -30,7 +32,7 @@ export function PipelineStatusBadge({ status }: { status: ContentStatus }) {
     <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(200)} style={styles.container}>
       <View style={styles.badge}>
         <Icon size={10} color={config.color} />
-        <Text style={[styles.label, { color: config.color }]}>{config.label}</Text>
+        <Text style={[styles.label, { color: config.color }]}>{t(config.labelKey)}</Text>
       </View>
     </Animated.View>
   );

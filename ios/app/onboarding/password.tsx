@@ -11,12 +11,14 @@ import { View, StyleSheet, KeyboardAvoidingView, Platform, Pressable } from 'rea
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { Text, Input, Button, useToast } from '../../components/ui';
 import { useAuthStore } from '../../stores/authStore';
 import { haptics } from '../../lib/haptics';
 import { colors, spacing, fonts, typography, borderRadius } from '../../theme';
 
 export default function PasswordScreen() {
+  const { t } = useTranslation();
   const { email } = useLocalSearchParams<{ email: string }>();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -42,17 +44,17 @@ export default function PasswordScreen() {
 
   const handleSubmit = async () => {
     if (!password.trim()) {
-      show('Enter your password', 'error');
+      show(t('onboarding.enterPassword'), 'error');
       return;
     }
 
     if (isNewUser) {
       if (password.length < 8) {
-        show('8 characters minimum', 'error');
+        show(t('onboarding.minChars'), 'error');
         return;
       }
       if (password !== confirmPassword) {
-        show('Passwords do not match', 'error');
+        show(t('onboarding.passwordsNoMatch'), 'error');
         return;
       }
       try {
@@ -60,7 +62,7 @@ export default function PasswordScreen() {
         await signup(email!, password);
         haptics.success();
       } catch {
-        show(error || 'Signup failed', 'error');
+        show(error || t('auth.signupFailed'), 'error');
       }
     } else {
       try {
@@ -68,7 +70,7 @@ export default function PasswordScreen() {
         await login(email!, password);
         haptics.success();
       } catch {
-        show(error || 'Login failed', 'error');
+        show(error || t('auth.loginFailed'), 'error');
       }
     }
   };
@@ -88,7 +90,7 @@ export default function PasswordScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <Text variant="body" color="secondary">Verification...</Text>
+          <Text variant="body" color="secondary">{t('onboarding.verification')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -113,7 +115,7 @@ export default function PasswordScreen() {
           {/* Title - same style as auth */}
           <View style={styles.titleContainer}>
             <Text style={styles.titleSmall}>
-              {isNewUser ? 'New account' : 'Welcome back'}
+              {isNewUser ? t('onboarding.newAccount') : t('onboarding.welcomeBack')}
             </Text>
             <Text style={styles.title}>
               {email}
@@ -123,7 +125,7 @@ export default function PasswordScreen() {
           {/* Form */}
           <View style={styles.form}>
             <Input
-              label="Password"
+              label={t('auth.password')}
               placeholder="********"
               value={password}
               onChangeText={setPassword}
@@ -132,7 +134,7 @@ export default function PasswordScreen() {
 
             {isNewUser && (
               <Input
-                label="Confirm"
+                label={t('onboarding.passwordConfirmLabel')}
                 placeholder="********"
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
@@ -147,15 +149,15 @@ export default function PasswordScreen() {
               onPress={handleSubmit}
               loading={isLoading}
             >
-              {isNewUser ? 'Sign up' : 'Log in'}
+              {isNewUser ? t('auth.signup') : t('auth.login')}
             </Button>
 
             <Pressable onPress={toggleMode} style={styles.toggleMode}>
               <Text variant="caption" color="secondary">
-                {isNewUser ? 'Already have an account? ' : 'No account? '}
+                {isNewUser ? t('auth.hasAccount') + ' ' : t('auth.noAccount') + ' '}
               </Text>
               <Text variant="caption" style={{ color: colors.accent }}>
-                {isNewUser ? 'Log in' : 'Sign up'}
+                {isNewUser ? t('auth.login') : t('auth.signup')}
               </Text>
             </Pressable>
           </View>

@@ -9,6 +9,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { Text, Button } from '../../components/ui';
 import { GlassButton } from '../../components/glass/GlassButton';
 import { QuestionCard, AnswerFeedback, QuizSummary } from '../../components/quiz';
@@ -22,6 +23,7 @@ import { colors, spacing, borderRadius } from '../../theme';
 type QuizState = 'question' | 'feedback' | 'summary';
 
 export default function QuizScreen() {
+  const { t } = useTranslation();
   const { id, ids, dailyRecId } = useLocalSearchParams<{ id: string; ids?: string; dailyRecId?: string }>();
   const router = useRouter();
 
@@ -86,14 +88,14 @@ export default function QuizScreen() {
   }, [quiz, id, isMulti]);
 
 
-  const headerOptions = { title: '', headerBackTitle: 'Retour', headerShadowVisible: false, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text };
+  const headerOptions = { title: '', headerBackTitle: t('common.back'), headerShadowVisible: false, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text };
 
   if (isLoading) {
     return (<><Stack.Screen options={headerOptions} /><LoadingScreen /></>);
   }
 
   if (!quiz || !quiz.questions.length) {
-    return (<><Stack.Screen options={headerOptions} /><ErrorState message="Quiz introuvable" onRetry={refetch} /></>);
+    return (<><Stack.Screen options={headerOptions} /><ErrorState message={t('errors.quizNotFound')} onRetry={refetch} /></>);
   }
 
   const questions = quiz.questions;
@@ -172,7 +174,7 @@ export default function QuizScreen() {
     <View style={[styles.container, feedbackBg && { backgroundColor: feedbackBg }]}>
       <View style={styles.header}>
         <GlassButton size="sm" onPress={handleQuit}>
-          ✕ Quitter
+          ✕ {t('quiz.quit')}
         </GlassButton>
       </View>
 
@@ -222,11 +224,11 @@ export default function QuizScreen() {
             disabled={!selectedAnswer || !sessionId}
             loading={submitMutation.isPending}
           >
-            Valider
+            {t('quiz.validate')}
           </Button>
         ) : (
           <Button variant="primary" fullWidth onPress={handleNext}>
-            {currentIndex < total - 1 ? 'Question suivante' : 'Voir le résultat'}
+            {currentIndex < total - 1 ? t('quiz.nextQuestion') : t('quiz.seeResult')}
           </Button>
         )}
       </View>

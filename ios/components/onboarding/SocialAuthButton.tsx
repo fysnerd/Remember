@@ -7,6 +7,7 @@
 
 import { Pressable, StyleSheet, View, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { Text } from '../ui';
 import { haptics } from '../../lib/haptics';
 import { colors, spacing, borderRadius, layout, typography } from '../../theme';
@@ -20,14 +21,14 @@ interface SocialAuthButtonProps {
 
 const PROVIDER_CONFIG = {
   apple: {
-    label: 'Continuer avec Apple',
+    labelKey: 'auth.continueWithApple',
     icon: '\uF8FF',
     bg: 'transparent',
     textColor: colors.text,
     borderColor: colors.borderLight,
   },
   google: {
-    label: 'Continuer avec Google',
+    labelKey: 'auth.continueWithGoogle',
     icon: 'G',
     bg: 'transparent',
     textColor: colors.text,
@@ -36,6 +37,7 @@ const PROVIDER_CONFIG = {
 };
 
 export function SocialAuthButton({ provider, onPress, loading, disabled }: SocialAuthButtonProps) {
+  const { t } = useTranslation();
   const config = PROVIDER_CONFIG[provider];
 
   return (
@@ -70,7 +72,7 @@ export function SocialAuthButton({ provider, onPress, loading, disabled }: Socia
             weight="medium"
             style={{ color: config.textColor }}
           >
-            {config.label}
+            {t(config.labelKey)}
           </Text>
         </View>
       )}

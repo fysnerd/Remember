@@ -5,6 +5,7 @@
 
 import { View, StyleSheet } from 'react-native';
 import { Check, X } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { Text } from '../ui';
 import { colors, spacing, borderRadius, feedback as themeFeedback, typography } from '../../theme';
 
@@ -34,6 +35,7 @@ export function AnswerFeedback({
   correctAnswer,
   explanation,
 }: AnswerFeedbackProps) {
+  const { t } = useTranslation();
   const theme = isCorrect ? feedback.correct : feedback.wrong;
 
   return (
@@ -47,20 +49,20 @@ export function AnswerFeedback({
           )}
         </View>
         <Text variant="h2" style={{ color: theme.iconColor }}>
-          {isCorrect ? 'Correct !' : 'Incorrect'}
+          {isCorrect ? t('quiz.correct') : t('quiz.incorrect')}
         </Text>
       </View>
 
       <View>
         <Text variant="caption" color="secondary" style={styles.label}>
-          Bonne réponse
+          {t('quiz.correctAnswer')}
         </Text>
         <Text variant="body" weight="medium" style={styles.answer}>
           {correctAnswer}
         </Text>
 
         <Text variant="caption" color="secondary" style={styles.label}>
-          Explication
+          {t('quiz.explanation')}
         </Text>
         <Text variant="body" color="secondary">
           {explanation}

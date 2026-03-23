@@ -136,7 +136,10 @@
     "remindReview": "On vous rappellera quand il sera temps de réviser.",
     "welcomeNameTitle": "{{name}}, bienvenue\nsur Ankora !",
     "welcomeNameSubtitle": "Tout est prêt. Transformez ce que vous regardez en connaissances durables.",
-    "welcomeNameDefault": "toi"
+    "welcomeNameDefault": "toi",
+    "paywallTitle": "Commencez votre essai\ngratuit de 14 jours",
+    "paywallSubtitle": "Accès complet à toutes les fonctionnalités. Sans engagement.",
+    "paywallCta": "C'est parti !"
   },
   "home": {
     "greeting": "Bonjour {{name}} !",
@@ -218,19 +221,54 @@
     "good": "Bien !",
     "keepGoing": "Continue comme ça !",
     "tryAgain": "Tu peux mieux faire !",
-    "questionsCorrect": "{{correct}} / {{total}} bonnes réponses"
+    "questionsCorrect": "{{correct}} / {{total}} bonnes réponses",
+    "validate": "Valider",
+    "nextQuestion": "Question suivante",
+    "seeResult": "Voir le résultat",
+    "quit": "Quitter",
+    "questionProgress": "Question {{current}}/{{total}}",
+    "noQuizForTheme": "Aucun quiz pour ce thème",
+    "correctAnswer": "Bonne réponse",
+    "scoreLabel": "Score : {{score}}/{{total}}",
+    "summaryMessage_one": "Tu as bien répondu à {{count}} question sur {{total}}.",
+    "summaryMessage_other": "Tu as bien répondu à {{count}} questions sur {{total}}.",
+    "synthesis": "Synthèse",
+    "questionsCount_one": "{{count}} Question",
+    "questionsCount_other": "{{count}} Questions"
   },
   "memo": {
     "title": "Mémo",
     "generatedFrom": "Généré à partir de",
     "keyPoints": "Points clés",
-    "slide": "Slide {{n}}"
+    "slide": "Slide {{n}}",
+    "generating": "Génération du mémo...",
+    "noMemo": "Aucun memo disponible",
+    "sessionNotFound": "Session introuvable",
+    "questionsCount_one": "{{count}} question",
+    "questionsCount_other": "{{count}} questions",
+    "viewContent": "Consulter le contenu",
+    "redoQuiz": "Refaire le quiz",
+    "cardType": {
+      "essential": "Idée principale",
+      "concept": "Concept",
+      "keyConcepts": "Concepts clés",
+      "connections": "Liens & applications",
+      "mnemonic": "Astuce mémo",
+      "summary": "Résumé"
+    }
   },
   "theme": {
     "title": "Thème",
     "contents": "Contenus",
     "quizzes": "Quiz",
-    "noContents": "Aucun contenu dans ce thème"
+    "noContents": "Aucun contenu dans ce thème",
+    "contentCount_one": "{{count}} contenu",
+    "contentCount_other": "{{count}} contenus",
+    "quizMinRequired": "Il faut au moins 3 contenus avec quiz pour lancer un quiz thème.",
+    "quizProgress": "Quiz ({{ready}}/3)",
+    "remove": "Retirer",
+    "selected_one": "{{count}} sélectionné",
+    "selected_other": "{{count}} sélectionnés"
   },
   "profile": {
     "title": "Profil",
@@ -310,7 +348,19 @@
     "generatingQuiz": "Génération du quiz...",
     "failed": "Échec du traitement",
     "retryProcessing": "Réessayer",
-    "unsupported": "Contenu non supporté"
+    "unsupported": "Contenu non supporté",
+    "themes": "Thèmes",
+    "noTheme": "Aucun thème",
+    "addTheme": "+ Thème",
+    "description": "Description",
+    "manageThemes": "Gérer les thèmes",
+    "quizQuestions_one": "Quiz ({{count}} question)",
+    "quizQuestions_other": "Quiz ({{count}} questions)",
+    "waitingProcessing": "En attente de traitement...",
+    "quizCreating": "Quiz en création...",
+    "contentCount_one": "{{count}} contenu",
+    "contentCount_other": "{{count}} contenus",
+    "noThemesYet": "Aucun thème. Créez-en un d'abord."
   },
   "pipeline": {
     "inbox": "À trier",
@@ -318,7 +368,21 @@
     "transcribing": "Transcription",
     "ready": "Prêt",
     "unsupported": "Non supporté",
-    "failed": "Échoué"
+    "failed": "Échoué",
+    "waiting": "En attente",
+    "transcriptionProgress": "Transcription...",
+    "quizCreating": "Quiz en creation...",
+    "error": "Erreur",
+    "notSupported": "Non supporte"
+  },
+  "digest": {
+    "loadingError": "Erreur de chargement",
+    "nothingToReview": "Rien à réviser aujourd'hui !",
+    "comeBackTomorrow": "Reviens demain pour de nouvelles questions.",
+    "correctAnswers": "{{score}}/{{total}} bonnes réponses",
+    "score": "Score",
+    "bestStreak": "Meilleure série",
+    "duration": "Durée"
   },
   "errors": {
     "network": "Erreur réseau. Vérifiez votre connexion.",
@@ -332,7 +396,8 @@
     "subscriptionRequired": "Les abonnements nécessitent une mise à jour de l'app",
     "tryAgain": "Veuillez réessayer.",
     "contentNotFound": "Contenu introuvable",
-    "quizGenerationFailed": "Impossible de générer le quiz"
+    "quizGenerationFailed": "Impossible de générer le quiz",
+    "quizNotFound": "Quiz introuvable"
   },
   "empty": {
     "title": "Rien ici pour le moment",

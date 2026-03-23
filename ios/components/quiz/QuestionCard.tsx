@@ -3,6 +3,7 @@
  */
 
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Text } from '../ui';
 import { colors, spacing, borderRadius, feedback, typography } from '../../theme';
 
@@ -56,17 +57,18 @@ export function QuestionCard({
   current,
   total,
 }: QuestionCardProps) {
+  const { t } = useTranslation();
   return (
     <View>
       {current != null && total != null && (
         <Text variant="caption" color="secondary" style={styles.counter}>
-          Question {current}/{total}
+          {t('quiz.questionProgress', { current, total })}
         </Text>
       )}
       {isSynthesis && (
         <View style={styles.synthesisBadge}>
           <Text variant="caption" weight="medium" style={styles.synthesisBadgeText}>
-            Synthese
+            {t('quiz.synthesis')}
           </Text>
         </View>
       )}

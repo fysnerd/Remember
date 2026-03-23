@@ -5,6 +5,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated, ScrollView } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { Text, Button } from '../../../components/ui';
 import { GlassButton } from '../../../components/glass/GlassButton';
 import { QuestionCard, AnswerFeedback, QuizSummary } from '../../../components/quiz';
@@ -17,6 +18,7 @@ import { colors, spacing, borderRadius } from '../../../theme';
 type QuizState = 'question' | 'feedback' | 'summary';
 
 export default function ThemeQuizScreen() {
+  const { t } = useTranslation();
   const { id, dailyRecId } = useLocalSearchParams<{ id: string; dailyRecId?: string }>();
   const router = useRouter();
   const { data: quiz, isLoading, error, refetch } = useThemeQuiz(id || '');
@@ -59,14 +61,14 @@ export default function ThemeQuizScreen() {
     }).start();
   }, [answeredCount, quiz?.questions.length]);
 
-  const headerOptions = { title: '', headerBackTitle: 'Retour', headerShadowVisible: false, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text };
+  const headerOptions = { title: '', headerBackTitle: t('common.back'), headerShadowVisible: false, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text };
 
   if (isLoading) {
     return (<><Stack.Screen options={headerOptions} /><LoadingScreen /></>);
   }
 
   if (!quiz || !quiz.questions.length) {
-    return (<><Stack.Screen options={headerOptions} /><ErrorState message="Aucun quiz pour ce thème" onRetry={refetch} /></>);
+    return (<><Stack.Screen options={headerOptions} /><ErrorState message={t('quiz.noQuizForTheme')} onRetry={refetch} /></>);
   }
 
   const questions = quiz.questions;
@@ -140,11 +142,11 @@ export default function ThemeQuizScreen() {
             {quiz.theme?.emoji} {quiz.theme?.name}
           </Text>
           <Text variant="body" weight="medium">
-            Question {currentIndex + 1}/{total}
+            {t('quiz.questionProgress', { current: currentIndex + 1, total })}
           </Text>
         </View>
         <GlassButton size="sm" onPress={handleQuit}>
-          ✕ Quitter
+          ✕ {t('quiz.quit')}
         </GlassButton>
       </View>
 
@@ -185,11 +187,11 @@ export default function ThemeQuizScreen() {
             disabled={!selectedAnswer || !sessionId}
             loading={submitMutation.isPending}
           >
-            Valider
+            {t('quiz.validate')}
           </Button>
         ) : (
           <Button variant="primary" fullWidth onPress={handleNext}>
-            {currentIndex < total - 1 ? 'Question suivante' : 'Voir le résultat'}
+            {currentIndex < total - 1 ? t('quiz.nextQuestion') : t('quiz.seeResult')}
           </Button>
         )}
       </View>

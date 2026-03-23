@@ -6,6 +6,7 @@
 import { View, FlatList, ScrollView, Dimensions, StyleSheet, Linking } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import Markdown from 'react-native-markdown-display';
 import { useCallback, useRef, useState, useMemo as useReactMemo } from 'react';
 import { Text, Button } from '../../components/ui';
@@ -31,11 +32,11 @@ interface IdeaCard {
   body: string;
 }
 
-const CARD_TYPE_CONFIG: Record<CardType, { label: string }> = {
-  essential: { label: 'Idée principale' },
-  concept: { label: 'Concept' },
-  connections: { label: 'Liens & applications' },
-  mnemonic: { label: 'Astuce mémo' },
+const CARD_TYPE_I18N_KEY: Record<CardType, string> = {
+  essential: 'memo.cardType.essential',
+  concept: 'memo.cardType.concept',
+  connections: 'memo.cardType.connections',
+  mnemonic: 'memo.cardType.mnemonic',
 };
 
 // --- Markdown styles (body zone) ---
@@ -160,7 +161,7 @@ function splitConcepts(markdown: string): { title: string; body: string }[] {
   return results;
 }
 
-function parseMemoCards(markdown: string): IdeaCard[] {
+function parseMemoCards(markdown: string, t: (key: string) => string): IdeaCard[] {
   const clean = markdown.replace(/\n-{3,}\n/g, '\n\n');
   const lines = clean.split('\n');
   const cards: IdeaCard[] = [];
@@ -201,7 +202,7 @@ function parseMemoCards(markdown: string): IdeaCard[] {
       case 'main-idea':
         cards.push({
           type: 'essential',
-          title: 'Idée principale',
+          title: t('memo.cardType.essential'),
           body: section.content,
         });
         break;
@@ -212,14 +213,14 @@ function parseMemoCards(markdown: string): IdeaCard[] {
           for (const c of concepts) {
             cards.push({
               type: 'concept',
-              title: c.title || 'Concept',
+              title: c.title || t('memo.cardType.concept'),
               body: c.body,
             });
           }
         } else {
           cards.push({
             type: 'concept',
-            title: 'Concepts clés',
+            title: t('memo.cardType.keyConcepts'),
             body: section.content,
           });
         }
@@ -229,7 +230,7 @@ function parseMemoCards(markdown: string): IdeaCard[] {
       case 'connections':
         cards.push({
           type: 'connections',
-          title: 'Liens & applications',
+          title: t('memo.cardType.connections'),
           body: section.content,
         });
         break;
@@ -237,7 +238,7 @@ function parseMemoCards(markdown: string): IdeaCard[] {
       case 'mnemonic':
         cards.push({
           type: 'mnemonic',
-          title: 'Astuce mémo',
+          title: t('memo.cardType.mnemonic'),
           body: section.content,
         });
         break;
@@ -247,7 +248,7 @@ function parseMemoCards(markdown: string): IdeaCard[] {
   if (cards.length === 0) {
     cards.push({
       type: 'essential',
-      title: 'Résumé',
+      title: t('memo.cardType.summary'),
       body: clean.trim(),
     });
   }
@@ -258,8 +259,9 @@ function parseMemoCards(markdown: string): IdeaCard[] {
 // --- Components ---
 
 function CardView({ card }: { card: IdeaCard }) {
+  const { t } = useTranslation();
   const mdStyles = card.type === 'essential' ? essentialBodyStyles : bodyMarkdownStyles;
-  const typeConfig = CARD_TYPE_CONFIG[card.type];
+  const typeLabel = t(CARD_TYPE_I18N_KEY[card.type]);
 
   return (
     <View style={[styles.cardWrapper, shadows.md]}>
@@ -269,7 +271,7 @@ function CardView({ card }: { card: IdeaCard }) {
         showsVerticalScrollIndicator={false}
         nestedScrollEnabled
       >
-        <Text style={styles.cardTypeLabel}>{typeConfig.label}</Text>
+        <Text style={styles.cardTypeLabel}>{typeLabel}</Text>
         <Text style={styles.cardTitle} numberOfLines={3}>
           {card.title}
         </Text>
@@ -298,14 +300,15 @@ function PaginationDots({ total, current }: { total: number; current: number }) 
 // --- Main Screen ---
 
 export default function MemoScreen() {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { data: memo, isLoading: memoLoading, error: memoError, refetch } = useMemo(id!);
   const { data: content } = useContent(id!);
   const cards = useReactMemo(
-    () => (memo ? parseMemoCards(memo.content) : []),
-    [memo],
+    () => (memo ? parseMemoCards(memo.content, t) : []),
+    [memo, t],
   );
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -335,12 +338,12 @@ export default function MemoScreen() {
     router.push({ pathname: '/quiz/[id]' as any, params: { id: id! } });
   };
 
-  const headerOptions = { title: '', headerBackTitle: 'Retour', headerShadowVisible: false, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text };
+  const headerOptions = { title: '', headerBackTitle: t('common.back'), headerShadowVisible: false, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text };
 
   if (memoLoading) return (<><Stack.Screen options={headerOptions} /><LoadingScreen /></>);
 
   if (memoError || !memo) {
-    return (<><Stack.Screen options={headerOptions} /><ErrorState message="Mémo introuvable" onRetry={refetch} hasHeader /></>);
+    return (<><Stack.Screen options={headerOptions} /><ErrorState message={t('memo.noMemo')} onRetry={refetch} hasHeader /></>);
   }
 
   return (
@@ -377,12 +380,12 @@ export default function MemoScreen() {
         <View style={styles.actions}>
           {content?.url && (
             <Button variant="secondary" fullWidth onPress={handleWatchVideo}>
-              Consulter le contenu
+              {t('memo.viewContent')}
             </Button>
           )}
           {content && (content.quizCount ?? 0) > 0 && (
             <Button variant="primary" fullWidth onPress={handleRedoQuiz}>
-              Refaire le quiz
+              {t('memo.redoQuiz')}
             </Button>
           )}
         </View>

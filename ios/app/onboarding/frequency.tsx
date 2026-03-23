@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { Text, Button } from '../../components/ui';
 import { OnboardingProgressBar } from '../../components/onboarding/OnboardingProgressBar';
 import { useOnboardingStore } from '../../stores/onboardingStore';
@@ -14,12 +15,13 @@ import { colors, spacing, borderRadius, feedback } from '../../theme';
 import { haptics } from '../../lib/haptics';
 
 const FREQUENCY_OPTIONS = [
-  { value: 'daily', label: 'Every day', description: 'Recommended' },
-  { value: 'regular', label: '3-4 times a week', description: 'A good steady pace' },
-  { value: 'relaxed', label: '1-2 times a week', description: 'Take it easy' },
+  { value: 'daily', labelKey: 'onboarding.frequencyOptions.daily', descKey: 'onboarding.frequencyOptions.dailyDesc' },
+  { value: 'regular', labelKey: 'onboarding.frequencyOptions.regular', descKey: 'onboarding.frequencyOptions.regularDesc' },
+  { value: 'relaxed', labelKey: 'onboarding.frequencyOptions.relaxed', descKey: 'onboarding.frequencyOptions.relaxedDesc' },
 ];
 
 export default function FrequencyScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { saveStep, isSaving } = useOnboardingStore();
   const { updateUser } = useAuthStore();
@@ -41,9 +43,9 @@ export default function FrequencyScreen() {
     <SafeAreaView style={styles.container}>
       <OnboardingProgressBar step={5} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text variant="h2" style={styles.title}>How often?</Text>
+        <Text variant="h2" style={styles.title}>{t('onboarding.howOften')}</Text>
         <Text variant="body" color="secondary" style={styles.subtitle}>
-          You can change this later.
+          {t('onboarding.changeLater')}
         </Text>
 
         <View style={styles.options}>
@@ -67,10 +69,10 @@ export default function FrequencyScreen() {
                 </View>
                 <View style={styles.optionContent}>
                   <Text variant="body" weight="medium" style={isSelected && styles.labelSelected}>
-                    {freq.label}
+                    {t(freq.labelKey)}
                   </Text>
                   <Text variant="caption" color="secondary">
-                    {freq.description}
+                    {t(freq.descKey)}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -85,7 +87,7 @@ export default function FrequencyScreen() {
           disabled={!selected}
           loading={isSaving}
         >
-          Continue
+          {t('common.continue')}
         </Button>
       </ScrollView>
     </SafeAreaView>

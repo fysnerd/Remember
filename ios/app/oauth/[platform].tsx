@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Text, Button } from '../../components/ui';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import api from '../../lib/api';
@@ -47,6 +48,7 @@ const USER_AGENT =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 
 export default function OAuthWebViewScreen() {
+  const { t } = useTranslation();
   const { platform } = useLocalSearchParams<{ platform: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -76,9 +78,9 @@ export default function OAuthWebViewScreen() {
   if (!config) {
     return (
       <SafeAreaView style={styles.container}>
-        <Text variant="body">Plateforme non supportée</Text>
+        <Text variant="body">{t('platforms.unsupportedPlatform')}</Text>
         <Button variant="outline" onPress={() => router.back()}>
-          Retour
+          {t('common.back')}
         </Button>
       </SafeAreaView>
     );

@@ -136,7 +136,10 @@
     "remindReview": "We'll remind you when it's time to review.",
     "welcomeNameTitle": "{{name}}, welcome\nto Ankora!",
     "welcomeNameSubtitle": "All set. Let's turn what you watch into lasting knowledge.",
-    "welcomeNameDefault": "you"
+    "welcomeNameDefault": "you",
+    "paywallTitle": "Start your free\n14-day trial",
+    "paywallSubtitle": "Full access to all features. No commitment.",
+    "paywallCta": "Let's go!"
   },
   "home": {
     "greeting": "Hello {{name}}!",
@@ -218,19 +221,54 @@
     "good": "Good!",
     "keepGoing": "Keep going!",
     "tryAgain": "You can do better!",
-    "questionsCorrect": "{{correct}} / {{total}} correct answers"
+    "questionsCorrect": "{{correct}} / {{total}} correct answers",
+    "validate": "Validate",
+    "nextQuestion": "Next question",
+    "seeResult": "See result",
+    "quit": "Quit",
+    "questionProgress": "Question {{current}}/{{total}}",
+    "noQuizForTheme": "No quiz for this theme",
+    "correctAnswer": "Correct answer",
+    "scoreLabel": "Score: {{score}}/{{total}}",
+    "summaryMessage_one": "You answered {{count}} question correctly out of {{total}}.",
+    "summaryMessage_other": "You answered {{count}} questions correctly out of {{total}}.",
+    "synthesis": "Synthesis",
+    "questionsCount_one": "{{count}} Question",
+    "questionsCount_other": "{{count}} Questions"
   },
   "memo": {
     "title": "Memo",
     "generatedFrom": "Generated from",
     "keyPoints": "Key points",
-    "slide": "Slide {{n}}"
+    "slide": "Slide {{n}}",
+    "generating": "Generating memo...",
+    "noMemo": "No memo available",
+    "sessionNotFound": "Session not found",
+    "questionsCount_one": "{{count}} question",
+    "questionsCount_other": "{{count}} questions",
+    "viewContent": "View content",
+    "redoQuiz": "Redo quiz",
+    "cardType": {
+      "essential": "Main idea",
+      "concept": "Concept",
+      "keyConcepts": "Key concepts",
+      "connections": "Links & applications",
+      "mnemonic": "Memory tip",
+      "summary": "Summary"
+    }
   },
   "theme": {
     "title": "Theme",
     "contents": "Contents",
     "quizzes": "Quizzes",
-    "noContents": "No content in this theme"
+    "noContents": "No content in this theme",
+    "contentCount_one": "{{count}} content",
+    "contentCount_other": "{{count}} contents",
+    "quizMinRequired": "You need at least 3 contents with quizzes to start a theme quiz.",
+    "quizProgress": "Quiz ({{ready}}/3)",
+    "remove": "Remove",
+    "selected_one": "{{count}} selected",
+    "selected_other": "{{count}} selected"
   },
   "profile": {
     "title": "Profile",
@@ -310,7 +348,19 @@
     "generatingQuiz": "Generating quiz...",
     "failed": "Processing failed",
     "retryProcessing": "Retry",
-    "unsupported": "Unsupported content"
+    "unsupported": "Unsupported content",
+    "themes": "Themes",
+    "noTheme": "No theme",
+    "addTheme": "+ Theme",
+    "description": "Description",
+    "manageThemes": "Manage themes",
+    "quizQuestions_one": "Quiz ({{count}} question)",
+    "quizQuestions_other": "Quiz ({{count}} questions)",
+    "waitingProcessing": "Waiting for processing...",
+    "quizCreating": "Creating quiz...",
+    "contentCount_one": "{{count}} content",
+    "contentCount_other": "{{count}} contents",
+    "noThemesYet": "No themes yet. Create one first."
   },
   "pipeline": {
     "inbox": "To sort",
@@ -318,7 +368,21 @@
     "transcribing": "Transcribing",
     "ready": "Ready",
     "unsupported": "Unsupported",
-    "failed": "Failed"
+    "failed": "Failed",
+    "waiting": "Waiting",
+    "transcriptionProgress": "Transcribing...",
+    "quizCreating": "Creating quiz...",
+    "error": "Error",
+    "notSupported": "Not supported"
+  },
+  "digest": {
+    "loadingError": "Loading error",
+    "nothingToReview": "Nothing to review today!",
+    "comeBackTomorrow": "Come back tomorrow for new questions.",
+    "correctAnswers": "{{score}}/{{total}} correct answers",
+    "score": "Score",
+    "bestStreak": "Best streak",
+    "duration": "Duration"
   },
   "errors": {
     "network": "Network error. Check your connection.",
@@ -332,7 +396,8 @@
     "subscriptionRequired": "Subscriptions require an app update",
     "tryAgain": "Please try again.",
     "contentNotFound": "Content not found",
-    "quizGenerationFailed": "Unable to generate quiz"
+    "quizGenerationFailed": "Unable to generate quiz",
+    "quizNotFound": "Quiz not found"
   },
   "empty": {
     "title": "Nothing here yet",

@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { X } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { Text, Button } from '../../components/ui';
 import { OnboardingProgressBar } from '../../components/onboarding/OnboardingProgressBar';
 import { useOnboardingStore } from '../../stores/onboardingStore';
@@ -29,6 +30,7 @@ try {
 }
 
 export default function PaywallScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { saveStep, isSaving } = useOnboardingStore();
   const { updateUser } = useAuthStore();
@@ -96,10 +98,10 @@ export default function PaywallScreen() {
         <Animated.View entering={FadeIn.duration(500)}>
           <Text style={styles.emoji}>🎁</Text>
           <Text variant="h2" style={styles.title}>
-            Start your free{'\n'}14-day trial
+            {t('onboarding.paywallTitle')}
           </Text>
           <Text variant="body" color="secondary" style={styles.subtitle}>
-            Full access to all features. No commitment.
+            {t('onboarding.paywallSubtitle')}
           </Text>
         </Animated.View>
 
@@ -110,7 +112,7 @@ export default function PaywallScreen() {
             onPress={handleContinuePlaceholder}
             loading={isSaving || completing}
           >
-            Let's go!
+            {t('onboarding.paywallCta')}
           </Button>
         </View>
       </View>

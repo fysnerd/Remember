@@ -7,6 +7,7 @@
 import { View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Trophy, Flame, Clock } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { Text, Button } from '../ui';
 import { colors, spacing, typography } from '../../theme';
 
@@ -32,6 +33,7 @@ export function DigestClosure({
   durationMs,
   onClose,
 }: DigestClosureProps) {
+  const { t } = useTranslation();
   const percentage = total > 0 ? Math.round((score / total) * 100) : 0;
 
   return (
@@ -44,7 +46,7 @@ export function DigestClosure({
 
         {/* Subtitle */}
         <Text variant="body" color="secondary" style={styles.subtitle}>
-          {score}/{total} bonnes réponses
+          {t('digest.correctAnswers', { score, total })}
         </Text>
 
         {/* Stats row */}
@@ -55,7 +57,7 @@ export function DigestClosure({
               {score}/{total}
             </Text>
             <Text variant="caption" color="secondary">
-              Score
+              {t('digest.score')}
             </Text>
           </View>
 
@@ -65,7 +67,7 @@ export function DigestClosure({
               {bestStreak}
             </Text>
             <Text variant="caption" color="secondary">
-              Meilleure série
+              {t('digest.bestStreak')}
             </Text>
           </View>
 
@@ -75,7 +77,7 @@ export function DigestClosure({
               {formatDuration(durationMs)}
             </Text>
             <Text variant="caption" color="secondary">
-              Durée
+              {t('digest.duration')}
             </Text>
           </View>
         </View>
@@ -83,7 +85,7 @@ export function DigestClosure({
         {/* Close button */}
         <View style={styles.actions}>
           <Button variant="primary" fullWidth onPress={onClose}>
-            Retour
+            {t('common.back')}
           </Button>
         </View>
       </View>

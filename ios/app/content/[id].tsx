@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { View, ScrollView, StyleSheet, Image, Pressable, Modal, FlatList } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Text, Button } from '../../components/ui';
 import { PlatformIcon } from '../../components/icons';
 import { LoadingScreen } from '../../components/LoadingScreen';
@@ -34,6 +35,7 @@ function formatDuration(seconds?: number): string | null {
 }
 
 export default function ContentDetailScreen() {
+  const { t } = useTranslation();
   const { id, dailyRecId } = useLocalSearchParams<{ id: string; dailyRecId?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -53,7 +55,7 @@ export default function ContentDetailScreen() {
     return () => clearInterval(interval);
   }, [content?.status, refetch]);
 
-  const headerOptions = { title: '', headerBackTitle: 'Retour', headerShadowVisible: false, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text };
+  const headerOptions = { title: '', headerBackTitle: t('common.back'), headerShadowVisible: false, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text };
 
   if (isLoading) {
     return (
@@ -68,7 +70,7 @@ export default function ContentDetailScreen() {
     return (
       <>
         <Stack.Screen options={headerOptions} />
-        <ErrorState message="Contenu introuvable" onRetry={refetch} hasHeader />
+        <ErrorState message={t('errors.contentNotFound')} onRetry={refetch} hasHeader />
       </>
     );
   }
@@ -126,7 +128,7 @@ export default function ContentDetailScreen() {
           {/* Themes */}
           <View style={styles.section}>
             <Text variant="body" weight="medium" style={styles.sectionTitle}>
-              Thèmes
+              {t('content.themes')}
             </Text>
             <View style={styles.themes}>
               {content.themes && content.themes.length > 0 ? (
@@ -141,11 +143,11 @@ export default function ContentDetailScreen() {
                 ))
               ) : (
                 <Text variant="caption" color="secondary">
-                  Aucun thème
+                  {t('content.noTheme')}
                 </Text>
               )}
               <Pressable onPress={() => setShowThemeModal(true)} style={styles.addThemeChip}>
-                <Text variant="caption" color="secondary">+ Thème</Text>
+                <Text variant="caption" color="secondary">{t('content.addTheme')}</Text>
               </Pressable>
             </View>
           </View>
@@ -154,7 +156,7 @@ export default function ContentDetailScreen() {
           {displayText && (
             <View style={styles.section}>
               <Text variant="body" weight="medium" style={styles.sectionTitle}>
-                Description
+                {t('content.description')}
               </Text>
               <Markdown style={markdownStyles}>
                 {displayText}
@@ -167,15 +169,15 @@ export default function ContentDetailScreen() {
         <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.md }]}>
           {hasQuiz ? (
             <Button variant="primary" fullWidth onPress={handleStartQuiz}>
-              Quiz ({content.quizCount} question{(content.quizCount ?? 0) !== 1 ? 's' : ''})
+              {t('content.quizQuestions', { count: content.quizCount ?? 0 })}
             </Button>
           ) : (
             <Button variant="primary" fullWidth disabled onPress={() => { }}>
-              {content.status === 'TRANSCRIBING' ? 'Transcription en cours...' :
-                content.status === 'GENERATING' ? 'Quiz en création...' :
-                  content.status === 'FAILED' ? 'Erreur de traitement' :
-                    content.status === 'UNSUPPORTED' ? 'Contenu non supporté' :
-                      'En attente de traitement...'}
+              {content.status === 'TRANSCRIBING' ? t('content.transcribing') :
+                content.status === 'GENERATING' ? t('content.quizCreating') :
+                  content.status === 'FAILED' ? t('content.failed') :
+                    content.status === 'UNSUPPORTED' ? t('content.unsupported') :
+                      t('content.waitingProcessing')}
             </Button>
           )}
         </View>
@@ -190,9 +192,9 @@ export default function ContentDetailScreen() {
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text variant="h2">Gérer les thèmes</Text>
+            <Text variant="h2">{t('content.manageThemes')}</Text>
             <Pressable onPress={() => setShowThemeModal(false)} hitSlop={8}>
-              <Text variant="body" color="secondary">Fermer</Text>
+              <Text variant="body" color="secondary">{t('common.close')}</Text>
             </Pressable>
           </View>
           <FlatList
@@ -221,7 +223,7 @@ export default function ContentDetailScreen() {
                   <View style={styles.modalItemInfo}>
                     <Text variant="body" weight="medium">{theme.name}</Text>
                     <Text variant="caption" color="secondary">
-                      {theme.contentCount} contenu{theme.contentCount !== 1 ? 's' : ''}
+                      {t('content.contentCount', { count: theme.contentCount })}
                     </Text>
                   </View>
                   <View style={[styles.checkbox, isAssigned && styles.checkboxChecked]}>
@@ -232,7 +234,7 @@ export default function ContentDetailScreen() {
             }}
             ListEmptyComponent={
               <Text variant="body" color="secondary" style={styles.modalEmpty}>
-                Aucun thème. Créez-en un d'abord.
+                {t('content.noThemesYet')}
               </Text>
             }
           />

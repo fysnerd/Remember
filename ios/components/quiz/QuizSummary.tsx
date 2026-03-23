@@ -5,6 +5,7 @@
 import { View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Trophy, ThumbsUp, Star } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { Text, Button } from '../ui';
 import { colors, spacing } from '../../theme';
 
@@ -17,7 +18,9 @@ interface QuizSummaryProps {
   hideSecondButton?: boolean; // Hide the "Retour" button
 }
 
-export function QuizSummary({ score, total, onViewMemo, onClose, memoLabel = 'Voir le mémo', hideSecondButton = false }: QuizSummaryProps) {
+export function QuizSummary({ score, total, onViewMemo, onClose, memoLabel, hideSecondButton = false }: QuizSummaryProps) {
+  const { t } = useTranslation();
+  const resolvedMemoLabel = memoLabel ?? t('content.viewMemo');
   const percentage = Math.round((score / total) * 100);
   const ResultIcon = percentage >= 80 ? Trophy : percentage >= 50 ? ThumbsUp : Star;
 
@@ -27,20 +30,20 @@ export function QuizSummary({ score, total, onViewMemo, onClose, memoLabel = 'Vo
         <ResultIcon size={64} color={colors.accent} strokeWidth={1.5} />
 
         <Text variant="h1" style={styles.score}>
-          Score : {score}/{total}
+          {t('quiz.scoreLabel', { score, total })}
         </Text>
 
         <Text variant="body" color="secondary" style={styles.message}>
-          Tu as bien répondu à {score} question{score > 1 ? 's' : ''} sur {total}.
+          {t('quiz.summaryMessage', { count: score, total })}
         </Text>
 
         <View style={styles.actions}>
           <Button variant="primary" fullWidth onPress={onViewMemo}>
-            {memoLabel}
+            {resolvedMemoLabel}
           </Button>
           {!hideSecondButton && (
             <Button variant="outline" fullWidth onPress={onClose}>
-              Retour
+              {t('common.back')}
             </Button>
           )}
         </View>

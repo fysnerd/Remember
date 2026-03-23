@@ -9,6 +9,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link2 } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
 import { GreetingHeader } from '../../components/home/GreetingHeader';
@@ -20,6 +21,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { colors, spacing, depth } from '../../theme';
 
 export default function HomeScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { bottom: bottomInset } = useSafeAreaInsets();
@@ -54,8 +56,8 @@ export default function HomeScreen() {
   const handleRecommendationPress = (rec: { id: string; type: 'content' | 'theme'; dailyRecId?: string; completed?: boolean }) => {
     if (rec.completed) {
       Alert.alert(
-        'Quiz termine',
-        'Tu as deja fait ce quiz aujourd\'hui.\nRevise avant de rejouer. A demain !',
+        t('home.quizDone'),
+        t('home.quizDoneToday'),
       );
       return;
     }
@@ -77,7 +79,7 @@ export default function HomeScreen() {
   }
 
   if (recommendations.length === 0) {
-    return <EmptyState message="Connectez vos plateformes pour commencer" icon={Link2} hasHeader />;
+    return <EmptyState message={t('home.connectPlatforms')} icon={Link2} hasHeader />;
   }
 
   return (
