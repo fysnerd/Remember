@@ -177,13 +177,25 @@ export default function InstagramSyncScreen() {
     }
   }, [syncTriggered, t]);
 
-  // Poll every 2s in login phase
+  // Clear stale cookies on mount, then poll every 2s in login phase
   useEffect(() => {
     if (phase !== 'login' || syncTriggered) return;
-    // Check immediately on mount
-    checkLogin();
-    const interval = setInterval(checkLogin, 2000);
-    return () => clearInterval(interval);
+    let interval: ReturnType<typeof setInterval>;
+
+    // Clear old Instagram cookies first so stale sessions don't auto-trigger sync
+    const start = async () => {
+      if (CookieManager) {
+        try {
+          await CookieManager.clearAll();
+        } catch {}
+      }
+      // Now start polling — user must log in fresh
+      checkLogin();
+      interval = setInterval(checkLogin, 2000);
+    };
+    start();
+
+    return () => { if (interval) clearInterval(interval); };
   }, [phase, syncTriggered, checkLogin]);
 
   // Timeout for likes phase
