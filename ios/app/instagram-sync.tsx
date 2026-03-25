@@ -137,6 +137,19 @@ true;
 
 type Phase = 'login' | 'likes' | 'done' | 'error';
 
+// Injected BEFORE page JS runs — clears web storage so Instagram can't auto-re-login
+const CLEAR_STORAGE_JS = `
+try { localStorage.clear(); } catch(e) {}
+try { sessionStorage.clear(); } catch(e) {}
+try {
+  var dbs = indexedDB.databases ? indexedDB.databases() : Promise.resolve([]);
+  dbs.then(function(databases) {
+    databases.forEach(function(db) { indexedDB.deleteDatabase(db.name); });
+  });
+} catch(e) {}
+true;
+`;
+
 export default function InstagramSyncScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -153,7 +166,7 @@ export default function InstagramSyncScreen() {
     if (!CookieManager || syncTriggered) return;
     try {
       const cookies = await CookieManager.get('https://www.instagram.com');
-      const hasSession = cookies?.sessionid?.value || cookies?.ds_user_id?.value;
+      const hasSession = !!cookies?.sessionid?.value;
       if (hasSession) {
         console.log('[InstagramSync] Session detected, switching to likes page');
         setSyncTriggered(true);
@@ -323,6 +336,7 @@ export default function InstagramSyncScreen() {
                 if (phase === 'login') checkLogin();
               }}
               onMessage={onMessage}
+              injectedJavaScriptBeforeContentLoaded={phase === 'login' ? CLEAR_STORAGE_JS : undefined}
               injectedJavaScript={phase === 'likes' ? SCRAPE_JS : undefined}
               javaScriptEnabled={true}
               domStorageEnabled={true}
