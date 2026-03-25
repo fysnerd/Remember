@@ -146,6 +146,7 @@ export default function InstagramSyncScreen() {
   const [message, setMessage] = useState('');
   const [newItems, setNewItems] = useState(0);
   const [syncTriggered, setSyncTriggered] = useState(false);
+  const [cookiesReady, setCookiesReady] = useState(false);
 
   // Poll for login cookies — when found, switch to likes phase
   const checkLogin = useCallback(async () => {
@@ -177,26 +178,24 @@ export default function InstagramSyncScreen() {
     }
   }, [syncTriggered, t]);
 
-  // Clear stale cookies on mount, then poll every 2s in login phase
+  // Clear stale cookies BEFORE mounting the WebView
   useEffect(() => {
-    if (phase !== 'login' || syncTriggered) return;
-    let interval: ReturnType<typeof setInterval>;
-
-    // Clear old Instagram cookies first so stale sessions don't auto-trigger sync
-    const start = async () => {
+    if (cookiesReady) return;
+    (async () => {
       if (CookieManager) {
-        try {
-          await CookieManager.clearAll();
-        } catch {}
+        try { await CookieManager.clearAll(); } catch {}
       }
-      // Now start polling — user must log in fresh
-      checkLogin();
-      interval = setInterval(checkLogin, 2000);
-    };
-    start();
+      setCookiesReady(true);
+    })();
+  }, [cookiesReady]);
 
-    return () => { if (interval) clearInterval(interval); };
-  }, [phase, syncTriggered, checkLogin]);
+  // Poll every 2s in login phase (only after cookies cleared)
+  useEffect(() => {
+    if (!cookiesReady || phase !== 'login' || syncTriggered) return;
+    checkLogin();
+    const interval = setInterval(checkLogin, 2000);
+    return () => clearInterval(interval);
+  }, [cookiesReady, phase, syncTriggered, checkLogin]);
 
   // Timeout for likes phase
   useEffect(() => {
@@ -312,7 +311,7 @@ export default function InstagramSyncScreen() {
 
         {/* WebView — remounted via key when phase changes */}
         <View style={styles.webviewContainer}>
-          {(phase === 'login' || phase === 'likes') && (
+          {cookiesReady && (phase === 'login' || phase === 'likes') && (
             <WebView
               key={phase} // Forces remount when switching from login → likes
               source={{ uri: phase === 'likes' ? LIKES_PAGE_URL : 'https://www.instagram.com/' }}
