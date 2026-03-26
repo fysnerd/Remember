@@ -77,10 +77,11 @@ model UserSettings {
 
   // Notifications
   emailReminders    Boolean @default(true)
-  lastPushSentAt    DateTime? // Dedup: morning push (daily subjects announcement)
-  noonPushSentAt    DateTime? // Dedup: noon push (new inbox content)
-  afternoonPushSentAt DateTime? // Dedup: afternoon push (single subject nudge)
-  eveningPushSentAt DateTime? // Dedup: evening push (streak in danger)
+  lastPushSentAt    DateTime?         // Last push sent (any type)
+  pushIgnoredCount  Int       @default(0) // Consecutive pushes not opened
+  lastPushOpenedAt  DateTime?         // Last time user opened app from push
+  weeklyPushCount   Int       @default(0) // Pushes sent this week
+  weeklyPushResetAt DateTime?         // Reset every Monday
 
   // FSRS-5 settings
   desiredRetention  Float   @default(0.85) // Target recall probability [0.80 - 0.95]
