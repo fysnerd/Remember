@@ -203,14 +203,11 @@ interface SubmitAnswerParams {
 export function useSubmitAnswer() {
   return useMutation({
     mutationFn: async ({ cardId, isCorrect, responseTime, sessionId }: SubmitAnswerParams) => {
-      const rating = isCorrect ? 'GOOD' : 'AGAIN';
-
       const { data } = await api.post('/reviews', {
         cardId,
-        rating,
+        correct: isCorrect,
         responseTime,
         sessionId,
-        // Note: no isPractice flag, so it gets tracked
       });
       return data;
     },

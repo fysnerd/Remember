@@ -4,6 +4,7 @@ import { prisma } from '../config/database.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { Rating, Platform } from '@prisma/client';
 import { generateText } from '../services/llm.js';
+import { fsrs, generatorParameters, Rating as FSRSRating, Card as FSRSCard, State } from 'ts-fsrs';
 
 // Helper to safely extract string param (handles string | string[] | undefined)
 function asString(value: string | string[] | undefined): string {
@@ -516,13 +517,69 @@ reviewRouter.post('/digest', async (req: Request, res: Response, next: NextFunct
   }
 });
 
-// Validation schema for review submission
+// ============================================================================
+// FSRS-5 Helpers
+// ============================================================================
+
+/**
+ * Infer FSRS rating from correctness and response time.
+ * No self-rating — zero friction for the user.
+ */
+function inferRating(correct: boolean, responseTime: number | null): FSRSRating {
+  if (!correct) return FSRSRating.Again;
+  if (responseTime === null || responseTime === undefined) return FSRSRating.Good; // fallback
+  if (responseTime > 30000) return FSRSRating.Hard;
+  if (responseTime < 10000) return FSRSRating.Easy;
+  return FSRSRating.Good;
+}
+
+/**
+ * Map FSRS Rating enum to Prisma Rating enum.
+ */
+function fsrsRatingToPrisma(rating: FSRSRating): Rating {
+  switch (rating) {
+    case FSRSRating.Again: return 'AGAIN';
+    case FSRSRating.Hard: return 'HARD';
+    case FSRSRating.Good: return 'GOOD';
+    case FSRSRating.Easy: return 'EASY';
+    default: return 'GOOD';
+  }
+}
+
+/**
+ * Build a ts-fsrs Card object from our Prisma Card data.
+ */
+function buildFSRSCard(card: {
+  stability: number;
+  difficulty: number;
+  repetitions: number;
+  nextReviewAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}): FSRSCard {
+  return {
+    due: card.nextReviewAt,
+    stability: card.stability,
+    difficulty: card.difficulty,
+    elapsed_days: 0, // computed by ts-fsrs from last_review
+    scheduled_days: 0,
+    reps: card.repetitions,
+    lapses: 0,
+    learning_steps: 0,
+    state: card.repetitions === 0 ? State.New : State.Review,
+    last_review: card.updatedAt,
+  };
+}
+
+// Validation schema for review submission — FSRS-5: correct + responseTime, no rating
 const submitReviewSchema = z.object({
   cardId: z.string(),
-  rating: z.enum(['AGAIN', 'HARD', 'GOOD', 'EASY']),
+  correct: z.boolean(),
+  // Legacy support: accept rating from old frontend versions during rollout
+  rating: z.enum(['AGAIN', 'HARD', 'GOOD', 'EASY']).optional(),
   responseTime: z.number().optional(),
   sessionId: z.string().optional(),
-  isPractice: z.boolean().optional(), // Practice mode - don't update SM-2 stats
+  isPractice: z.boolean().optional(),
 });
 
 // POST /api/reviews - Submit a review
@@ -542,7 +599,7 @@ reviewRouter.post('/', async (req: Request, res: Response, next: NextFunction) =
       return res.status(404).json({ error: 'Card not found' });
     }
 
-    // Practice mode - don't update SM-2 stats or streak
+    // Practice mode — don't update SRS stats or streak
     if (data.isPractice) {
       return res.json({
         card,
@@ -551,69 +608,75 @@ reviewRouter.post('/', async (req: Request, res: Response, next: NextFunction) =
       });
     }
 
-    // Research-backed fixed intervals (v4.0 PRD)
-    const FIXED_INTERVALS: Record<number, number> = {
-      1: 1,   // J+1: first review
-      2: 3,   // J+3: second review
-      3: 7,   // J+7: third review
-      4: 31,  // J+31: fourth review
-    };
-    const MAX_FIXED_REP = 4;
-
-    // SM-2 Algorithm with fixed interval progression (v4.0)
-    const ratingValue = { AGAIN: 1, HARD: 2, GOOD: 3, EASY: 4 }[data.rating];
-
-    let newEaseFactor = card.easeFactor;
-    let newInterval = card.interval;
-    let newRepetitions = card.repetitions;
-
-    if (ratingValue < 3) {
-      // SRS-03: Failed review resets to J+1
-      newRepetitions = 0;
-      newInterval = 1;
+    // Determine the FSRS rating
+    let fsrsRating: FSRSRating;
+    if (data.correct !== undefined) {
+      // New FSRS path: infer rating from correct + responseTime
+      fsrsRating = inferRating(data.correct, data.responseTime ?? null);
+    } else if (data.rating) {
+      // Legacy path: map old rating string to FSRS rating
+      const legacyMap: Record<string, FSRSRating> = {
+        'AGAIN': FSRSRating.Again,
+        'HARD': FSRSRating.Hard,
+        'GOOD': FSRSRating.Good,
+        'EASY': FSRSRating.Easy,
+      };
+      fsrsRating = legacyMap[data.rating] ?? FSRSRating.Good;
     } else {
-      // Successful review
-      newRepetitions += 1;
-
-      if (newRepetitions <= MAX_FIXED_REP) {
-        // SRS-02: Fixed intervals for first 4 reps
-        newInterval = FIXED_INTERVALS[newRepetitions];
-      } else {
-        // Beyond J+31: SM-2 dynamic intervals with easeFactor
-        newInterval = Math.round(card.interval * newEaseFactor);
-
-        // EASY bonus only applies in dynamic interval phase (rep > 4)
-        if (data.rating === 'EASY') {
-          newInterval = Math.round(newInterval * 1.3);
-        }
-      }
-
-      // SRS-04: Ease factor always adjusts (SM-2 compatible)
-      newEaseFactor = Math.max(
-        1.3,
-        card.easeFactor + (0.1 - (5 - ratingValue) * (0.08 + (5 - ratingValue) * 0.02))
-      );
+      fsrsRating = FSRSRating.Good; // ultimate fallback
     }
 
-    const nextReviewAt = new Date();
-    nextReviewAt.setDate(nextReviewAt.getDate() + newInterval);
+    // Get user's desired retention for FSRS scheduling
+    const settings = await prisma.userSettings.findUnique({
+      where: { userId: req.user!.id },
+    });
+    const desiredRetention = settings?.desiredRetention ?? 0.85;
+
+    // Initialize FSRS scheduler with user's desired retention
+    const params = generatorParameters({ request_retention: desiredRetention });
+    const f = fsrs(params);
+
+    // Build ts-fsrs Card from our DB card
+    const fsrsCard = buildFSRSCard(card);
+
+    // Schedule the card
+    const now = new Date();
+    const scheduling = f.repeat(fsrsCard, now);
+    const result = scheduling[fsrsRating as unknown as keyof typeof scheduling] as { card: FSRSCard; log: any };
+
+    // Extract new FSRS state
+    const newStability = Math.max(0.1, Math.min(36500, result.card.stability));
+    const newDifficulty = Math.max(1, Math.min(10, result.card.difficulty));
+    const newNextReviewAt = result.card.due;
+    const newRepetitions = result.card.reps;
+
+    // Compute backward-compatible SM-2 fields from FSRS state
+    const newInterval = Math.max(1, Math.round(
+      (newNextReviewAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+    ));
+    // Map FSRS difficulty [1,10] back to SM-2 easeFactor [1.3, 2.5+]
+    const newEaseFactor = Math.max(1.3, 2.5 - (newDifficulty - 5) * 0.12);
+
+    const prismaRating = fsrsRatingToPrisma(fsrsRating);
 
     // Update card and create review in transaction
     const [updatedCard, review] = await prisma.$transaction([
       prisma.card.update({
         where: { id: card.id },
         data: {
+          stability: newStability,
+          difficulty: newDifficulty,
           easeFactor: newEaseFactor,
           interval: newInterval,
           repetitions: newRepetitions,
-          nextReviewAt,
+          nextReviewAt: newNextReviewAt,
         },
       }),
       prisma.review.create({
         data: {
           cardId: card.id,
           userId: req.user!.id,
-          rating: data.rating as Rating,
+          rating: prismaRating,
           responseTime: data.responseTime,
           sessionId: data.sessionId,
         },
@@ -944,7 +1007,7 @@ reviewRouter.post('/practice/theme', async (req: Request, res: Response, next: N
                 const synthCardNextReview = new Date();
                 synthCardNextReview.setDate(synthCardNextReview.getDate() + 1);
                 await prisma.card.create({
-                  data: { quizId: quiz.id, userId, nextReviewAt: synthCardNextReview },
+                  data: { quizId: quiz.id, userId, stability: 3.0, difficulty: 5.0, nextReviewAt: synthCardNextReview },
                 });
               }
               console.log(`[synthesis] Generated ${result.questions.length} synthesis cards for theme ${themeId}`);
@@ -1640,6 +1703,7 @@ reviewRouter.get('/settings', async (req: Request, res: Response, next: NextFunc
       dailyReminderTime: settings?.dailyReminderTime ?? '09:00',
       timezone: settings?.timezone ?? 'UTC',
       emailReminders: settings?.emailReminders ?? true,
+      desiredRetention: settings?.desiredRetention ?? 0.85,
     });
   } catch (error) {
     return next(error);
@@ -1652,6 +1716,7 @@ const updateSettingsSchema = z.object({
   dailyReminderTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
   timezone: z.string().optional(),
   emailReminders: z.boolean().optional(),
+  desiredRetention: z.number().min(0.80).max(0.95).optional(),
 });
 
 // PATCH /api/reviews/settings - Update review settings

@@ -81,6 +81,9 @@ model UserSettings {
   afternoonPushSentAt DateTime? // Dedup: afternoon push (single subject nudge)
   eveningPushSentAt DateTime? // Dedup: evening push (streak in danger)
 
+  // FSRS-5 settings
+  desiredRetention  Float   @default(0.85) // Target recall probability [0.80 - 0.95]
+
   // Onboarding preferences (synced from onboarding flow)
   interests         String[]  @default([])
   objective         String?
@@ -353,7 +356,11 @@ model Card {
   quiz        Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
   userId      String
 
-  // SM-2 Algorithm fields
+  // FSRS-5 fields
+  stability   Float    @default(3.0)    // S: days until R drops to 90%
+  difficulty  Float    @default(5.0)    // D: intrinsic difficulty [1, 10]
+
+  // SM-2 fields (deprecated — kept for backward compatibility)
   easeFactor  Float    @default(2.5)
   interval    Int      @default(1)   // days
   repetitions Int      @default(0)

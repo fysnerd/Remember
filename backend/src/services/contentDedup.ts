@@ -95,6 +95,8 @@ export async function cloneFromDonor(contentId: string): Promise<boolean> {
           data: {
             quizId: quiz.id,
             userId: content.userId,
+            stability: 3.0,
+            difficulty: 5.0,
             nextReviewAt: cardNextReview,
           },
         });

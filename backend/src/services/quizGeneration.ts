@@ -525,11 +525,13 @@ export async function processContentQuiz(contentId: string, language: string = '
           },
         });
 
-        // Create card for the user who owns this content
+        // Create card for the user who owns this content (FSRS-5 defaults)
         await tx.card.create({
           data: {
             quizId: quiz.id,
             userId: content.userId,
+            stability: 3.0,
+            difficulty: 5.0,
             nextReviewAt: cardNextReview,
           },
         });
@@ -712,7 +714,7 @@ export async function regenerateQuiz(contentId: string, language: string = 'fr')
           },
         });
         await tx.card.create({
-          data: { quizId: quiz.id, userId: content.userId, nextReviewAt: regenNextReview },
+          data: { quizId: quiz.id, userId: content.userId, stability: 3.0, difficulty: 5.0, nextReviewAt: regenNextReview },
         });
       }
       await tx.content.update({
