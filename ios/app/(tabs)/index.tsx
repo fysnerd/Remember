@@ -1,5 +1,11 @@
 /**
- * Home Tab - Daily learning experience with greeting, stats, and 3 fixed daily quiz cards
+ * Home Tab - Daily learning experience
+ *
+ * Layout:
+ * 1. Progress tracker (segments + streak flame)
+ * 2. Greeting header
+ * 3. Digest CTA — primary daily action (launches interleaved digest)
+ * 4. Recommendation cards — 3 optional content/theme quizzes
  */
 
 import { useCallback, useState } from 'react';
@@ -14,11 +20,13 @@ import { LoadingScreen } from '../../components/LoadingScreen';
 import { EmptyState } from '../../components/EmptyState';
 import { GreetingHeader } from '../../components/home/GreetingHeader';
 import { DailyProgressTracker } from '../../components/home/DailyProgressTracker';
+import { DigestCTA } from '../../components/home/DigestCTA';
 import { QuizRecommendationCard } from '../../components/home/QuizRecommendationCard';
 import { STAGGER_DELAY, STAGGER_CAP } from '../../lib/animations';
 import { useQuizRecommendations, usePipelineStatus, useReviewStats } from '../../hooks';
 import { useAuthStore } from '../../stores/authStore';
-import { colors, spacing, depth } from '../../theme';
+import { Text } from '../../components/ui';
+import { colors, spacing, depth, fonts, typography } from '../../theme';
 
 export default function HomeScreen() {
   const { t } = useTranslation();
@@ -38,6 +46,8 @@ export default function HomeScreen() {
 
   const recommendations = data?.recommendations ?? [];
   const dailyProgress = data?.dailyProgress;
+  const dueCount = reviewStats?.dueToday ?? 0;
+  const currentStreak = reviewStats?.currentStreak ?? 0;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -52,6 +62,10 @@ export default function HomeScreen() {
       setRefreshing(false);
     }
   }, [queryClient]);
+
+  const handleDigestPress = () => {
+    router.push('/digest' as any);
+  };
 
   const handleRecommendationPress = (rec: { id: string; type: 'content' | 'theme'; dailyRecId?: string; completed?: boolean }) => {
     if (rec.completed) {
@@ -96,24 +110,39 @@ export default function HomeScreen() {
           <DailyProgressTracker
             completed={dailyProgress.completed}
             total={dailyProgress.total}
-            streak={reviewStats?.currentStreak ?? 0}
+            streak={currentStreak}
           />
         )}
         <GreetingHeader userName={userName} />
 
-        <View style={styles.cardsList}>
-          {recommendations.map((rec, index) => (
-            <Animated.View
-              key={rec.id}
-              entering={FadeInDown.delay(Math.min(index, STAGGER_CAP) * STAGGER_DELAY).duration(250)}
-            >
-              <QuizRecommendationCard
-                recommendation={rec}
-                onPress={() => handleRecommendationPress(rec)}
-              />
-            </Animated.View>
-          ))}
-        </View>
+        {/* Primary CTA — Daily digest (interleaved session) */}
+        <DigestCTA
+          dueCount={dueCount}
+          streak={currentStreak}
+          onPress={handleDigestPress}
+        />
+
+        {/* Secondary — Recommendation cards */}
+        {recommendations.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>
+              {t('home.pickASubject', { defaultValue: 'Ou choisis un sujet' })}
+            </Text>
+            <View style={styles.cardsList}>
+              {recommendations.map((rec, index) => (
+                <Animated.View
+                  key={rec.id}
+                  entering={FadeInDown.delay(Math.min(index, STAGGER_CAP) * STAGGER_DELAY).duration(250)}
+                >
+                  <QuizRecommendationCard
+                    recommendation={rec}
+                    onPress={() => handleRecommendationPress(rec)}
+                  />
+                </Animated.View>
+              ))}
+            </View>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -129,6 +158,13 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing.md,
+  },
+  sectionTitle: {
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
+    ...typography.body,
+    letterSpacing: -0.3,
+    marginBottom: spacing.md,
   },
   cardsList: {
     gap: spacing.lg,

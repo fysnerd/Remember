@@ -789,18 +789,19 @@ reviewRouter.post('/', async (req: Request, res: Response, next: NextFunction) =
       }),
     ]);
 
-    // Update streak and check for milestones
-    const streakResult = await updateStreak(req.user!.id);
+    // Streak is updated on session completion (digest/recall only), not per review
+    // Just return current streak for display
+    const streak = await prisma.streak.findUnique({ where: { userId: req.user!.id } });
 
     return res.json({
       card: updatedCard,
       review,
       nextReviewIn: `${newInterval} day(s)`,
       streak: {
-        current: streakResult.currentStreak,
-        longest: streakResult.longestStreak,
-        milestone: streakResult.milestone,
-        isNewRecord: streakResult.isNewRecord,
+        current: streak?.currentStreak ?? 0,
+        longest: streak?.longestStreak ?? 0,
+        milestone: null,
+        isNewRecord: false,
       },
     });
   } catch (error) {
@@ -1585,6 +1586,14 @@ reviewRouter.post('/session/:id/complete', async (req: Request, res: Response, n
       data: { completedAt: new Date() },
     });
 
+    // Update streak ONLY for digest/recall sessions (not practice)
+    const streakModes = ['quick', 'daily', 'deep', 'recall', 'due'];
+    const sessionMode = (session as any).mode || 'practice';
+    let streakResult = null;
+    if (streakModes.includes(sessionMode)) {
+      streakResult = await updateStreak(req.user!.id);
+    }
+
     // Compute daily progress for the response
     const userSettings = await prisma.userSettings.findUnique({ where: { userId: req.user!.id } });
     const tz = userSettings?.timezone || 'UTC';
@@ -1614,6 +1623,12 @@ reviewRouter.post('/session/:id/complete', async (req: Request, res: Response, n
         accuracy: totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0,
       },
       dailyProgress,
+      streak: streakResult ? {
+        current: streakResult.currentStreak,
+        longest: streakResult.longestStreak,
+        milestone: streakResult.milestone,
+        isNewRecord: streakResult.isNewRecord,
+      } : undefined,
     });
   } catch (error) {
     return next(error);

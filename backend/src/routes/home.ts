@@ -157,6 +157,7 @@ export async function generateRecommendations(userId: string): Promise<Recommend
   }
 
   // Step 3: Theme candidates - discovered with >= 3 quizzable contents
+  // Use ThemeProgress.meanRetrievability for smarter ordering (lowest R = most at risk)
   const themeCandidates = await prisma.$queryRaw<{
     id: string;
     name: string;
@@ -165,21 +166,25 @@ export async function generateRecommendations(userId: string): Promise<Recommend
     contentCount: bigint;
     questionCount: bigint;
     dueCount: bigint;
+    meanRetrievability: number | null;
   }[]>`
     SELECT
       t.id, t.name, t.emoji, t.color,
       COUNT(DISTINCT cth."contentId") AS "contentCount",
       COUNT(DISTINCT q.id) AS "questionCount",
-      COUNT(DISTINCT card.id) FILTER (WHERE card."nextReviewAt" <= NOW()) AS "dueCount"
+      COUNT(DISTINCT card.id) FILTER (WHERE card."nextReviewAt" <= NOW()) AS "dueCount",
+      tp."meanRetrievability"
     FROM "Theme" t
     JOIN "ContentTheme" cth ON cth."themeId" = t.id
     JOIN "Content" co ON co.id = cth."contentId" AND co.status = 'READY'
     JOIN "Quiz" q ON q."contentId" = co.id AND q."isSynthesis" = false
     LEFT JOIN "Card" card ON card."quizId" = q.id AND card."userId" = ${userId}
+    LEFT JOIN "ThemeProgress" tp ON tp."themeId" = t.id AND tp."userId" = ${userId}
     WHERE t."userId" = ${userId} AND t."discoveredAt" IS NOT NULL
-    GROUP BY t.id
+    GROUP BY t.id, tp."meanRetrievability"
     HAVING COUNT(DISTINCT cth."contentId") >= 3
     ORDER BY
+      tp."meanRetrievability" ASC NULLS LAST,
       COUNT(DISTINCT card.id) FILTER (WHERE card."nextReviewAt" <= NOW()) DESC,
       COUNT(DISTINCT cth."contentId") DESC
     LIMIT 5
