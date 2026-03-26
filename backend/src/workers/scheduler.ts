@@ -14,6 +14,7 @@ import { runReminderWorker } from './reminderWorker.js';
 import { runAutoTaggingWorker } from '../services/tagging.js';
 import { runThemeClassificationWorker, runBackfillThemes } from '../services/themeClassification.js';
 import { runEmbeddingWorker, runEmbeddingBackfill } from '../services/embeddingGeneration.js';
+import { runThemeProgressWorker, backfillThemeProgress } from '../services/themeProgress.js';
 import { trackJobExecution } from './jobExecutionTracker.js';
 import { runCleanupJobExecutions } from './cleanupWorker.js';
 import { cleanupDesktopAuthSessions } from '../routes/oauth.js';
@@ -144,6 +145,13 @@ export function startScheduler(): void {
     await runJob('embedding-generation', runEmbeddingWorker);
   });
 
+  // Theme Progress Worker - Every hour
+  // Computes per-theme learning metrics and manages phase transitions (FSRS-5 Phase 2)
+  cron.schedule('0 * * * *', async () => {
+    log.info({ job: 'theme-progress' }, 'Triggering scheduled job');
+    await runJob('theme-progress', runThemeProgressWorker);
+  });
+
   // Job Execution Cleanup - Daily at 3:00 AM
   // Deletes execution records older than 30 days
   cron.schedule('0 3 * * *', async () => {
@@ -193,6 +201,7 @@ export function startScheduler(): void {
       { name: 'auto-tagging', schedule: '*/15 * * * *' },
       { name: 'theme-classification', schedule: '*/15 * * * *' },
       { name: 'embedding-generation', schedule: '*/5 * * * *' },
+      { name: 'theme-progress', schedule: '0 * * * *' },
       { name: 'cleanup-job-executions', schedule: '0 3 * * *' },
       { name: 'inbox-auto-expiration', schedule: '15 3 * * *' },
       { name: 'desktop-auth-cleanup', schedule: '* * * * *' },
@@ -231,7 +240,7 @@ export async function runAllSyncsNow(): Promise<void> {
  * Run a specific job manually
  */
 export async function triggerJob(
-  jobName: 'youtube' | 'spotify' | 'tiktok' | 'instagram' | 'transcription' | 'podcast-transcription' | 'tiktok-transcription' | 'instagram-transcription' | 'quiz-generation' | 'reminder' | 'auto-tagging' | 'theme-classification' | 'theme-backfill' | 'embedding-generation' | 'embedding-backfill' | 'synopsis-backfill',
+  jobName: 'youtube' | 'spotify' | 'tiktok' | 'instagram' | 'transcription' | 'podcast-transcription' | 'tiktok-transcription' | 'instagram-transcription' | 'quiz-generation' | 'reminder' | 'auto-tagging' | 'theme-classification' | 'theme-backfill' | 'embedding-generation' | 'embedding-backfill' | 'synopsis-backfill' | 'theme-progress' | 'theme-progress-backfill',
   triggerSource: 'SCHEDULED' | 'MANUAL' = 'SCHEDULED'
 ): Promise<{ success: boolean; message: string }> {
   switch (jobName) {
@@ -299,6 +308,14 @@ export async function triggerJob(
       await runJob('synopsis-backfill', runSynopsisBackfill, triggerSource);
       return { success: true, message: 'Synopsis backfill completed' };
 
+    case 'theme-progress':
+      await runJob('theme-progress', runThemeProgressWorker, triggerSource);
+      return { success: true, message: 'Theme progress worker completed' };
+
+    case 'theme-progress-backfill':
+      await runJob('theme-progress-backfill', backfillThemeProgress, triggerSource);
+      return { success: true, message: 'Theme progress backfill completed' };
+
     default:
       return { success: false, message: `Unknown job: ${jobName}` };
   }
@@ -329,6 +346,7 @@ export function getSchedulerStatus(): {
       { name: 'auto-tagging', schedule: '*/15 * * * *' },
       { name: 'theme-classification', schedule: '*/15 * * * *' },
       { name: 'embedding-generation', schedule: '*/5 * * * *' },
+      { name: 'theme-progress', schedule: '0 * * * *' },
       { name: 'cleanup-job-executions', schedule: '0 3 * * *' },
       { name: 'inbox-auto-expiration', schedule: '15 3 * * *' },
     ],

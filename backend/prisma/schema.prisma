@@ -60,6 +60,7 @@ model User {
   pushTokens    PushToken[]
   themes        Theme[]
   dailyRecommendations DailyRecommendation[]
+  themeProgress  ThemeProgress[]
 
   @@index([email])
 }
@@ -441,6 +442,7 @@ model Theme {
   contentThemes ContentTheme[]
   themeTags     ThemeTag[]
   quizzes       Quiz[]
+  themeProgress ThemeProgress[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
@@ -519,6 +521,47 @@ model Streak {
   lastReviewDate DateTime?
 
   updatedAt     DateTime @updatedAt
+}
+
+// ============================================================================
+// Theme Progress & Lifecycle (FSRS-5 Phase 2)
+// ============================================================================
+
+model ThemeProgress {
+  id                 String     @id @default(cuid())
+  userId             String
+  themeId            String
+  user               User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme              Theme      @relation(fields: [themeId], references: [id], onDelete: Cascade)
+
+  phase              ThemePhase @default(DISCOVERING)
+  phaseStartedAt     DateTime   @default(now())
+
+  // Aggregated metrics (recomputed by worker)
+  meanRetrievability Float      @default(1.0)
+  meanStability      Float      @default(0.0)
+  totalCards         Int        @default(0)
+  masteredCards      Int        @default(0)   // cards with S > 30 days
+
+  // Recall tracking
+  lastRecallAt       DateTime?
+  lastRecallScore    Float?     // % correct of last recall quiz
+  nextRecallAt       DateTime?  // next recall quiz scheduled
+
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  @@unique([userId, themeId])
+  @@index([nextRecallAt])
+  @@index([userId])
+}
+
+enum ThemePhase {
+  DISCOVERING    // < 5 cards with quiz, accumulating content
+  ACTIVE         // Active learning, daily reviews
+  CONSOLIDATING  // Recall quizzes every 3-5 days
+  ANCHORED       // Monthly recall, anchored knowledge
+  DORMANT        // No new content for 60d+
 }
 
 // ============================================================================

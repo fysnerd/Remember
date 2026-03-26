@@ -180,6 +180,26 @@ adminRouter.post('/sync/synopsis-backfill', async (_req: Request, res: Response,
   }
 });
 
+// POST /api/admin/sync/theme-progress - Trigger theme progress worker manually
+adminRouter.post('/sync/theme-progress', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await triggerJob('theme-progress', 'MANUAL');
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/sync/theme-progress-backfill - Backfill ThemeProgress for existing themes
+adminRouter.post('/sync/theme-progress-backfill', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    triggerJob('theme-progress-backfill', 'MANUAL').catch(err => log.error({ err }, 'Theme progress backfill failed'));
+    res.json({ success: true, message: 'Theme progress backfill started in background' });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/admin/embeddings/status - Get embedding coverage stats
 adminRouter.get('/embeddings/status', async (_req: Request, res: Response, next: NextFunction) => {
   try {
