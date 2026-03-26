@@ -384,28 +384,101 @@ reviewRouter.get('/stats', async (req: Request, res: Response, next: NextFunctio
 });
 
 // ============================================================================
-// Daily Digest Endpoint
+// Daily Digest Endpoint (Phase 5 — Interleaved Sessions)
 // ============================================================================
 
-// POST /api/reviews/digest - Build and return a daily digest session
+// FSRS retrievability for card sorting
+function retrievability(daysSinceReview: number, stability: number): number {
+  if (stability <= 0) return 0;
+  if (daysSinceReview <= 0) return 1;
+  return Math.pow(1 + (19 / 81) * daysSinceReview / stability, -0.5);
+}
+
+// Card limits per mode
+const MODE_LIMITS = {
+  quick: { warmup: 1, core: 2, newContent: 1, total: 5 },
+  daily: { warmup: 2, core: 5, newContent: 3, total: 12 },
+  deep:  { warmup: 2, core: 10, newContent: 5, total: 20 },
+} as const;
+
+type DigestMode = keyof typeof MODE_LIMITS;
+
+/**
+ * Round-robin interleave cards across themes.
+ * Groups cards by themeId, then distributes in round-robin order.
+ */
+function interleaveByTheme(cards: any[]): any[] {
+  if (cards.length <= 1) return cards;
+
+  // Group by theme — use first contentTheme or quiz.themeId
+  const buckets = new Map<string, any[]>();
+  const noTheme: any[] = [];
+
+  for (const card of cards) {
+    const themeId = card._themeId || 'unknown';
+    if (themeId === 'unknown') {
+      noTheme.push(card);
+    } else {
+      if (!buckets.has(themeId)) buckets.set(themeId, []);
+      buckets.get(themeId)!.push(card);
+    }
+  }
+
+  // Round-robin across theme buckets
+  const result: any[] = [];
+  const themeArrays = Array.from(buckets.values());
+
+  // Shuffle theme order for variety
+  themeArrays.sort(() => Math.random() - 0.5);
+
+  let maxLen = 0;
+  for (const arr of themeArrays) maxLen = Math.max(maxLen, arr.length);
+
+  for (let i = 0; i < maxLen; i++) {
+    for (const arr of themeArrays) {
+      if (i < arr.length) result.push(arr[i]);
+    }
+  }
+
+  // Append cards with no theme at the end
+  result.push(...noTheme);
+
+  return result;
+}
+
+// POST /api/reviews/digest - Build and return an interleaved digest session
 reviewRouter.post('/digest', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.id;
-    // Ideal range: 10-15 cards. No hard minimum enforced -- return whatever is available.
-    const MAX_DIGEST = 15;
+    const mode: DigestMode = (['quick', 'daily', 'deep'].includes(req.body?.mode) ? req.body.mode : 'daily') as DigestMode;
+    const limits = MODE_LIMITS[mode];
+    const now = new Date();
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // 1. SRS due cards (priority) - most overdue first
-    const dueCards = await prisma.card.findMany({
+    // Get user settings
+    const settings = await prisma.userSettings.findUnique({ where: { userId } });
+    const newCardsPerDay = settings?.newCardsPerDay ?? 20;
+
+    // Count new cards already introduced today
+    const firstReviewsToday = await prisma.review.count({
+      where: {
+        userId,
+        createdAt: { gte: today },
+        card: { repetitions: 1 },
+      },
+    });
+    const remainingNewToday = Math.max(0, newCardsPerDay - firstReviewsToday);
+
+    // ── Fetch all due review cards with theme info ──
+    const allDueCards = await prisma.card.findMany({
       where: {
         userId,
         repetitions: { gt: 0 },
-        nextReviewAt: { lte: new Date() },
+        nextReviewAt: { lte: now },
       },
-      orderBy: { nextReviewAt: 'asc' },
-      take: MAX_DIGEST,
+      take: 50, // fetch more than needed so we can sort and pick
       include: {
         quiz: {
           include: {
@@ -415,45 +488,69 @@ reviewRouter.post('/digest', async (req: Request, res: Response, next: NextFunct
                 title: true,
                 url: true,
                 platform: true,
+                contentThemes: {
+                  select: { themeId: true },
+                  take: 1,
+                },
               },
             },
             theme: {
-              select: {
-                id: true,
-                name: true,
-              },
+              select: { id: true, name: true },
             },
           },
         },
       },
     });
 
-    // 2. New card budget
-    const settings = await prisma.userSettings.findUnique({
-      where: { userId },
-    });
-    const newCardsPerDay = settings?.newCardsPerDay ?? 20;
-
-    const firstReviewsToday = await prisma.review.count({
-      where: {
-        userId,
-        createdAt: { gte: today },
-        card: {
-          repetitions: 1,
-        },
-      },
+    // Compute R for each card and attach themeId
+    const cardsWithR = allDueCards.map(card => {
+      const daysSince = (now.getTime() - card.updatedAt.getTime()) / (1000 * 60 * 60 * 24);
+      const r = retrievability(daysSince, card.stability);
+      const themeId = card.quiz.theme?.id || card.quiz.content?.contentThemes?.[0]?.themeId || 'unknown';
+      return { ...card, _r: r, _themeId: themeId };
     });
 
-    const remainingNewToday = Math.max(0, newCardsPerDay - firstReviewsToday);
-    const newSlots = Math.min(Math.max(0, MAX_DIGEST - dueCards.length), remainingNewToday);
+    // ── 1. WARM-UP: easy cards (R > 0.8), diverse themes ──
+    const warmupPool = cardsWithR
+      .filter(c => c._r > 0.8)
+      .sort(() => Math.random() - 0.5); // randomize for variety
 
-    // 3. New cards (fill remaining slots) - oldest first
+    // Pick warmup cards from different themes
+    const warmupCards: typeof cardsWithR = [];
+    const warmupThemes = new Set<string>();
+    for (const card of warmupPool) {
+      if (warmupCards.length >= limits.warmup) break;
+      if (!warmupThemes.has(card._themeId)) {
+        warmupCards.push(card);
+        warmupThemes.add(card._themeId);
+      }
+    }
+    // Fill remaining warmup slots if not enough diverse themes
+    if (warmupCards.length < limits.warmup) {
+      for (const card of warmupPool) {
+        if (warmupCards.length >= limits.warmup) break;
+        if (!warmupCards.includes(card)) warmupCards.push(card);
+      }
+    }
+
+    const warmupIds = new Set(warmupCards.map(c => c.id));
+
+    // ── 2. CORE REVIEW: hardest cards (lowest R), interleaved across themes ──
+    const corePool = cardsWithR
+      .filter(c => !warmupIds.has(c.id))
+      .sort((a, b) => a._r - b._r); // lowest R first (most forgotten)
+
+    const coreSelected = corePool.slice(0, limits.core);
+    const coreInterleaved = interleaveByTheme(coreSelected);
+
+    // ── 3. NEW CONTENT: cards with repetitions == 0 ──
+    const newSlots = Math.min(limits.newContent, remainingNewToday);
     const newCards = newSlots > 0
       ? await prisma.card.findMany({
           where: {
             userId,
             repetitions: 0,
-            nextReviewAt: { lte: new Date() },
+            nextReviewAt: { lte: now },
           },
           orderBy: { createdAt: 'asc' },
           take: newSlots,
@@ -466,13 +563,14 @@ reviewRouter.post('/digest', async (req: Request, res: Response, next: NextFunct
                     title: true,
                     url: true,
                     platform: true,
+                    contentThemes: {
+                      select: { themeId: true },
+                      take: 1,
+                    },
                   },
                 },
                 theme: {
-                  select: {
-                    id: true,
-                    name: true,
-                  },
+                  select: { id: true, name: true },
                 },
               },
             },
@@ -480,37 +578,44 @@ reviewRouter.post('/digest', async (req: Request, res: Response, next: NextFunct
         })
       : [];
 
-    // 4. Combine and shuffle
-    const allCards = [...dueCards, ...newCards].sort(() => Math.random() - 0.5);
+    // ── 4. Assemble: warmup → core (interleaved) → new content ──
+    const assembledCards = [...warmupCards, ...coreInterleaved, ...newCards];
 
-    // 5. Empty check
-    if (allCards.length === 0) {
+    // Strip internal fields before response
+    const responseCards = assembledCards.map(({ _r, _themeId, ...card }) => card);
+
+    // ── 5. Empty check ──
+    if (responseCards.length === 0) {
       return res.json({
         cards: [],
         session: null,
         reason: 'no_cards_due',
         count: 0,
-        stats: { dueCount: 0, newCount: 0 },
+        mode,
+        stats: { dueCount: 0, newCount: 0, warmupCount: 0, coreCount: 0 },
       });
     }
 
-    // 6. Auto-create session
+    // ── 6. Auto-create session ──
     const session = await prisma.quizSession.create({
       data: {
         userId,
-        questionLimit: allCards.length,
-        mode: 'due',
+        questionLimit: responseCards.length,
+        mode,
       },
     });
 
-    // 7. Return digest
+    // ── 7. Return ──
     return res.json({
-      cards: allCards,
-      count: allCards.length,
+      cards: responseCards,
+      count: responseCards.length,
       session: { id: session.id },
+      mode,
       stats: {
-        dueCount: dueCards.length,
+        warmupCount: warmupCards.length,
+        coreCount: coreInterleaved.length,
         newCount: newCards.length,
+        dueCount: allDueCards.length,
       },
     });
   } catch (error) {

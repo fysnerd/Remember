@@ -2,6 +2,7 @@
  * Daily Digest Session Screen
  *
  * Full-screen quiz flow: loading -> question -> feedback -> closure.
+ * Supports 3 modes: quick (3-5 cards), daily (8-12), deep (15-20).
  * Uses useDigestCards mutation to fetch cards (creates QuizSession server-side).
  * Tracks score, streak, and duration client-side for cognitive closure display.
  */
@@ -9,7 +10,7 @@
 import { useState, useEffect } from 'react';
 import { View, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react-native';
 import { Text, Button } from '../components/ui';
@@ -21,7 +22,7 @@ import { LoadingScreen } from '../components/LoadingScreen';
 import { haptics } from '../lib/haptics';
 import { useDigestCards, useSubmitAnswer, useCompleteSession } from '../hooks';
 import { colors, spacing } from '../theme';
-import type { DigestCard } from '../hooks';
+import type { DigestCard, DigestMode } from '../hooks';
 
 // ============================================================================
 // Option normalization (same logic as quiz/[id].tsx)
@@ -56,6 +57,9 @@ type DigestPhase = 'loading' | 'question' | 'feedback' | 'closure';
 export default function DigestScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const params = useLocalSearchParams<{ mode?: string }>();
+  const initialMode: DigestMode = (['quick', 'daily', 'deep'].includes(params.mode || '') ? params.mode as DigestMode : 'daily');
+
   const digestMutation = useDigestCards();
   const submitAnswer = useSubmitAnswer();
   const completeSession = useCompleteSession();
@@ -70,10 +74,11 @@ export default function DigestScreen() {
   const [bestStreak, setBestStreak] = useState(0);
   const [sessionStartTime] = useState(Date.now());
   const [questionStartTime, setQuestionStartTime] = useState(Date.now());
+  const [currentMode, setCurrentMode] = useState<DigestMode>(initialMode);
 
   // Fetch digest cards on mount
   useEffect(() => {
-    digestMutation.mutate();
+    digestMutation.mutate(initialMode);
   }, []);
 
   // Transition to question phase when data arrives
@@ -166,7 +171,7 @@ export default function DigestScreen() {
             <Text variant="h3" style={styles.emptyText}>
               {t('digest.loadingError')}
             </Text>
-            <Button variant="primary" onPress={() => digestMutation.mutate()}>
+            <Button variant="primary" onPress={() => digestMutation.mutate(initialMode)}>
               {t('common.retry')}
             </Button>
             <Button variant="outline" onPress={handleQuit}>
@@ -204,6 +209,22 @@ export default function DigestScreen() {
   // ========================================================================
 
   if (phase === 'closure') {
+    const canExtend = currentMode !== 'deep';
+
+    const handleExtend = () => {
+      // Upgrade mode: quick → daily, daily → deep
+      const nextMode: DigestMode = currentMode === 'quick' ? 'daily' : 'deep';
+      setCurrentMode(nextMode);
+      setPhase('loading');
+      setCurrentIndex(0);
+      setSelectedAnswer(null);
+      setScore(0);
+      setCurrentStreak(0);
+      setBestStreak(0);
+      setQuestionStartTime(Date.now());
+      digestMutation.mutate(nextMode);
+    };
+
     return (
       <DigestClosure
         score={score}
@@ -211,6 +232,8 @@ export default function DigestScreen() {
         bestStreak={bestStreak}
         durationMs={Date.now() - sessionStartTime}
         onClose={handleQuit}
+        canExtend={canExtend}
+        onExtend={handleExtend}
       />
     );
   }

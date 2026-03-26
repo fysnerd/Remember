@@ -17,6 +17,8 @@ interface DigestClosureProps {
   bestStreak: number;
   durationMs: number;
   onClose: () => void;
+  canExtend?: boolean;
+  onExtend?: () => void;
 }
 
 function formatDuration(ms: number): string {
@@ -32,6 +34,8 @@ export function DigestClosure({
   bestStreak,
   durationMs,
   onClose,
+  canExtend,
+  onExtend,
 }: DigestClosureProps) {
   const { t } = useTranslation();
   const percentage = total > 0 ? Math.round((score / total) * 100) : 0;
@@ -82,8 +86,13 @@ export function DigestClosure({
           </View>
         </View>
 
-        {/* Close button */}
+        {/* Actions */}
         <View style={styles.actions}>
+          {canExtend && onExtend && (
+            <Button variant="outline" fullWidth onPress={onExtend} style={styles.extendButton}>
+              {t('digest.extendSession', { defaultValue: '2 min de plus ?' })}
+            </Button>
+          )}
           <Button variant="primary" fullWidth onPress={onClose}>
             {t('common.back')}
           </Button>
@@ -126,5 +135,9 @@ const styles = StyleSheet.create({
   },
   actions: {
     width: '100%',
+    gap: spacing.sm,
+  },
+  extendButton: {
+    marginBottom: spacing.xs,
   },
 });
