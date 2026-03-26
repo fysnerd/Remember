@@ -15,6 +15,7 @@ import { runAutoTaggingWorker } from '../services/tagging.js';
 import { runThemeClassificationWorker, runBackfillThemes } from '../services/themeClassification.js';
 import { runEmbeddingWorker, runEmbeddingBackfill } from '../services/embeddingGeneration.js';
 import { runThemeProgressWorker, backfillThemeProgress } from '../services/themeProgress.js';
+import { runThemeRecallWorker } from '../workers/themeRecallWorker.js';
 import { trackJobExecution } from './jobExecutionTracker.js';
 import { runCleanupJobExecutions } from './cleanupWorker.js';
 import { cleanupDesktopAuthSessions } from '../routes/oauth.js';
@@ -152,6 +153,13 @@ export function startScheduler(): void {
     await runJob('theme-progress', runThemeProgressWorker);
   });
 
+  // Theme Recall Worker - Every 30 minutes
+  // Checks for due recall quizzes and sends push notifications (FSRS-5 Phase 3)
+  cron.schedule('*/30 * * * *', async () => {
+    log.info({ job: 'theme-recall' }, 'Triggering scheduled job');
+    await runJob('theme-recall', runThemeRecallWorker);
+  });
+
   // Job Execution Cleanup - Daily at 3:00 AM
   // Deletes execution records older than 30 days
   cron.schedule('0 3 * * *', async () => {
@@ -202,6 +210,7 @@ export function startScheduler(): void {
       { name: 'theme-classification', schedule: '*/15 * * * *' },
       { name: 'embedding-generation', schedule: '*/5 * * * *' },
       { name: 'theme-progress', schedule: '0 * * * *' },
+      { name: 'theme-recall', schedule: '*/30 * * * *' },
       { name: 'cleanup-job-executions', schedule: '0 3 * * *' },
       { name: 'inbox-auto-expiration', schedule: '15 3 * * *' },
       { name: 'desktop-auth-cleanup', schedule: '* * * * *' },
@@ -240,7 +249,7 @@ export async function runAllSyncsNow(): Promise<void> {
  * Run a specific job manually
  */
 export async function triggerJob(
-  jobName: 'youtube' | 'spotify' | 'tiktok' | 'instagram' | 'transcription' | 'podcast-transcription' | 'tiktok-transcription' | 'instagram-transcription' | 'quiz-generation' | 'reminder' | 'auto-tagging' | 'theme-classification' | 'theme-backfill' | 'embedding-generation' | 'embedding-backfill' | 'synopsis-backfill' | 'theme-progress' | 'theme-progress-backfill',
+  jobName: 'youtube' | 'spotify' | 'tiktok' | 'instagram' | 'transcription' | 'podcast-transcription' | 'tiktok-transcription' | 'instagram-transcription' | 'quiz-generation' | 'reminder' | 'auto-tagging' | 'theme-classification' | 'theme-backfill' | 'embedding-generation' | 'embedding-backfill' | 'synopsis-backfill' | 'theme-progress' | 'theme-progress-backfill' | 'theme-recall',
   triggerSource: 'SCHEDULED' | 'MANUAL' = 'SCHEDULED'
 ): Promise<{ success: boolean; message: string }> {
   switch (jobName) {
@@ -316,6 +325,10 @@ export async function triggerJob(
       await runJob('theme-progress-backfill', backfillThemeProgress, triggerSource);
       return { success: true, message: 'Theme progress backfill completed' };
 
+    case 'theme-recall':
+      await runJob('theme-recall', runThemeRecallWorker, triggerSource);
+      return { success: true, message: 'Theme recall worker completed' };
+
     default:
       return { success: false, message: `Unknown job: ${jobName}` };
   }
@@ -347,6 +360,7 @@ export function getSchedulerStatus(): {
       { name: 'theme-classification', schedule: '*/15 * * * *' },
       { name: 'embedding-generation', schedule: '*/5 * * * *' },
       { name: 'theme-progress', schedule: '0 * * * *' },
+      { name: 'theme-recall', schedule: '*/30 * * * *' },
       { name: 'cleanup-job-executions', schedule: '0 3 * * *' },
       { name: 'inbox-auto-expiration', schedule: '15 3 * * *' },
     ],

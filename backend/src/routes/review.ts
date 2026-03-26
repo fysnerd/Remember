@@ -5,6 +5,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { Rating, Platform } from '@prisma/client';
 import { generateText } from '../services/llm.js';
 import { fsrs, generatorParameters, Rating as FSRSRating, Card as FSRSCard, State } from 'ts-fsrs';
+import { selectRecallCards, scoreRecallSession } from '../services/themeRecall.js';
 
 // Helper to safely extract string param (handles string | string[] | undefined)
 function asString(value: string | string[] | undefined): string {
@@ -703,6 +704,105 @@ reviewRouter.post('/', async (req: Request, res: Response, next: NextFunction) =
         error: 'Validation error',
         details: error.errors,
       });
+    }
+    return next(error);
+  }
+});
+
+// ============================================================================
+// Recall Quiz Endpoint (Phase 3 — Theme recall quizzes)
+// ============================================================================
+
+// POST /api/reviews/recall - Start a recall quiz for a theme
+reviewRouter.post('/recall', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const schema = z.object({ themeId: z.string() });
+    const { themeId } = schema.parse(req.body);
+    const userId = req.user!.id;
+
+    // Verify theme ownership
+    const theme = await prisma.theme.findFirst({
+      where: { id: themeId, userId },
+    });
+
+    if (!theme) {
+      return res.status(404).json({ error: 'Theme not found' });
+    }
+
+    // Select recall cards
+    const { cards, themeProgress } = await selectRecallCards(themeId, userId);
+
+    if (cards.length < 3) {
+      return res.status(400).json({
+        error: 'Not enough reviewed cards for recall quiz',
+        availableCards: cards.length,
+        minimum: 3,
+      });
+    }
+
+    // Create a recall session
+    const session = await prisma.quizSession.create({
+      data: {
+        userId,
+        questionLimit: cards.length,
+        mode: 'recall',
+      },
+    });
+
+    return res.json({
+      cards,
+      count: cards.length,
+      session: { id: session.id },
+      themeProgress: {
+        id: themeProgress.id,
+        phase: themeProgress.phase,
+        meanRetrievability: themeProgress.meanRetrievability,
+        meanStability: themeProgress.meanStability,
+        totalCards: themeProgress.totalCards,
+        theme: themeProgress.theme,
+      },
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation error', details: error.errors });
+    }
+    return next(error);
+  }
+});
+
+// POST /api/reviews/recall/:sessionId/score - Score a completed recall session
+reviewRouter.post('/recall/:sessionId/score', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const sessionId = asString(req.params.sessionId);
+    const schema = z.object({ themeId: z.string() });
+    const { themeId } = schema.parse(req.body);
+    const userId = req.user!.id;
+
+    // Verify session exists and is completed
+    const session = await prisma.quizSession.findFirst({
+      where: { id: sessionId, userId },
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    if (!session.completedAt) {
+      return res.status(400).json({ error: 'Session not completed yet. Complete it first via POST /session/:id/complete' });
+    }
+
+    // Score the recall and update ThemeProgress
+    const result = await scoreRecallSession(sessionId, themeId, userId);
+
+    return res.json({
+      score: Math.round(result.score * 100),
+      scoreRaw: result.score,
+      newPhase: result.newPhase,
+      nextRecallAt: result.nextRecallAt,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation error', details: error.errors });
     }
     return next(error);
   }
