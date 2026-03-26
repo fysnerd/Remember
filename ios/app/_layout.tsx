@@ -25,7 +25,7 @@ import { queryClient } from '../lib/queryClient';
 import { useAuthStore } from '../stores/authStore';
 import { useNotifications } from '../hooks/useNotifications';
 import { useBackgroundSync } from '../hooks/useBackgroundSync';
-import { InstagramAutoSync } from '../components/InstagramAutoSync';
+// import { InstagramAutoSync } from '../components/InstagramAutoSync'; // DISABLED 2026-03-26
 import { configurePurchases, identifyUser } from '../lib/purchases';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
@@ -170,7 +170,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>
         <StatusBar style="light" />
-        <InstagramAutoSync isAuthenticated={isAuthenticated} />
+        {/* <InstagramAutoSync isAuthenticated={isAuthenticated} /> DISABLED 2026-03-26 */}
         <Stack
           screenOptions={{
             headerShown: false,

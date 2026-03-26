@@ -101,15 +101,13 @@ export function startScheduler(): void {
     await runJob('tiktok-transcription', runTikTokTranscriptionWorker);
   });
 
-  // Instagram Sync - NO CRON: triggered only on-demand via /content/refresh (5min cooldown)
-  // Barcelona UA on i.instagram.com triggers "suspicious activity" warnings if called too often
-
-  // Instagram Transcription Worker - Every 2 minutes (optimized)
-  // Processes pending Instagram transcriptions (via yt-dlp + Whisper)
-  cron.schedule('*/2 * * * *', async () => {
-    log.info({ job: 'instagram-transcription' }, 'Triggering scheduled job');
-    await runJob('instagram-transcription', runInstagramTranscriptionWorker);
-  });
+  // Instagram — DISABLED (2026-03-26): feature parked, re-enable later
+  // Instagram Sync - NO CRON: was triggered only on-demand via /content/refresh
+  // Instagram Transcription Worker - was every 2 minutes
+  // cron.schedule('*/2 * * * *', async () => {
+  //   log.info({ job: 'instagram-transcription' }, 'Triggering scheduled job');
+  //   await runJob('instagram-transcription', runInstagramTranscriptionWorker);
+  // });
 
   // Quiz Generation Worker - Every 2 minutes (optimized)
   // Generates quizzes from transcribed content

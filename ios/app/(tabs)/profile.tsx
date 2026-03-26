@@ -36,7 +36,7 @@ const platformConfig = [
   { id: 'youtube', name: 'YouTube' },
   { id: 'spotify', name: 'Spotify' },
   { id: 'tiktok', name: 'TikTok' },
-  { id: 'instagram', name: 'Instagram' },
+  // { id: 'instagram', name: 'Instagram' }, // DISABLED 2026-03-26
 ] as const;
 
 export default function ProfileScreen() {
