@@ -20,6 +20,7 @@ interface QuestionCardProps {
   disabled?: boolean;
   correctId?: string;
   isSynthesis?: boolean;
+  contentTitle?: string | null;
   current?: number;
   total?: number;
 }
@@ -54,6 +55,7 @@ export function QuestionCard({
   disabled = false,
   correctId,
   isSynthesis = false,
+  contentTitle,
   current,
   total,
 }: QuestionCardProps) {
@@ -63,6 +65,11 @@ export function QuestionCard({
       {current != null && total != null && (
         <Text variant="caption" color="secondary" style={styles.counter}>
           {t('quiz.questionProgress', { current, total })}
+        </Text>
+      )}
+      {contentTitle && !isSynthesis && (
+        <Text variant="caption" color="secondary" style={styles.contentSource} numberOfLines={1}>
+          {contentTitle}
         </Text>
       )}
       {isSynthesis && (
@@ -117,6 +124,10 @@ export function QuestionCard({
 const styles = StyleSheet.create({
   counter: {
     marginBottom: spacing.sm,
+  },
+  contentSource: {
+    marginBottom: spacing.sm,
+    fontStyle: 'italic',
   },
   question: {
     marginBottom: spacing.lg,

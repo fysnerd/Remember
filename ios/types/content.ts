@@ -64,6 +64,7 @@ export interface Question {
   correctAnswer: string;
   explanation: string;
   isSynthesis?: boolean;
+  contentTitle?: string | null;
 }
 
 export interface Quiz {

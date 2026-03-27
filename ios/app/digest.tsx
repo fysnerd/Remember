@@ -280,6 +280,7 @@ export default function DigestScreen() {
                 setSelectedAnswer(optionId);
               }}
               isSynthesis={currentCard.quiz.isSynthesis}
+              contentTitle={currentCard.quiz.content?.title}
             />
             <View style={styles.buttonContainer}>
               <Button

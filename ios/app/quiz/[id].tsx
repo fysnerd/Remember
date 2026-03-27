@@ -202,6 +202,7 @@ export default function QuizScreen() {
             selectedId={selectedAnswer}
             current={currentIndex + 1}
             total={total}
+            contentTitle={current.contentTitle}
             onSelect={(optionId) => {
               haptics.selection();
               setSelectedAnswer(optionId);

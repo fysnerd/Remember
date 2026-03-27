@@ -169,6 +169,7 @@ export default function ThemeQuizScreen() {
               setSelectedAnswer(optionId);
             }}
             isSynthesis={current.isSynthesis}
+            contentTitle={current.contentTitle}
           />
         ) : (
           <AnswerFeedback

@@ -78,6 +78,7 @@ function transformCardsToQuiz(cards: BackendCard[], contentId: string): Quiz {
       correctAnswer: card.quiz.correctAnswer,
       explanation: card.quiz.explanation || '',
       isSynthesis: card.quiz.isSynthesis || false,
+      contentTitle: card.quiz.content?.title || null,
     };
   });
 
