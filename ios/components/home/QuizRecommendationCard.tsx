@@ -37,7 +37,8 @@ function getCardVariant(type: string, platform: string | null): CardVariant {
 
 function ThemeCard({ recommendation, completed }: { recommendation: QuizRecommendation; completed: boolean }) {
   const { t } = useTranslation();
-  const { title, thumbnailUrl, questionCount, subtitle } = recommendation;
+  const { title, thumbnailUrl, questionCount, dueCount, subtitle } = recommendation;
+  const displayCount = dueCount > 0 ? dueCount : questionCount;
 
   return (
     <View style={[styles.themeCardOuter, completed && styles.cardCompleted]}>
@@ -62,7 +63,10 @@ function ThemeCard({ recommendation, completed }: { recommendation: QuizRecommen
           </Text>
           <View style={styles.themeMetaRow}>
             <Text style={styles.themeMeta}>
-              {t('quiz.questionsCount', { count: questionCount })}
+              {dueCount > 0
+                ? t('quiz.dueCount', { count: displayCount, defaultValue: `${displayCount} à réviser` })
+                : t('quiz.questionsCount', { count: questionCount })
+              }
             </Text>
             {subtitle && (
               <>
@@ -81,9 +85,10 @@ function ThemeCard({ recommendation, completed }: { recommendation: QuizRecommen
 
 function ContentCard({ recommendation, completed }: { recommendation: QuizRecommendation; completed: boolean }) {
   const { t } = useTranslation();
-  const { type, title, thumbnailUrl, emoji, platform, questionCount } = recommendation;
+  const { type, title, thumbnailUrl, emoji, platform, questionCount, dueCount } = recommendation;
   const variant = getCardVariant(type, platform);
   const compact = variant === 'vertical' || variant === 'square';
+  const displayCount = dueCount > 0 ? dueCount : questionCount;
 
   return (
     <View style={[styles.card, compact && styles.cardCompact, completed && styles.cardCompleted]}>
@@ -134,7 +139,10 @@ function ContentCard({ recommendation, completed }: { recommendation: QuizRecomm
           {title}
         </Text>
         <Text style={styles.questionCount}>
-          {t('quiz.questionsCount', { count: questionCount })}
+          {dueCount > 0
+            ? t('quiz.dueCount', { count: displayCount, defaultValue: `${displayCount} à réviser` })
+            : t('quiz.questionsCount', { count: questionCount })
+          }
         </Text>
       </View>
     </View>

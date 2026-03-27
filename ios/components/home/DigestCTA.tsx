@@ -37,7 +37,10 @@ export function DigestCTA({ dueCount, streak, onPress }: DigestCTAProps) {
         </Text>
         <Text style={styles.subtitle}>
           {dueCount > 0
-            ? t('home.digestSubtitle', { count: dueCount, defaultValue: `${dueCount} question${dueCount > 1 ? 's' : ''} · ~5 min` })
+            ? (() => {
+                const sessionCount = Math.min(dueCount, 10);
+                return t('home.digestSubtitle', { count: sessionCount, defaultValue: `${sessionCount} question${sessionCount > 1 ? 's' : ''} · ~5 min` });
+              })()
             : t('home.digestAllDone', { defaultValue: 'Tout est révisé pour aujourd\'hui !' })
           }
         </Text>
