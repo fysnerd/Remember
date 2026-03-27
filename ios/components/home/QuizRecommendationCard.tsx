@@ -38,7 +38,7 @@ function getCardVariant(type: string, platform: string | null): CardVariant {
 function ThemeCard({ recommendation, completed }: { recommendation: QuizRecommendation; completed: boolean }) {
   const { t } = useTranslation();
   const { title, thumbnailUrl, questionCount, dueCount, subtitle } = recommendation;
-  const displayCount = dueCount > 0 ? dueCount : questionCount;
+  const displayCount = dueCount > 0 ? Math.min(dueCount, 20) : questionCount;
 
   return (
     <View style={[styles.themeCardOuter, completed && styles.cardCompleted]}>
@@ -88,7 +88,7 @@ function ContentCard({ recommendation, completed }: { recommendation: QuizRecomm
   const { type, title, thumbnailUrl, emoji, platform, questionCount, dueCount } = recommendation;
   const variant = getCardVariant(type, platform);
   const compact = variant === 'vertical' || variant === 'square';
-  const displayCount = dueCount > 0 ? dueCount : questionCount;
+  const displayCount = dueCount > 0 ? Math.min(dueCount, 20) : questionCount;
 
   return (
     <View style={[styles.card, compact && styles.cardCompact, completed && styles.cardCompleted]}>
